@@ -93,11 +93,11 @@ export function useDescriptionLines(selectedRequest) {
 export function useSelection(selectedRequest, selectedIds, itemId) {
   const isSelected = (item) => selectedRequest.value && itemId(selectedRequest.value) === itemId(item)
 
-  const toggleSelect = (item) => {
-    const id = itemId(item)
-    if (selectedIds.has(id)) {selectedIds.delete(id)}
-    else {selectedIds.add(id)}
+  // The table's own select-all hands back the whole ticked list; mirror it into the Set.
+  const setSelected = (ids) => {
+    selectedIds.clear()
+    ids.forEach((id) => selectedIds.add(id))
   }
 
-  return { isSelected, toggleSelect }
+  return { isSelected, setSelected }
 }

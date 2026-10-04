@@ -5,48 +5,55 @@
   asked for most. Nothing here fetches; the view hands over what it loaded.
 -->
 <template>
-  <v-row class="mb-2">
-    <v-col cols="12" lg="8">
-      <v-card elevation="0" class="dash-card dash-tint h-100">
-        <div class="dash-card-title">Filed &amp; Resolved</div>
-        <div class="dash-card-subtitle mb-3">Last 30 days</div>
-        <div v-if="loading" class="skel skel-plot" aria-hidden="true"></div>
-        <div v-else-if="history.length === 0" class="empty content-in">No requests yet</div>
-        <div v-else class="chart-box content-in">
-          <Line :data="flowData" :options="flowOptions" :plugins="[crosshair]" />
-          <ChartDataTable caption="Requests filed and resolved per day, last 30 days — same data as the chart above" category-label="Day" :labels="dayLabels" :series="flowSeries" />
+  <div class="chart-grid">
+    <v-card elevation="0" class="dash-card chart-card">
+      <div class="chart-head">
+        <div>
+          <div class="chart-title">Filed &amp; resolved</div>
+          <div class="chart-sub">Last 30 days, requests per day</div>
         </div>
-      </v-card>
-    </v-col>
+        <!-- The legend is HTML, top right (the chart's own is off): a swatch and a word each. -->
+        <div class="chart-legend">
+          <span><i :style="{ background: flowColors[0] }"></i>Filed</span>
+          <span><i :style="{ background: flowColors[1] }"></i>Resolved</span>
+        </div>
+      </div>
+      <div v-if="loading" class="skel skel-plot" aria-hidden="true"></div>
+      <div v-else-if="history.length === 0" class="empty content-in">No requests yet</div>
+      <div v-else class="chart-box content-in">
+        <Line :data="flowData" :options="flowOptions" :plugins="[crosshair]" />
+        <ChartDataTable caption="Requests filed and resolved per day, last 30 days — same data as the chart above" category-label="Day" :labels="dayLabels" :series="flowSeries" />
+      </div>
+    </v-card>
 
-    <v-col cols="12" lg="4">
-      <v-card elevation="0" class="dash-card h-100">
-        <div class="d-flex justify-space-between align-start flex-wrap ga-2 mb-3">
-          <div>
-            <div class="dash-card-title">Most Requested</div>
-            <div class="dash-card-subtitle">{{ view === 'services' ? 'Requests by service' : 'Times borrowed by item' }}, last 30 days</div>
-          </div>
-          <v-btn-toggle v-model="view" mandatory variant="outlined" color="primary" density="compact" divided rounded="lg" aria-label="Most requested">
-            <v-btn value="services" size="x-small" class="text-none font-weight-bold px-3">Services</v-btn>
-            <v-btn value="items" size="x-small" class="text-none font-weight-bold px-3">Equipment</v-btn>
-          </v-btn-toggle>
+    <v-card elevation="0" class="dash-card chart-card">
+      <div class="chart-head">
+        <div>
+          <div class="chart-title">Most requested</div>
+          <div class="chart-sub">{{ view === 'services' ? 'Requests by service' : 'Times borrowed by item' }}, last 30 days</div>
         </div>
-        <div v-if="loading" class="skel skel-plot" aria-hidden="true"></div>
-        <div v-else-if="ranked.length === 0" class="empty content-in">Nothing in the last 30 days</div>
-        <div v-else :key="view" class="chart-box content-in">
-          <Bar :data="rankData" :options="rankOptions" />
-          <ChartDataTable :caption="`Most requested ${view}, last 30 days — same data as the chart above`" category-label="Name" :labels="ranked.map((r) => r.label)" :series="[{ label: 'Count', data: ranked.map((r) => r.value) }]" />
-        </div>
-      </v-card>
-    </v-col>
-  </v-row>
+        <SegmentedTabs v-model="view" tonal dense aria-label="Most requested" :items="[{ value: 'services', label: 'Services' }, { value: 'items', label: 'Equipment' }]" />
+      </div>
+      <div v-if="loading" class="skel skel-plot" aria-hidden="true"></div>
+      <div v-else-if="ranked.length === 0" class="empty content-in">Nothing in the last 30 days</div>
+      <!-- A ranked list: each bar is the share of the top entry, the number sits at its end. -->
+      <ol v-else :key="view" class="rank-list content-in">
+        <li v-for="r in ranked" :key="r.label">
+          <span class="rank-name">{{ r.label }}</span>
+          <span class="rank-track"><span class="rank-bar" :style="{ width: `${Math.round((r.value / rankMax) * 100)}%` }"></span></span>
+          <b class="rank-n">{{ r.value }}</b>
+        </li>
+      </ol>
+    </v-card>
+  </div>
 </template>
 
 <script setup>
 import './dashboard.css'
 import { computed, ref } from 'vue'
-import { Bar, Line } from 'vue-chartjs'
+import { Line } from 'vue-chartjs'
 import ChartDataTable from '@/components/ChartDataTable.vue'
+import SegmentedTabs from '@/components/SegmentedTabs.vue'
 import { countByDay, lastDays } from '@/composables/dashboardTrends'
 import { useChartTheme, withAlpha } from '@/composables/useChartTheme'
 
@@ -58,7 +65,7 @@ const props = defineProps({
   loading: { type: Boolean, default: false },
 })
 
-const { colors, legend, base, horizontal } = useChartTheme()
+const { colors, base } = useChartTheme()
 
 // ---- Filed & Resolved -----------------------------------------------------
 
@@ -72,29 +79,20 @@ const flowSeries = computed(() => [
   { label: 'Filed', data: countByDay(props.history.map((h) => h.filedAt), days) },
   { label: 'Resolved', data: countByDay(props.history.map((h) => h.resolvedAt).filter(Boolean), days) },
 ])
-// Filed is neutral load; resolved is the good news, so it takes the brand teal.
-const flowColors = computed(() => [colors.value.slate, colors.value.primary])
-const FILL_TOP = [0.16, 0.4]
-
-// Fades from the series colour at the line to nothing at the axis. The canvas
-// gradient needs the chart area, which does not exist on the first pass.
-const fade = (color, top) => ({ chart }) => {
-  const area = chart.chartArea
-  if (!area) return withAlpha(color, top / 2)
-  const gradient = chart.ctx.createLinearGradient(0, area.top, 0, area.bottom)
-  gradient.addColorStop(0, withAlpha(color, top))
-  gradient.addColorStop(1, withAlpha(color, 0))
-  return gradient
-}
+// Filed is neutral load (slate); resolved is the good news, so it takes the brand
+// teal. The board's own hexes, so the legend swatches match the lines.
+const flowColors = ['#64748b', '#297a67']
+// Filed carries a flat light area under its line (the board's .10); Resolved is a line only.
+const FILED_AREA = 'rgba(100, 116, 139, 0.10)'
 const flowData = computed(() => ({
   labels: dayLabels,
   datasets: flowSeries.value.map((s, i) => ({
     label: s.label,
     data: s.data,
-    borderColor: flowColors.value[i],
-    backgroundColor: fade(flowColors.value[i], FILL_TOP[i]),
-    borderWidth: 2,
-    fill: true,
+    borderColor: flowColors[i],
+    backgroundColor: FILED_AREA,
+    borderWidth: 2.2,
+    fill: i === 0,
     // Monotone: the curve never dips below zero or overshoots a peak.
     cubicInterpolationMode: 'monotone',
     pointRadius: 0,
@@ -102,20 +100,22 @@ const flowData = computed(() => ({
   })),
 }))
 
-const dashedGrid = computed(() => ({ color: base.value.scales.y.grid.color, borderDash: [4, 4] }))
+// Gridlines are solid hairlines at .08 and axis labels 11px at .6, per the board.
+const gridLine = computed(() => ({ color: withAlpha(colors.value['on-surface'], 0.08), lineWidth: 1 }))
+const tickStyle = computed(() => ({ color: withAlpha(colors.value['on-surface'], 0.6), font: { size: 11 } }))
 const flowOptions = computed(() => ({
   ...base.value,
   plugins: {
-    legend: legend.value,
+    legend: { display: false },
     tooltip: { boxPadding: 4, callbacks: { title: (items) => dayTitles[items[0].dataIndex] } },
   },
   scales: {
     x: {
       grid: { display: false },
       // Every fourth label, counted back from today so today is always named.
-      ticks: { ...base.value.scales.x.ticks, autoSkip: false, maxRotation: 0, callback: (_v, i) => ((DAYS - 1 - i) % LABEL_EVERY === 0 ? dayLabels[i] : '') },
+      ticks: { ...tickStyle.value, autoSkip: false, maxRotation: 0, callback: (_v, i) => ((DAYS - 1 - i) % LABEL_EVERY === 0 ? dayLabels[i] : '') },
     },
-    y: { ...base.value.scales.y, grid: dashedGrid.value, border: { display: false } },
+    y: { ...base.value.scales.y, ticks: { ...base.value.scales.y.ticks, ...tickStyle.value }, grid: gridLine.value, border: { display: false } },
   },
 }))
 
@@ -147,26 +147,8 @@ const ranked = computed(() => {
   return (t?.labels ?? []).map((label, i) => ({ label, value: t.data[i] })).slice().sort((a, b) => b.value - a.value).slice(0, TOP)
 })
 
-// One teal ramp, darkest for #1.
-const rankColor = (i) => withAlpha(colors.value.primary, 1 - i * 0.09)
-const rankData = computed(() => ({
-  labels: ranked.value.map((r) => r.label),
-  datasets: [{
-    label: view.value === 'services' ? 'Requests' : 'Times borrowed',
-    data: ranked.value.map((r) => r.value),
-    backgroundColor: ranked.value.map((_r, i) => rankColor(i)),
-    borderRadius: 6,
-    borderSkipped: false,
-    maxBarThickness: 18,
-  }],
-}))
-const rankOptions = computed(() => ({
-  ...horizontal.value,
-  scales: {
-    x: { ...horizontal.value.scales.x, grid: dashedGrid.value, border: { display: false } },
-    y: horizontal.value.scales.y,
-  },
-}))
+// Each bar is the share of the top entry (the list is sorted, so that is the first).
+const rankMax = computed(() => Math.max(1, ...ranked.value.map((r) => r.value)))
 </script>
 
 <style scoped>
@@ -184,6 +166,21 @@ const rankOptions = computed(() => ({
   position: relative;
   height: 260px;
 }
+/* Two equal cards, 24px radius and padding (Dashboard board). */
+.chart-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 16px; align-items: stretch; margin-bottom: 8px; }
+.chart-card { padding: 24px !important; }
+.chart-head { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+.chart-title { font-size: 18.72px; line-height: 28px; font-weight: 600; }
+.chart-sub { font-size: 14px; line-height: 20px; color: var(--dash-muted); }
+.chart-legend { display: flex; gap: 16px; font-size: 13px; font-weight: 600; }
+.chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.chart-legend i { display: block; width: 18px; height: 3px; border-radius: 2px; }
+.rank-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.rank-list li { display: grid; grid-template-columns: minmax(120px, 38%) 1fr 32px; align-items: center; gap: 12px; font-size: 13px; }
+.rank-name { line-height: 18px; }
+.rank-track { display: block; height: 10px; border-radius: 999px; background: rgba(var(--v-theme-on-surface), 0.06); overflow: hidden; }
+.rank-bar { display: block; height: 100%; border-radius: 999px; background: #297A67; }
+.rank-n { text-align: right; font-variant-numeric: tabular-nums; }
 .empty {
   height: 260px;
   display: flex;

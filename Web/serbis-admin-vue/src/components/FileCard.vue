@@ -3,8 +3,7 @@
 
   One document in the Documents grid: a thumbnail (the image itself, or a
   neutral icon tile for a PDF or anything else), the title, and a muted
-  "size · date" line. Verified shows as a badge over the thumbnail's corner; the
-  ⋯ menu holds Download, Mark verified / Unverify and Delete. Clicking the card
+  "size · date" line. The ⋯ menu holds Download and Delete. Clicking the card
   opens the file (Enter too); the menu stops its own clicks. Presentational:
   the page owns what each action does.
 -->
@@ -28,9 +27,7 @@
       />
       <v-icon v-else size="40" class="text-medium-emphasis">{{ icon }}</v-icon>
 
-      <span v-if="verified" class="file-card__badge" :title="verifiedBy || undefined">
-        <v-icon size="14">mdi-check-decagram</v-icon> Verified
-      </span>
+      <span class="file-card__ext">{{ ext }}</span>
 
       <div class="file-card__menu" @click.stop @keydown.stop>
         <v-menu location="bottom end">
@@ -40,19 +37,12 @@
               class="file-card__more text-medium-emphasis"
               icon="mdi-dots-horizontal"
               variant="flat"
-              size="x-small"
-              :loading="busy"
+              size="default"
               :aria-label="`Actions for ${title}`"
             ></v-btn>
           </template>
           <v-list density="compact" rounded="lg">
             <v-list-item title="Download" prepend-icon="mdi-download" @click="emit('download')"></v-list-item>
-            <v-list-item
-              :title="verified ? 'Unverify' : 'Mark verified'"
-              :prepend-icon="verified ? 'mdi-close-circle-outline' : 'mdi-check-decagram-outline'"
-              :disabled="busy"
-              @click="emit('verify')"
-            ></v-list-item>
             <v-list-item title="Delete" prepend-icon="mdi-delete-outline" base-color="error" @click="emit('delete')"></v-list-item>
           </v-list>
         </v-menu>
@@ -61,7 +51,7 @@
 
     <div class="file-card__body">
       <div class="file-card__title text-body-2 font-weight-bold text-high-emphasis" :title="title">{{ title }}</div>
-      <div class="text-caption text-medium-emphasis">{{ meta }}</div>
+      <div class="file-card__meta">{{ meta }}</div>
     </div>
   </article>
 </template>
@@ -77,13 +67,10 @@ defineProps<{
   icon: string
   /** The muted line, e.g. "2.1 MB · Yesterday". */
   meta: string
-  verified: boolean
-  /** "Name, Role", shown as the badge's tooltip. */
-  verifiedBy?: string
-  /** A verify write is in flight for this file. */
-  busy?: boolean
+  /** The extension, shown as the badge over the preview. */
+  ext: string
 }>()
-const emit = defineEmits<{ open: []; download: []; verify: []; delete: [] }>()
+const emit = defineEmits<{ open: []; download: []; delete: [] }>()
 
 // An image that fails to load falls back to the icon tile instead of a broken box.
 const broken = ref(false)
@@ -94,14 +81,12 @@ const broken = ref(false)
   display: flex;
   flex-direction: column;
   min-width: 0;
-  border: 1px solid rgba(var(--v-theme-on-surface), 0.1);
-  border-radius: 12px;
+  border-radius: 24px;
   background: rgb(var(--v-theme-surface));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 14px rgba(0, 0, 0, 0.08);
   overflow: hidden;
   cursor: pointer;
-  transition: border-color var(--motion-fast) var(--ease-out);
 }
-.file-card:hover { border-color: rgba(var(--v-theme-on-surface), 0.28); }
 .file-card:focus-visible { outline: 2px solid rgb(var(--v-theme-primary)); outline-offset: 2px; }
 
 .file-card__thumb {
@@ -109,31 +94,35 @@ const broken = ref(false)
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 128px;
+  height: 150px;
   background: rgba(var(--v-theme-on-surface), 0.05);
 }
 .file-card__img { width: 100%; height: 100%; object-fit: cover; }
 
-/* Over a photo, so both corners sit on the surface colour, not on the image. */
-.file-card__badge {
+/* Extension badge, bottom left of the preview. */
+.file-card__ext {
   position: absolute;
-  top: 8px;
-  left: 8px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 24px;
-  padding: 0 8px;
+  left: 12px;
+  bottom: 10px;
+  padding: 2px 10px;
   border-radius: 999px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  background: rgb(var(--v-theme-surface));
-  color: rgb(var(--v-theme-primary-strong));
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.92);
+  color: #334155;
 }
-.file-card__menu { position: absolute; top: 6px; right: 6px; }
-.file-card__more { background: rgb(var(--v-theme-surface)) !important; }
+/* The ⋯ button: a 40px white circle with its own small shadow. */
+.file-card__menu { position: absolute; top: 10px; right: 10px; }
+.file-card__more {
+  width: 40px;
+  height: 40px;
+  background: #fff !important;
+  color: rgba(0, 0, 0, 0.7);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+.file-card__more :deep(.v-icon) { font-size: 18px; }
 
-.file-card__body { padding: 10px 12px 12px; min-width: 0; }
+.file-card__body { padding: 14px 16px 16px; min-width: 0; }
 .file-card__title {
   display: -webkit-box;
   -webkit-box-orient: vertical;
@@ -141,6 +130,11 @@ const broken = ref(false)
   line-clamp: 2;
   overflow: hidden;
   overflow-wrap: anywhere;
-  margin-bottom: 2px;
+}
+.file-card__meta {
+  margin-top: 4px;
+  font-size: 12px;
+  line-height: 16px;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
 </style>

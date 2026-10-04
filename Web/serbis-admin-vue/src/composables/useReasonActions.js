@@ -1,10 +1,16 @@
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { API_BASE } from '@/config/api'
+
+// Pending is the only status that can be disapproved or denied.
+export const pendingOf = (rows, selectedIds, itemId) =>
+  rows.filter(r => selectedIds.has(itemId(r)) && (r.status || 'Pending') === 'Pending')
 
 export const emptyReasonDialog = () => ({ open: false, kind: 'disapprove', reason: '', error: '' })
 
 export function useReasonActions(reasonDialog, { formData, apiError, bulkLoading, requests, selectedIds, itemId, getHeaders, updateStatus, fetchRequests }) {
   const noteExpanded = ref(false)
+
+  const pendingSelected = computed(() => pendingOf(requests.value, selectedIds, itemId))
 
   const openReason = (kind) => {
     noteExpanded.value = false
@@ -21,7 +27,7 @@ export function useReasonActions(reasonDialog, { formData, apiError, bulkLoading
   const bulkDisapprove = async (reason) => {
     bulkLoading.value = true
     apiError.value = ''
-    const targets = requests.value.filter(r => selectedIds.has(itemId(r)))
+    const targets = pendingSelected.value
     try {
       await Promise.all(targets.map(async (r) => {
         const res = await fetch(`${API_BASE}/service-requests/${itemId(r)}`, {
@@ -54,5 +60,5 @@ export function useReasonActions(reasonDialog, { formData, apiError, bulkLoading
     return updateStatus(kind === 'approve' ? 'Responding' : 'Disapproved')
   }
 
-  return { noteExpanded, openReason, clearReason, confirmReason, bulkDisapprove }
+  return { noteExpanded, pendingSelected, openReason, clearReason, confirmReason, bulkDisapprove }
 }

@@ -64,6 +64,9 @@
           v-else
           compact
           filter-bar
+          selectable
+          :selected="[...selectedIds]"
+          @update:selected="setSelected"
           :loading="initialLoad"
           :refreshing="reloading"
           v-model:search="search"
@@ -90,15 +93,6 @@
           <template v-slot:filters>
             <v-select v-model="vehicleFilter" :items="vehicleFilterOptions" prefix="Unit" aria-label="Unit" variant="outlined" density="compact" hide-details rounded="lg" class="filter-bar__select"></v-select>
             <v-select v-model="departedRange" :items="DEPARTED_RANGES" prefix="Departed" aria-label="Departed" variant="outlined" density="compact" hide-details rounded="lg" class="filter-bar__select"></v-select>
-          </template>
-
-          <template v-slot:item.select="{ item }">
-            <v-checkbox-btn
-              :model-value="selectedIds.has(item.conduction_request_id)"
-              density="compact"
-              :aria-label="`Select ${item.patient_name || 'unnamed patient'}'s trip record`"
-              @click.stop="toggleSelect(item)"
-            ></v-checkbox-btn>
           </template>
 
           <template v-slot:item.patient="{ item }">
@@ -684,7 +678,6 @@ const nameInitials = (name) => {
 // `value` gives the composite columns something to sort on; the key still
 // names the cell slot.
 const headers = [
-  { title: '', key: 'select', sortable: false, width: '48px' },
   { title: 'Booking no.', key: 'service_request_id', width: '14%' },
   { title: 'Patient', key: 'patient', value: 'patient_name', width: '26%' },
   { title: 'Vehicle', key: 'vehicle_label', value: (r) => tripVehicleLabel(r), width: '14%' },
@@ -1137,7 +1130,7 @@ const detail = ref({ open: false })
 const selected = ref(null)
 // Ticked trip records, for bulk print/export.
 const selectedIds = reactive(new Set())
-const { toggleSelect } = useSelection(selected, selectedIds, (r) => r.conduction_request_id)
+const { setSelected } = useSelection(selected, selectedIds, (r) => r.conduction_request_id)
 
 const openDetail = (item) => {
   apiError.value = ''
@@ -1397,7 +1390,6 @@ onMounted(() => {
 .gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
 
-.txn { font-size: 13px; white-space: nowrap; }
 .tabular { font-variant-numeric: tabular-nums; white-space: nowrap; }
 
 .assign-box { border: 1px solid rgba(var(--v-theme-on-surface), 0.14); border-radius: 12px; }

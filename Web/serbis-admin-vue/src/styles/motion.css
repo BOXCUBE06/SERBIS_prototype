@@ -6,6 +6,33 @@
   --motion-slow: 320ms;
   --ease-out: cubic-bezier(0.2, 0, 0, 1);
   --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  /* The Motion board's: page, row, dialog in/out, overlay, hover feedback. */
+  --motion-page: 220ms;
+  --motion-row: 150ms;
+  --motion-dialog-in: 180ms;
+  --motion-dialog-out: 140ms;
+  --motion-overlay-in: 160ms;
+  --motion-overlay-out: 140ms;
+  --motion-hover: 150ms;
+  --ease-dialog: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes pageIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes rowIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes dlgIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: none; } }
+@keyframes dlgOut { from { opacity: 1; transform: none; } to { opacity: 0; transform: scale(0.98); } }
+@keyframes btn-spin { to { transform: rotate(360deg); } }
+
+/* 16px spinner for a saving button (white on the filled primary button). */
+.btn-spin {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.45);
+  border-top-color: #fff;
+  animation: btn-spin 700ms linear infinite;
 }
 
 /* The one skeleton primitive. Hidden for its first 150ms, so a fast response
@@ -15,7 +42,7 @@
   position: relative;
   overflow: hidden;
   border-radius: 6px;
-  background: var(--skel-bg, rgba(var(--v-theme-on-surface), 0.08));
+  background: var(--skel-bg, rgba(var(--v-theme-on-surface), 0.06));
   opacity: 0;
   animation: skel-appear 1ms 150ms forwards;
 }
@@ -24,10 +51,10 @@
   position: absolute;
   inset: 0;
   transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, var(--skel-shine, rgba(255, 255, 255, 0.5)), transparent);
-  animation: skel-shimmer 1.4s 150ms linear infinite;
+  /* Darkens to the board's .11 at its peak (.06 base + .05 shine), 1.2s linear. */
+  background: linear-gradient(90deg, transparent, var(--skel-shine, rgba(var(--v-theme-on-surface), 0.05)), transparent);
+  animation: skel-shimmer 1.2s 150ms linear infinite;
 }
-.v-theme--dark .skel { --skel-shine: rgba(255, 255, 255, 0.05); }
 .skel-line { height: 12px; }
 /* Stands in for a count chip; em-sized so it matches the text beside it. */
 .skel-pill {
@@ -41,11 +68,13 @@
 @keyframes skel-shimmer { to { transform: translateX(100%); } }
 
 /* Real content replacing a skeleton. */
-.content-in,
-.table-fade tbody {
+.content-in {
   animation: content-in var(--motion-base) var(--ease-out) backwards;
 }
 @keyframes content-in { from { opacity: 0; } }
+
+/* Rows arriving after a load fade in together: opacity only, no rise, no stagger. */
+.table-fade tbody tr { animation: rowIn var(--motion-row) ease-out both; }
 
 /* A refetch keeps the rows on screen, dimmed, under the table's own progress bar. */
 .v-table tbody { transition: opacity var(--motion-fast) var(--ease-out); }
@@ -53,21 +82,19 @@
 .is-refreshing tbody,
 .is-dim { opacity: 0.6; }
 
-/* Route change: the new page rises 4px as it fades in; the old one only fades. */
-.page-enter-active { transition: opacity var(--motion-base) var(--ease-out), transform var(--motion-base) var(--ease-out); }
-.page-leave-active { transition: opacity 60ms var(--ease-out); }
-.page-enter-from { opacity: 0; transform: translateY(4px); }
-.page-leave-to { opacity: 0; }
+/* Route change: the new page fades in with a 6px rise. No exit animation and no
+   out-in wait (App.vue), so navigation never waits. */
+.page-enter-active { animation: pageIn var(--motion-page) ease-out both; }
+.page-leave-active { display: none; }
 
-/* Every v-dialog (the default in plugins/vuetify.ts). The scrim keeps Vuetify's own fade.
-   Opacity only — no transform. A CSS transform on the dialog card is a new
-   containing block for any position:fixed content teleported inside it (a
-   nested v-select's menu), so while this class was applied the menu's own
-   position math ran against the wrong box and it rendered off the activator. */
-.dialog-soft-enter-active { transition: opacity var(--motion-base) var(--ease-out); }
-.dialog-soft-leave-active { transition: opacity var(--motion-fast) var(--ease-out); }
-.dialog-soft-enter-from,
-.dialog-soft-leave-to { opacity: 0; }
+/* Every v-dialog (the default in plugins/vuetify.ts): the card scales in from 96%
+   and out to 98%; the scrim fades .16s in and .14s out. Both keyframes end on
+   `transform: none`, so once it has settled the card is not a containing block
+   for a teleported select menu (the reason this used to be opacity only). */
+.dialog-soft-enter-active { animation: dlgIn var(--motion-dialog-in) var(--ease-dialog) both; }
+.dialog-soft-leave-active { animation: dlgOut var(--motion-dialog-out) ease-in both; }
+.v-overlay__scrim { transition: opacity var(--motion-overlay-in) ease-out; }
+.v-overlay:not(.v-overlay--active) .v-overlay__scrim { transition-duration: var(--motion-overlay-out); transition-timing-function: ease-in; }
 
 /* A changed figure (KPI value, welcome count): keyed on its value, so the new
    one mounts and slides up 4px. A fade, never a counter. */
@@ -80,12 +107,18 @@
 /* Feedback: hover colours at --motion-fast; a pressed button settles to 0.98. */
 .v-btn {
   transition-property: background-color, color, border-color, box-shadow, opacity, transform;
-  transition-duration: var(--motion-fast);
-  transition-timing-function: var(--ease-out);
+  transition-duration: var(--motion-hover);
+  transition-timing-function: ease;
 }
-.v-btn__overlay { transition-duration: var(--motion-fast); }
+.v-btn__overlay { transition-duration: var(--motion-hover); }
 .v-btn:active:not(:disabled) { transform: scale(0.98); }
-.v-table tbody td { transition: background-color var(--motion-fast) var(--ease-out), box-shadow var(--motion-fast) var(--ease-out); }
+/* The plain buttons the shared components draw (tabs, footer pages, toggles). */
+button {
+  transition: background-color var(--motion-hover) ease, box-shadow var(--motion-hover) ease, transform 100ms ease;
+}
+button:active:not(:disabled) { transform: scale(0.98); }
+.v-table tbody tr,
+.v-table tbody td { transition: background-color var(--motion-hover) ease, box-shadow var(--motion-hover) ease; }
 
 /* A status change recolours the pill instead of snapping. */
 .status-pill,

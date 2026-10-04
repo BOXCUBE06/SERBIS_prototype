@@ -8,12 +8,16 @@
         class="request-table"
         compact
         filter-bar
+        selectable
+        :selected="[...selectedIds]"
+        @update:selected="setSelected"
         v-model:search="search"
         search-placeholder="Search name or transaction no."
         :tabs="statusTabItems"
         :status="filters.status"
         @update:status="filters.status = $event"
         :headers="tableHeaders"
+        :sort-hint="sortCaption"
         :items="filteredAndSortedRequests"
         item-value="request_id"
         :no-data-text="emptyListMessage"
@@ -43,40 +47,16 @@
           />
         </template>
 
-        <template v-slot:actions>
-          <span class="text-caption text-medium-emphasis">{{ sortCaption }}</span>
-        </template>
-
         <template v-slot:summary>{{ summary }}</template>
 
         <template v-if="selectedIds.size > 0" v-slot:before-table>
-          <div class="d-flex align-center justify-space-between px-4 py-2 subtle-surface rounded-lg mb-3">
-            <span class="text-caption font-weight-bold" aria-live="polite">{{ selectedIds.size }} selected</span>
-            <div class="d-flex align-center gap-2">
-              <v-btn size="small" height="36" variant="outlined" color="primary" class="text-none" @click="selectedIds.clear()">Clear</v-btn>
-              <v-btn
-                color="error"
-                variant="flat"
-                size="small"
-                height="36"
-                class="text-none font-weight-bold"
-                :loading="bulkLoading"
-                @click="openReason('bulk')"
-              >
-                Disapprove {{ selectedIds.size }}
-                <span class="d-sr-only">selected requests</span>
-              </v-btn>
-            </div>
-          </div>
-        </template>
-
-        <template v-slot:item.select="{ item }">
-          <v-checkbox-btn
-            :model-value="selectedIds.has(itemId(item))"
-            density="compact"
-            :aria-label="`Select ${item._requesterName}'s request`"
-            @click.stop="toggleSelect(item)"
-          ></v-checkbox-btn>
+          <BulkSelectionBar
+            :selected="selectedIds.size"
+            :actionable="pendingSelected.length"
+            :loading="bulkLoading"
+            @clear="selectedIds.clear()"
+            @action="openReason('bulk')"
+          />
         </template>
 
         <template v-slot:item.request_id="{ item }">
@@ -807,7 +787,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { getToken } from '@/composables/authToken'
-import { outcomeLabel, isBookingOverdue, bookingCountdownLabel, pendingWaitLabel, openWaitDays, waitTone, authHeaders } from '@/composables/adminUi'
+import { outcomeLabel, isBookingOverdue, bookingCountdownLabel, pendingWaitLabel, openWaitDays, waitTone, authHeaders, pluralize } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
@@ -818,6 +798,7 @@ import PickerDrawer from '@/components/PickerDrawer.vue'
 import '@/components/detail-dialog.css'
 import RequestFiltersBar from '@/components/RequestFiltersBar.vue'
 import ExportMenu from '@/components/ExportMenu.vue'
+import BulkSelectionBar from '@/components/BulkSelectionBar.vue'
 import { requesterName, isWalkIn, requesterInitials, requesterPhone, requesterBarangay, vehicleName, vehicleIcon, getVehicleNameById, useDescriptionLines, useSelection, transactionNo } from '@/composables/requestDisplay'
 import { useRequestAttachments } from '@/composables/useRequestAttachments'
 import { useRequestFetch, AMBULANCE_SERVICE_CODE, itemId } from '@/composables/useRequestFetch'
@@ -953,10 +934,11 @@ const { updateStatus } = useUpdateStatus({
 
 const { resolveDialog, openResolveConfirm, confirmResolve } = useResolveDialog(selectedRequest, { requesterName, updateStatus, apiError })
 
-const { noteExpanded, openReason, clearReason, confirmReason } =
+const { noteExpanded, pendingSelected, openReason, clearReason, confirmReason } =
   useReasonActions(reasonDialog, { formData, apiError, bulkLoading, requests, selectedIds, itemId, getHeaders, updateStatus, fetchRequests })
+const skipped = computed(() => selectedIds.size - pendingSelected.value.length)
 
-const { isSelected, toggleSelect } = useSelection(selectedRequest, selectedIds, itemId)
+const { isSelected, setSelected } = useSelection(selectedRequest, selectedIds, itemId)
 
 const descriptionLines = useDescriptionLines(selectedRequest)
 
@@ -989,8 +971,8 @@ const reasonCopy = computed(() => {
     }
     case 'bulk':
       return {
-        title: `Disapprove ${selectedIds.size} request${selectedIds.size === 1 ? '' : 's'}`,
-        body: 'Every selected request is declined with this same reason.',
+        title: `Disapprove ${pendingSelected.value.length} request${pendingSelected.value.length === 1 ? '' : 's'}`,
+        body: `Every pending request in the selection is declined with this same reason.${skipped.value ? ` ${skipped.value} other${skipped.value === 1 ? '' : 's'} in the selection ${skipped.value === 1 ? 'is' : 'are'} not pending and will be skipped.` : ''}`,
         label: 'Reason for declining',
         placeholder: 'e.g. No unit free for the requested window',
         hint: 'Shown to any Head of the Family in the selection with a linked account; kept as an internal record for a walk-in with none.',
@@ -1015,12 +997,11 @@ const closedLabel = computed(() => CLOSED_LABELS[selectedRequest.value?.status] 
 
 const NOT_RECORDED = 'Not recorded'
 const WAIT_CLASS = { muted: 'text-medium-emphasis', warning: 'text-warning-strong', error: 'text-error' }
-const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
 const time = (d) => (d ? new Date(d).getTime() : 0)
 // "17 hours", "3 days": hours under a day, days after.
 const elapsed = (from, to = Date.now()) => {
   const hours = Math.max(0, Math.floor((time(to) - time(from)) / 36e5))
-  return hours < 24 ? plural(Math.max(hours, 1), 'hour') : plural(Math.floor(hours / 24), 'day')
+  return hours < 24 ? pluralize(Math.max(hours, 1), 'hour') : pluralize(Math.floor(hours / 24), 'day')
 }
 const shortDateTime = (d) => (d ? new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '')
 const respondingTrip = computed(() => selectedRequest.value?.conduction_requests?.[0] ?? null)
@@ -1099,7 +1080,7 @@ const pickerItems = computed(() => availableVehicles.value.map((v) => ({
   icon: vehicleIcon(v.type),
   status: 'Available',
 })))
-const pickerSubtitle = computed(() => `${plural(pickerItems.value.length, 'unit')} free for this request. Busy units are hidden.`)
+const pickerSubtitle = computed(() => `${pluralize(pickerItems.value.length, 'unit')} free for this request. Busy units are hidden.`)
 // A Booked pick is saved on Done (it re-approves with the new unit); a Pending one is a draft until Approve.
 const donePicker = () => {
   if (isBooked.value && formData.value.vehicle_id && formData.value.vehicle_id !== selectedRequest.value.vehicle_id) return approveBooking()
@@ -1111,7 +1092,7 @@ const closePicker = () => {
 }
 
 // Every tab keeps the shared order: Pending first on All, then newest first.
-const sortCaption = computed(() => (filters.status === 'All' ? 'Pending first, then newest first' : 'Newest first'))
+const sortCaption = computed(() => (filters.status === 'All' ? 'Sorted by: pending on top, then newest' : 'Sorted by: newest'))
 
 const statusTabs = ['All', 'Pending', 'Booked', 'Responding', 'Resolved', 'Disapproved', 'Cancelled']
 
@@ -1128,7 +1109,7 @@ const HEADER_WIDTH_TOTAL = 92
 const tableHeaders = computed(() => {
   const columns = [
     // minWidth fits "TXN-000000" in the mono face plus sort icon, so the ID never ellipsizes.
-    { title: 'Transaction No.', key: 'request_id', width: 10, minWidth: '150px' },
+    { title: 'Txn no.', key: 'request_id', width: 10, minWidth: '150px' },
     { title: 'Patient', key: 'patient_name', width: 12 },
     { title: 'Requester', key: '_requesterName', width: 16 },
     { title: 'Barangay', key: '_secondary', width: 11 },
@@ -1138,7 +1119,6 @@ const tableHeaders = computed(() => {
   ]
   const scale = HEADER_WIDTH_TOTAL / columns.reduce((sum, c) => sum + c.width, 0)
   return [
-    { title: '', key: 'select', sortable: false, width: '48px' },
     ...columns.map(c => ({ ...c, width: `${Math.round(c.width * scale * 10) / 10}%` })),
     { title: '', key: 'chevron', sortable: false, width: '40px' },
   ]
@@ -1231,7 +1211,7 @@ const subtitle = computed(() => {
   const pending = requestCounts.value.Pending
   if (!pending) return 'No pending requests'
   const longest = Math.max(...requests.value.filter((r) => (r.status || 'Pending') === 'Pending').map((r) => openWaitDays('Pending', r.created_at) ?? 0))
-  return `${pending} pending${longest ? ` · the longest has waited ${plural(longest, 'day')}` : ''}`
+  return `${pending} pending${longest ? ` · the longest has waited ${pluralize(longest, 'day')}` : ''}`
 })
 
 const formatDateTime = (dateStr) => dateStr ? new Date(dateStr).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : ''
@@ -1520,7 +1500,7 @@ const submitWalkIn = async () => {
   }
 }
 
-watch(() => filters.status, () => { page.value = 1 })
+watch(() => filters.status, () => { page.value = 1; selectedIds.clear() })
 watch(search, () => { page.value = 1 })
 watch(() => filters.barangay, () => { page.value = 1 })
 watch(() => filters.unit, () => { page.value = 1 })
@@ -1740,8 +1720,7 @@ defineExpose({ selectRequestById, rows: filteredAndSortedRequests, selectedIds, 
   color: #A78BFA;
 }
 
-/* Board type: Txn no. in mono, dates in tabular figures. */
-.txn { font-size: 13px; white-space: nowrap; }
+/* Board type: dates in tabular figures. */
 .tabular { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .request-table :deep(tbody tr.row-selected) { background-color: rgba(var(--v-theme-primary), 0.08); }
 

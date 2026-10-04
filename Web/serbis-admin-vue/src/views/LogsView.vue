@@ -1,35 +1,31 @@
 <template>
   <v-container fluid class="fill-height align-start bg-background">
-    <v-row>
-      <v-col cols="12">
-        <PageHeader
-          title="Activity Logs"
-        >
-          <template v-slot:actions>
-            <v-text-field
-              v-model="search"
-              prepend-inner-icon="mdi-magnify"
-              placeholder="Search logs..."
-              variant="solo"
-              density="compact"
-              hide-details
-              rounded="lg"
-              class="elevation-1"
-              style="width: 300px; max-width: 100%;"
-            ></v-text-field>
-          </template>
+    <div class="logs-page w-100">
+        <PageHeader title="Activity logs">
+          <template v-slot:subtitle>What staff changed in the panel, and the text blasts that were sent</template>
         </PageHeader>
 
-        <v-card elevation="0" border rounded="xl" class="bg-surface">
-          <v-tabs v-model="activeTab" color="primary" class="border-b px-4">
-            <v-tab value="system" class="text-none font-weight-bold">
-              <v-icon start>mdi-laptop</v-icon> System Activity
-            </v-tab>
-            <v-tab value="sms" class="text-none font-weight-bold">
-              <v-icon start>mdi-message-text</v-icon> SMS History
-            </v-tab>
-          </v-tabs>
+        <SegmentedTabs
+          v-model="activeTab"
+          tonal
+          :items="[{ value: 'system', label: 'System activity' }, { value: 'sms', label: 'SMS history' }]"
+        />
 
+        <div class="filter-bar">
+          <v-text-field
+            v-model="search"
+            prepend-inner-icon="mdi-magnify"
+            placeholder="Search logs"
+            aria-label="Search logs"
+            variant="outlined"
+            density="compact"
+            hide-details
+            rounded="lg"
+            class="filter-bar__search logs-search"
+          ></v-text-field>
+        </div>
+
+        <v-card elevation="0" rounded="xl" class="logs-card bg-surface">
           <v-card-text class="pa-0">
             <v-window v-model="activeTab">
               <v-window-item value="system">
@@ -47,28 +43,29 @@
                   :loading="loading && systemLogs.length > 0"
                   :class="{ 'is-refreshing': loading && systemLogs.length > 0 }"
                   hover
-                  class="bg-transparent logs-table"
+                  hide-default-footer
+                  :key="loading && systemLogs.length === 0 ? 'loading' : 'ready'"
+                  class="bg-transparent logs-table board-table table-fade"
                   @update:options="onSystemOptions"
                 >
                   <template v-if="loading && systemLogs.length === 0" #body>
                     <SkeletonRows :rows="itemsPerPage" :columns="systemHeaders.length" />
                   </template>
                   <template v-slot:item.rowNumber="{ index }">
-                    <span class="row-number text-medium-emphasis">{{ systemRowNumber(index) }}</span>
+                    <span class="row-number">{{ systemRowNumber(index) }}</span>
                   </template>
 
                   <template v-slot:item.action="{ item }">
-                    <v-chip :color="getActionColor(item.action)" size="small" variant="tonal" class="font-weight-bold">
-                      {{ item.action }}
-                    </v-chip>
+                    <StatusPill :status="actionKey(item.action)" :label="item.action" />
                   </template>
                   <template v-slot:item.created_at="{ item }">
-                    {{ formatDate(item.created_at) }}
+                    {{ formatLogDate(item.created_at) }}
                   </template>
                   <template v-slot:item.description="{ item }">
-                    <span class="cell-truncate" :title="item.description">{{ item.description }}</span>
+                    <span class="cell-truncate cell-muted" :title="item.description">{{ item.description }}</span>
                   </template>
                 </v-data-table-server>
+                <TableFooter :page="systemPage" :per-page="itemsPerPage" :total="systemTotal" @update:page="setSystemPage" @update:per-page="setPerPage" />
               </v-window-item>
 
               <v-window-item value="sms">
@@ -81,18 +78,24 @@
                   :loading="loading && smsLogs.length > 0"
                   :class="{ 'is-refreshing': loading && smsLogs.length > 0 }"
                   hover
-                  class="bg-transparent logs-table"
+                  hide-default-footer
+                  :key="loading && smsLogs.length === 0 ? 'loading' : 'ready'"
+                  class="bg-transparent logs-table board-table table-fade"
                   @update:options="onSmsOptions"
                 >
                   <template v-if="loading && smsLogs.length === 0" #body>
                     <SkeletonRows :rows="itemsPerPage" :columns="smsHeaders.length" />
                   </template>
                   <template v-slot:item.rowNumber="{ index }">
-                    <span class="row-number text-medium-emphasis">{{ smsRowNumber(index) }}</span>
+                    <span class="row-number">{{ smsRowNumber(index) }}</span>
                   </template>
 
                   <template v-slot:item.message="{ item }">
-                    <span class="cell-truncate" :title="item.message">{{ item.message }}</span>
+                    <span class="cell-truncate cell-muted" :title="item.message">{{ item.message }}</span>
+                  </template>
+
+                  <template v-slot:item.recipient_count="{ item }">
+                    <span class="cell-num cell-bold">{{ item.recipient_count }}</span>
                   </template>
 
                   <template v-slot:item.status="{ item }">
@@ -102,28 +105,25 @@
                          delivered one looking alike is the one distinction this
                          table exists to make. -->
                     <!-- 'Queued' is what SkySMS accepting a blast is recorded as:
-                         billed, not delivered, so it is blue and never green.
-                         'Pending' is SkySMS holding it. 'Unconfirmed' is amber
-                         and not red: the vendor never answered, which is not
-                         the same as nothing having been sent, and colouring it
-                         as a failure is what would prompt a duplicate blast.
+                         billed, not delivered, so it is neutral slate and never
+                         green. 'Pending' is SkySMS holding it. 'Unconfirmed' is
+                         amber and not red: the vendor never answered, which is
+                         not the same as nothing having been sent, and colouring
+                         it as a failure is what would prompt a duplicate blast.
                          Anything unrecognised falls back to grey, not red — red
                          is for Failed only. -->
-                    <v-chip :color="smsStatusColor(item.status)" size="small" variant="tonal" class="font-weight-bold">
-                      {{ item.status }}
-                    </v-chip>
+                    <StatusPill :status="smsPillStatus(item.status)" :label="item.status" />
                   </template>
                   <template v-slot:item.created_at="{ item }">
-                    {{ formatDate(item.created_at) }}
+                    {{ formatLogDate(item.created_at) }}
                   </template>
                 </v-data-table-server>
+                <TableFooter :page="smsPage" :per-page="itemsPerPage" :total="smsTotal" @update:page="setSmsPage" @update:per-page="setPerPage" />
               </v-window-item>
             </v-window>
           </v-card-text>
         </v-card>
-
-      </v-col>
-    </v-row>
+    </div>
   </v-container>
 </template>
 
@@ -134,17 +134,15 @@ import { useServerRowNumber } from '@/composables/rowNumber'
 import { API_BASE } from '@/config/api'
 import { useCachedFetch } from '@/composables/useCachedFetch'
 import PageHeader from '@/components/PageHeader.vue'
+import TableFooter from '@/components/TableFooter.vue'
+import SegmentedTabs from '@/components/SegmentedTabs.vue'
+import StatusPill from '@/components/StatusPill.vue'
 import SkeletonRows from '@/components/SkeletonRows.vue'
 
-// The SMS History status chip. Sent is the only green: it is set only after
-// SkySMS's own message list says every recipient's message was sent.
-const smsStatusColor = (status) => ({
-  Sent: 'green',
-  Queued: 'blue',
-  Pending: 'amber-darken-2',
-  Unconfirmed: 'amber-darken-2',
-  Failed: 'red',
-}[status] || 'grey')
+// The SMS History status pill (statusPill.ts accents). Sent is the only green: it
+// is set only after SkySMS's own message list says every recipient's message was
+// sent. Unconfirmed wears Pending's amber.
+const smsPillStatus = (status) => (status === 'Unconfirmed' ? 'Pending' : status)
 
 const activeTab = ref('system')
 const search = ref('')
@@ -157,7 +155,7 @@ const smsLogs = ref([])
 // server's answer rather than deriving anything: `*Total` is meta.total, which
 // is the count of rows matching the CURRENT SEARCH, not the size of the table.
 // v-data-table-server needs it to know how many page buttons to draw.
-const itemsPerPage = 25
+const itemsPerPage = ref(25)
 const systemPage = ref(1)
 const smsPage = ref(1)
 const systemTotal = ref(0)
@@ -185,25 +183,25 @@ watch(search, () => {
 
 // Table Definitions
 const systemHeaders = [
-  { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
-  { title: 'Date & Time', key: 'created_at', width: '19%' },
-  { title: 'User', key: 'user.name', width: '19%' },
-  { title: 'Module', key: 'module', width: '14%' },
-  { title: 'Action', key: 'action', width: '14%' },
-  { title: 'Description', key: 'description', width: '28%' },
+  { title: '#', key: 'rowNumber', sortable: false, width: '56px' },
+  { title: 'Date & time', key: 'created_at' },
+  { title: 'User', key: 'user.name', sortable: false },
+  { title: 'Module', key: 'module', sortable: false },
+  { title: 'Action', key: 'action', sortable: false },
+  { title: 'Description', key: 'description', sortable: false, width: '34%' },
 ]
 
 // One row per barangay per blast, which is how the backend records them: the
 // vendor is called once, but "what went to my barangay" is the unit anyone asks
 // about afterwards.
 const smsHeaders = [
-  { title: '#', key: 'rowNumber', sortable: false, align: 'center', width: '64px' },
-  { title: 'Date & Time', key: 'created_at', width: '17%' },
-  { title: 'Sender', key: 'user.name', width: '15%' },
-  { title: 'Barangay', key: 'barangay', width: '13%' },
-  { title: 'Message Content', key: 'message', width: '31%' },
-  { title: 'Recipients', key: 'recipient_count', align: 'center', width: '10%' },
-  { title: 'Status', key: 'status', align: 'center', width: '9%' },
+  { title: '#', key: 'rowNumber', sortable: false, width: '56px' },
+  { title: 'Date & time', key: 'created_at' },
+  { title: 'Sender', key: 'user.name', sortable: false },
+  { title: 'Barangay', key: 'barangay', sortable: false },
+  { title: 'Message', key: 'message', sortable: false, width: '32%' },
+  { title: 'Recipients', key: 'recipient_count', sortable: false, align: 'end' },
+  { title: 'Status', key: 'status', sortable: false },
 ]
 
 // Data Fetching
@@ -215,7 +213,7 @@ const getHeaders = () => ({
 const listUrl = (path, page) => {
   const params = new URLSearchParams({
     page: String(page),
-    per_page: String(itemsPerPage),
+    per_page: String(itemsPerPage.value),
   })
 
   // URLSearchParams encodes the term, so a '%' or '&' typed into the box
@@ -271,27 +269,24 @@ const onSmsOptions = ({ page }) => {
   fetchLogs()
 }
 
-// Helpers
-const formatDate = (dateString) => {
-  if (!dateString) return ''
-  const date = new Date(dateString)
-  return new Intl.DateTimeFormat('en-PH', { 
-    year: 'numeric', month: 'short', day: '2-digit', 
-    hour: '2-digit', minute: '2-digit' 
-  }).format(date)
+// The footer's own paging: it reports, these fetch (same as the options above).
+const setSystemPage = (page) => { systemPage.value = page; fetchLogs() }
+const setSmsPage = (page) => { smsPage.value = page; fetchLogs() }
+const setPerPage = (n) => {
+  itemsPerPage.value = n
+  systemPage.value = 1
+  smsPage.value = 1
+  fetchLogs()
 }
 
-const getActionColor = (action) => {
-  switch (action?.toLowerCase()) {
-    case 'created': return 'green'   // was 'create'
-    case 'updated': return 'blue'    // was 'update'
-    case 'deleted': return 'red'     // was 'delete'
-    case 'login':   return 'purple'
-    case 'exported':
-    case 'printed': return 'teal'
-    default:        return 'grey'
-  }
-}
+// Helpers
+// "Oct 4, 2026, 7:02 PM" on both tables.
+const formatLogDate = (dateString) => (dateString
+  ? new Date(dateString).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+  : '')
+
+// The action's StatusPill accent key (statusPill.ts): the server's word, capitalised.
+const actionKey = (action) => `${(action || '').charAt(0).toUpperCase()}${(action || '').slice(1).toLowerCase()}`
 
 onMounted(() => {
   fetchLogs()
@@ -299,15 +294,23 @@ onMounted(() => {
 </script>
 <style scoped>
 .row-number {
-  font-size: 0.95rem;
-  font-weight: 700;
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
   font-variant-numeric: tabular-nums;
 }
 
-/* Fixed layout holds both tables to the header widths declared in
-   systemHeaders/smsHeaders; without it, Description and Message Content
-   wrap freely and every row is a different height. */
-.logs-table :deep(table) { table-layout: fixed !important; width: 100% !important; min-width: 760px; }
+.logs-page { display: flex; flex-direction: column; gap: 20px; }
+.logs-page > .page-header { margin-bottom: 0; }
+.logs-search { width: 320px; }
+.logs-search :deep(.v-field) { border-radius: 10px; }
+
+/* The board's card: 24px radius and shadow, no border. */
+.logs-card {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 4px 14px rgba(0, 0, 0, 0.08) !important;
+  overflow: hidden;
+}
+
+/* Both tables take the shared board look (styles/board-table.css), whose fixed
+   layout holds Description and Message to their declared widths. */
 .cell-truncate {
   display: block;
   overflow: hidden;

@@ -1,9 +1,10 @@
 <template>
   <v-container fluid class="fill-height align-start bg-background">
-    <PageHeader title="Resource Management">
+    <PageHeader title="Resource Management" class="mb-5">
+      <template v-slot:subtitle>{{ subtitle }}</template>
       <template v-slot:actions>
-        <v-btn color="primary" variant="flat" rounded="lg" height="36" class="px-5 text-none font-weight-bold" @click="openAdd">
-          <v-icon start size="18">mdi-plus</v-icon> Add Equipment
+        <v-btn color="primary" variant="flat" class="text-none font-weight-bold" height="40" prepend-icon="mdi-plus" @click="openAdd">
+          Add equipment
         </v-btn>
       </template>
     </PageHeader>
@@ -16,6 +17,8 @@
       <DataTablePage
         :refreshing="refreshing"
         compact
+        filter-bar
+        range-summary
         collapse-mobile
         @click:row="(_event, { item }) => openEdit(item)"
         :tabs="statusTabs"
@@ -34,10 +37,8 @@
         @update:items-per-page="itemsPerPage = $event"
         result-noun="items"
       >
-        <template v-slot:summary>{{ summary }}</template>
-
         <template v-slot:item.item_name="{ item }">
-          <PersonCell :name="item.item_name" :icon="itemIcon(item.item_name)" size="36" />
+          <PersonCell :name="item.item_name" icon="mdi-package-variant-closed" tinted size="36" />
         </template>
 
         <template v-slot:item.available_quantity="{ item }">
@@ -68,44 +69,16 @@
 
 
     <!-- Add / Edit -->
-    <v-dialog v-model="modal.show" max-width="500" persistent>
-      <v-card rounded="xl" class="pa-2">
-        <v-card-title class="d-flex justify-space-between align-center pa-6 pb-2">
-          <span class="text-h6 font-weight-bold text-high-emphasis">{{ modal.editing ? 'Edit equipment' : 'Add equipment' }}</span>
-          <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" @click="modal.show = false"></v-btn>
-        </v-card-title>
-        <v-card-text class="px-6 py-2">
-          <v-alert v-if="modal.error" type="error" variant="tonal" density="compact" rounded="lg" class="mb-4">{{ modal.error }}</v-alert>
-          <v-text-field v-model="form.item_name" label="Item name *" placeholder="Folding stretcher" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-text-field>
-          <v-row>
-            <v-col cols="12" md="6">
-              <v-text-field v-model.number="form.total_quantity" label="Total owned *" placeholder="12" type="number" min="1" variant="outlined" density="comfortable" rounded="lg"></v-text-field>
-            </v-col>
-            <v-col cols="12" md="6">
-              <v-text-field
-                v-if="modal.editing"
-                v-model.number="form.available_quantity"
-                label="Available now *"
-                placeholder="9"
-                type="number" min="0" :max="form.total_quantity"
-                variant="outlined" density="comfortable" rounded="lg"
-              ></v-text-field>
-              <div v-else class="autosync-note subtle-surface">
-                <v-icon size="16" class="mr-1 text-medium-emphasis">mdi-sync</v-icon>
-                Available starts equal to total
-              </div>
-            </v-col>
-          </v-row>
-          <v-select v-model="form.status" :items="['Available', 'Unavailable']" label="Status *" variant="outlined" density="comfortable" rounded="lg" class="mt-1"></v-select>
-        </v-card-text>
-        <v-card-actions class="pa-6 pt-2 justify-end gap-3">
-          <v-btn variant="outlined" color="primary" rounded="lg" class="text-none" :disabled="modal.loading" @click="modal.show = false">Cancel</v-btn>
-          <v-btn color="primary" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold" :loading="modal.loading" @click="saveEquipment">
-            {{ modal.editing ? 'Save' : 'Add' }}
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <EditDialog
+      v-model="modal.show"
+      :title="modal.editing ? 'Edit equipment' : 'Add equipment'"
+      :confirm-label="modal.editing ? 'Save' : 'Add'"
+      :fields="formFields"
+      :form="form"
+      :error="modal.error"
+      :loading="modal.loading"
+      @save="saveEquipment"
+    />
 
     <!-- Delete confirm -->
     <v-dialog v-model="deleteDialog.show" max-width="420">
@@ -130,11 +103,13 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
 import { invalidate, useCachedFetch } from '@/composables/useCachedFetch'
+import { pluralize } from '@/composables/adminUi'
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
 import PersonCell from '@/components/PersonCell.vue'
 import StatusChip from '@/components/StatusChip.vue'
 import RowActions from '@/components/RowActions.vue'
+import EditDialog from '@/components/EditDialog.vue'
 
 const API = `${API_BASE}/equipments`
 
@@ -150,6 +125,16 @@ const modal = ref({ show: false, editing: false, loading: false, error: '', targ
 const form = ref({ item_name: '', total_quantity: 1, available_quantity: 1, status: 'Available' })
 const deleteDialog = ref({ show: false, item: null, loading: false })
 const snackbar = ref({ show: false, text: '', color: 'success' })
+
+// Total and Available sit side by side; on add, Available is just a note (it mirrors total).
+const formFields = computed(() => [
+  { key: 'item_name', label: 'Item name', required: true, placeholder: 'Folding stretcher' },
+  { key: 'total_quantity', label: 'Total owned', required: true, placeholder: '12', type: 'number', min: 1, half: true },
+  modal.value.editing
+    ? { key: 'available_quantity', label: 'Available now', required: true, placeholder: '9', type: 'number', min: 0, max: form.value.total_quantity, half: true }
+    : { key: 'available_quantity', note: 'Available starts equal to total', half: true },
+  { key: 'status', label: 'Status', required: true, items: ['Available', 'Unavailable'] },
+])
 
 const notify = (text, color = 'success') => { snackbar.value = { show: true, text, color } }
 const getHeaders = () => ({ Authorization: `Bearer ${getToken()}`, 'Content-Type': 'application/json', Accept: 'application/json' })
@@ -188,12 +173,12 @@ const statusTabs = computed(() => [
   { value: 'Needs attention', label: 'Low / Depleted', count: baseEquipments.value.filter((e) => !inStock(e)).length },
 ])
 
-// Footer summary: unit totals for the rows shown ("Available" sums units here,
-// which is why it is not a tab of its own).
-const summary = computed(() => {
-  const rows = filteredEquipments.value
+// Header subtitle: unit totals over the whole inventory ("Available" sums units
+// here, which is why it is not a tab of its own).
+const subtitle = computed(() => {
+  const rows = equipments.value
   const sum = (key) => rows.reduce((total, e) => total + (e[key] || 0), 0)
-  return `${rows.length} ${rows.length === 1 ? 'item' : 'items'} · ${sum('total_quantity')} owned · ${sum('available_quantity')} available`
+  return `${pluralize(rows.length, 'item')} ·${sum('total_quantity')} owned · ${sum('available_quantity')} available`
 })
 
 watch([search, statusFilter], () => { page.value = 1 })
@@ -208,22 +193,8 @@ const inventoryHeaders = [
   { title: 'Available', key: 'available_quantity', width: '200px' },
   { title: 'Status', key: 'state', value: (e) => stateLabel(e), width: '160px' },
   { title: 'In use', key: 'in_use', sortable: false, width: '120px', headerProps: HIDE_SM, cellProps: HIDE_SM },
-  { title: 'Actions', key: 'actions', sortable: false, align: 'end', width: '96px' },
+  { title: 'Actions', key: 'actions', sortable: false, align: 'end', width: '120px' },
 ]
-
-const itemIcon = (name) => {
-  const n = (name || '').toLowerCase()
-  if (n.includes('wheelchair')) return 'mdi-wheelchair'
-  if (n.includes('megaphone')) return 'mdi-bullhorn-outline'
-  if (n.includes('generator')) return 'mdi-engine-outline'
-  if (n.includes('first aid') || n.includes('medical')) return 'mdi-medical-bag'
-  if (n.includes('oxygen')) return 'mdi-gas-cylinder'
-  if (n.includes('rescue') || n.includes('tool')) return 'mdi-toolbox-outline'
-  if (n.includes('tent')) return 'mdi-tent'
-  if (n.includes('light') || n.includes('lamp')) return 'mdi-flashlight'
-  if (n.includes('radio')) return 'mdi-radio-handheld'
-  return 'mdi-package-variant-closed'
-}
 
 const { get, refreshing } = useCachedFetch()
 
@@ -330,15 +301,4 @@ onMounted(fetchEquipments)
 .fill-available { background: rgb(var(--v-theme-primary)); }
 .fill-low { background: rgb(var(--v-theme-warning)); }
 .fill-depleted { background: rgb(var(--v-theme-error)); }
-
-.autosync-note {
-  display: flex;
-  align-items: center;
-  height: 100%;
-  min-height: 52px;
-  padding: 8px 12px;
-  border-radius: 10px;
-  font-size: 0.78rem;
-  color: rgba(var(--v-theme-on-surface), 0.7);
-}
 </style>

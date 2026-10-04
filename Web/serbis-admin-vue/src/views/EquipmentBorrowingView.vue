@@ -67,6 +67,7 @@
       :status="statusFilter"
       @update:status="statusFilter = $event"
       :headers="activeHeaders"
+      :sort-hint="SORT_CAPTION"
       :items="activeItems"
       item-value="borrow_id"
       :row-props="rowProps"
@@ -84,8 +85,15 @@
       @clear-all="clearAllFilters"
       @click:row="(_event, { item }) => openDetail(item)"
     >
-      <template v-slot:actions>
-        <span class="text-caption text-medium-emphasis">{{ SORT_CAPTION }}</span>
+      <template v-if="selected.length > 0" v-slot:before-table>
+        <BulkSelectionBar
+          :selected="selected.length"
+          :actionable="pendingSelected.length"
+          action-label="Deny"
+          :loading="loading"
+          @clear="selected = []"
+          @action="requestBulkDeny"
+        />
       </template>
 
       <template v-slot:item.borrow_id="{ item }">
@@ -111,7 +119,7 @@
         <div class="min-w-0">
           <v-tooltip :text="itemName(item)" location="top">
             <template v-slot:activator="{ props }">
-              <div v-bind="props" class="text-body-2 font-weight-medium text-high-emphasis cell-truncate">
+              <div v-bind="props" class="text-body-2 font-weight-bold text-high-emphasis cell-truncate">
                 {{ itemName(item) }} <span class="text-medium-emphasis">&times;{{ item.quantity }}</span>
               </div>
             </template>
@@ -208,6 +216,17 @@
       @clear-all="clearAllFilters"
       @click:row="(_event, { item }) => openDetail(item)"
     >
+      <template v-if="selected.length > 0" v-slot:before-table>
+        <BulkSelectionBar
+          :selected="selected.length"
+          :actionable="pendingSelected.length"
+          action-label="Deny"
+          :loading="loading"
+          @clear="selected = []"
+          @action="requestBulkDeny"
+        />
+      </template>
+
       <template v-slot:item.borrow_id="{ item }">
         <span class="mono txn">{{ borrowingTransactionNo(item.borrow_id) }}</span>
       </template>
@@ -248,8 +267,7 @@
          mid-upload. Leave with the close button. -->
     <DetailDrawer
       :model-value="modal.isOpen"
-      @update:model-value="(v) => { if (!v) closeModal() }"
-      persistent
+      @update:model-value="(v) => { if (!v) requestClose() }"
       eyebrow="Equipment request"
       :name="drawerName"
       :initials="initials(selectedRecord?.resident)"
@@ -629,7 +647,7 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { initials as computeInitials } from '@/composables/adminUi'
+import { initials as computeInitials, pluralize } from '@/composables/adminUi'
 import { getToken } from '@/composables/authToken'
 import { displayPhone } from '@/composables/phoneNumber'
 import { useBorrowingsList } from '@/composables/borrowingsList'
@@ -642,9 +660,11 @@ import SegmentedTabs from '@/components/SegmentedTabs.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import PersonCell from '@/components/PersonCell.vue'
 import ExportMenu from '@/components/ExportMenu.vue'
+import BulkSelectionBar from '@/components/BulkSelectionBar.vue'
 import DetailDrawer from '@/components/DetailDrawer.vue'
 import '@/components/detail-dialog.css'
 import { borrowingTransactionNo } from '@/composables/requestDisplay'
+import { pendingOf } from '@/composables/useReasonActions'
 import { BORROWING_STATUSES, statusIcon } from '@/composables/borrowingStatus'
 
 const route = useRoute()
@@ -698,6 +718,10 @@ const selectedRecord = ref(null)
 // ExportMenu takes them as a Set.
 const selected = ref([])
 const selectedIds = computed(() => new Set(selected.value))
+// A bulk deny acts on the Pending rows only; the rest of a selection is skipped.
+const pendingSelected = computed(() => pendingOf(borrowings.value, selectedIds.value, (b) => b.borrow_id))
+// A different tab or status segment is a different list; ticks do not carry over.
+watch([activeTab, statusFilter, outcomeFilter], () => { selected.value = [] })
 const snackbar = ref({ show: false, text: '', color: 'success' })
 
 const emptyAction = () => ({
@@ -711,6 +735,7 @@ const emptyAction = () => ({
   condition: 'Good',
   conditionNote: '',
   error: '',
+  bulk: false,
 })
 const actionDialog = ref(emptyAction())
 
@@ -876,18 +901,17 @@ const historyStatusTabs = computed(() => {
   ]
 })
 
-const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`
 
 // The page header's line, per tab.
 const subtitle = computed(() => {
-  if (activeTab.value === 'history') return `${plural(borrowings.value.filter((b) => terminalStatuses.has(b.status)).length, 'completed request')}, newest first`
+  if (activeTab.value === 'history') return `${pluralize(borrowings.value.filter((b) => terminalStatuses.has(b.status)).length, 'completed request')}, newest first`
   const pending = borrowings.value.filter((b) => b.status === 'Pending').length
   const overdue = borrowings.value.filter((b) => isOverdue(b)).length
   return `${pending} pending${overdue ? ` · ${overdue} overdue` : ''}`
 })
 
 // What activeItems sorts by: overdue, then stage, then oldest-waiting.
-const SORT_CAPTION = 'Overdue first, then by stage, longest waiting first'
+const SORT_CAPTION = 'Sorted by: overdue on top, then status, then oldest'
 
 // Search's own chip is DataTablePage's job (it already owns that prop); this
 // only covers the two selects plus whichever tab is active on the current
@@ -1058,7 +1082,7 @@ const agingLabel = (item) => {
   const anchor = (released && item.released_at) || item.created_at
   const days = Math.floor((Date.now() - new Date(anchor).getTime()) / 86_400_000)
   if (days <= 0) return released ? 'Out today' : 'Filed today'
-  return `${plural(days, 'day')} ${released ? 'out' : 'waiting'}`
+  return `${pluralize(days, 'day')} ${released ? 'out' : 'waiting'}`
 }
 
 // One plain line under the status pill: the due countdown, then the age.
@@ -1088,9 +1112,9 @@ const drawerStatus = computed(() => {
   const days = (from, to = Date.now()) => Math.max(0, Math.floor((new Date(to).getTime() - new Date(from).getTime()) / 86_400_000))
   switch (r.status) {
     case 'Pending':
-      return { text: `Waiting ${plural(days(r.created_at), 'day')}`, class: null }
+      return { text: `Waiting ${pluralize(days(r.created_at), 'day')}`, class: null }
     case 'Approved':
-      return { text: `Approved · filed ${plural(days(r.created_at), 'day')} ago`, class: null }
+      return { text: `Approved · filed ${pluralize(days(r.created_at), 'day')} ago`, class: null }
     case 'Released':
       return r.due_date
         ? { text: `${dueLabel(r)} · due back ${fmtDate(r.due_date)}`, class: dueClass(r) }
@@ -1101,7 +1125,7 @@ const drawerStatus = computed(() => {
       const back = r.returned_at ? new Date(r.returned_at) : null
       if (back) back.setHours(0, 0, 0, 0)
       const late = due && back ? Math.round((back - due) / 86_400_000) : 0
-      return { text: `Returned ${fmtDate(r.returned_at)}${late > 0 ? ` · ${plural(late, 'day')} late` : ''}`, class: null }
+      return { text: `Returned ${fmtDate(r.returned_at)}${late > 0 ? ` · ${pluralize(late, 'day')} late` : ''}`, class: null }
     }
     case 'Cancelled':
       return { text: 'Withdrawn by the resident', class: null }
@@ -1337,6 +1361,16 @@ const uploadHandoverPhoto = async (record, stage, file) => {
   }
 }
 
+// A click on the scrim, Escape and the header's close button all land here, as on
+// the other pages' drawers. The drawer holds no typed-in form (due date, reason and
+// return condition live in the action dialog), so the only thing a close could lose
+// is work in flight: it stays open while a photo or a status change is being saved.
+// There is no "Discard changes?" confirm in the app to ask with.
+const requestClose = () => {
+  if (photoUploading.value || photoRemoving.value || loading.value) return
+  closeModal()
+}
+
 const closeModal = () => {
   modal.value.isOpen = false
   selectedRecord.value = null
@@ -1384,13 +1418,27 @@ const requestAction = (record, newStatus) => {
   actionDialog.value = next
 }
 
+const requestBulkDeny = () => {
+  actionDialog.value = { ...emptyAction(), open: true, mode: 'deny', status: 'Denied', bulk: true }
+}
+
 const actionCopy = computed(() => {
   const record = actionDialog.value.record
   const who = `${record?.resident?.first_name || ''} ${record?.resident?.last_name || ''}`.trim() || 'this resident'
   const what = record?.equipment?.item_name || record?.other_equipment_text || 'the equipment'
   switch (actionDialog.value.mode) {
-    case 'deny':
+    case 'deny': {
+      if (actionDialog.value.bulk) {
+        const n = pendingSelected.value.length
+        const skipped = selectedIds.value.size - n
+        return {
+          title: `Deny ${pluralize(n, 'request')}`,
+          body: `Every pending request in the selection is denied with this same reason.${skipped ? ` ${skipped} other${skipped === 1 ? '' : 's'} in the selection ${skipped === 1 ? 'is' : 'are'} not pending and will be skipped.` : ''}`,
+          confirm: 'Deny all',
+        }
+      }
       return { title: 'Deny this request', body: `${who} asked for ${what}.`, confirm: 'Deny request' }
+    }
     case 'due':
       return {
         title: actionDialog.value.status === 'Approved' ? 'Approve this request' : 'Release to resident',
@@ -1426,6 +1474,7 @@ const confirmAction = () => {
     actionDialog.value.error = 'Say what condition it came back in — every return needs a note.'
     return
   }
+  if (actionDialog.value.bulk) return bulkDeny(reason.trim(), denialReasonCode)
   const extra = {}
   if (mode === 'due') extra.due_date = dueDate
   if (mode === 'deny') {
@@ -1437,6 +1486,34 @@ const confirmAction = () => {
     extra.return_condition_note = conditionNote.trim()
   }
   return updateStatus(record, status, extra)
+}
+
+// No bulk endpoint: the single-request deny, once per Pending row in the selection.
+const bulkDeny = async (reason, denialReasonCode) => {
+  loading.value = true
+  apiError.value = ''
+  try {
+    await Promise.all(pendingSelected.value.map(async (b) => {
+      const res = await fetch(`${API_BASE}/borrowings/${b.borrow_id}`, {
+        method: 'PUT',
+        headers: getHeaders(),
+        body: JSON.stringify({ status: 'Denied', denial_reason: reason, denial_reason_code: denialReasonCode }),
+      })
+      if (!res.ok) throw new Error('Failed to update one or more requests')
+    }))
+    selected.value = []
+    invalidate('/borrowings')
+    invalidate('/equipments')
+    await fetchData()
+    notify('Requests denied')
+    actionDialog.value.open = false
+  } catch (error) {
+    apiError.value = error.message
+    actionDialog.value.error = error.message
+    notify(error.message, 'error')
+  } finally {
+    loading.value = false
+  }
 }
 
 const updateStatus = async (record, newStatus, extra = {}) => {
@@ -1500,7 +1577,6 @@ onMounted(async () => {
 .borrow-table :deep(.dtp-table td) { white-space: nowrap; }
 .action-btn { min-width: 104px; }
 
-.txn { font-size: 13px; white-space: nowrap; }
 .borrow-table :deep(tbody tr.row-selected) { background-color: rgba(var(--v-theme-primary), 0.08); }
 
 /* Drawer body: the same boxes as the other request drawers. */

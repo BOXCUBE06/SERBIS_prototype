@@ -86,7 +86,14 @@ const { width } = useDisplay()
 </script>
 
 <style scoped>
-.detail-drawer { box-shadow: 0 28px 64px rgba(2, 20, 16, 0.32); }
+/* Only while open: a closed drawer is parked just past the viewport edge, and its
+   64px shadow would bleed onto the page as a grey band against the scrollbar. */
+.detail-drawer { box-shadow: none; }
+.detail-drawer.v-navigation-drawer--active { box-shadow: 0 28px 64px rgba(2, 20, 16, 0.32); }
+/* Closed: no shadow (it fades out with the slide, on the drawer's own transition) and
+   hidden once the slide ends, so nothing in it can be tabbed to or read out. Vuetify's
+   drawer transition already animates visibility, so the slide-out stays visible. */
+.detail-drawer:not(.v-navigation-drawer--active) { visibility: hidden; }
 .dd-header {
   flex-shrink: 0;
   padding: 24px 24px 16px;

@@ -1,12 +1,12 @@
 <template>
   <v-container fluid class="fill-height align-start bg-background">
-    <PageHeader title="Emergency Hotlines">
+    <PageHeader title="Emergency hotlines">
       <template v-slot:subtitle>
         The numbers residents see in the app's Library. The app keeps the last list it downloaded, so a change reaches a phone the next time it is online.
       </template>
       <template v-slot:actions>
-        <v-btn color="primary" variant="flat" rounded="lg" height="36" class="px-5 text-none font-weight-bold" prepend-icon="mdi-plus" @click="openAdd">
-          Add hotline
+        <v-btn color="primary" variant="flat" height="40" class="add-btn text-none font-weight-bold" @click="openAdd">
+          <v-icon start size="16">mdi-plus</v-icon> Add hotline
         </v-btn>
       </template>
     </PageHeader>
@@ -22,6 +22,9 @@
       <DataTablePage
         :refreshing="refreshing"
         compact
+        filter-bar
+        board-table
+        :row-height="56"
         class="hotline-table"
         :searchable="false"
         :loading="initialLoad"
@@ -33,61 +36,44 @@
         result-noun="hotlines"
         no-data-text="No hotlines — the app falls back to its built-in list"
       >
+        <template v-slot:summary>{{ pluralize(rows.length, 'hotline') }}</template>
+
         <template v-slot:item.label="{ item }">
-          <div class="font-weight-bold text-high-emphasis">{{ item.label }}</div>
-          <div v-if="item.label_fil && item.label_fil !== item.label" class="text-caption text-medium-emphasis">{{ item.label_fil }}</div>
+          <div class="hotline-name">{{ item.label }}</div>
+          <div v-if="item.label_fil && item.label_fil !== item.label" class="hotline-sub">{{ item.label_fil }}</div>
         </template>
 
         <template v-slot:item.numbers="{ item }">
-          <div v-for="(n, i) in item.numbers" :key="i" class="text-body-2">
-            <span v-if="n.label" class="text-medium-emphasis">{{ n.label }}: </span>{{ n.number }}
+          <div v-for="(n, i) in item.numbers" :key="i" class="hotline-line">
+            <span v-if="n.label" class="hotline-line__label">{{ n.label }}:</span> {{ n.number }}
           </div>
         </template>
 
         <template v-slot:item.actions="{ item, index }">
-          <div class="d-flex justify-end">
-            <v-btn icon="mdi-arrow-up" variant="text" size="small" :disabled="index === 0 || moving" aria-label="Move up" @click.stop="move(index, -1)"></v-btn>
-            <v-btn icon="mdi-arrow-down" variant="text" size="small" :disabled="index === rows.length - 1 || moving" aria-label="Move down" @click.stop="move(index, 1)"></v-btn>
-            <v-btn icon="mdi-pencil-outline" variant="text" size="small" aria-label="Edit" @click.stop="openEdit(item)"></v-btn>
-            <v-btn icon="mdi-delete-outline" variant="text" size="small" color="error" aria-label="Delete" @click.stop="deleteDialog = { show: true, hotline: item, loading: false }"></v-btn>
+          <div class="d-flex justify-end hotline-actions">
+            <v-btn icon="mdi-arrow-up" variant="text" :disabled="index === 0 || moving" :aria-label="`Move ${item.label} up`" @click.stop="move(index, -1)"></v-btn>
+            <v-btn icon="mdi-arrow-down" variant="text" :disabled="index === rows.length - 1 || moving" :aria-label="`Move ${item.label} down`" @click.stop="move(index, 1)"></v-btn>
+            <v-btn icon="mdi-pencil-outline" variant="text" class="hotline-actions__quiet" :aria-label="`Edit ${item.label}`" @click.stop="openEdit(item)"></v-btn>
+            <v-btn icon="mdi-delete-outline" variant="text" color="error" :aria-label="`Delete ${item.label}`" @click.stop="deleteDialog = { show: true, hotline: item, loading: false }"></v-btn>
           </div>
         </template>
       </DataTablePage>
     </div>
 
     <!-- Add / Edit -->
-    <v-dialog v-model="formDialog.show" max-width="520" persistent>
-      <v-card rounded="xl" class="pa-2">
-        <v-card-title class="d-flex justify-space-between align-center pa-6 pb-2">
-          <span class="text-h6 font-weight-bold text-high-emphasis">{{ formDialog.editing ? 'Edit hotline' : 'Add hotline' }}</span>
-          <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" @click="formDialog.show = false"></v-btn>
-        </v-card-title>
-        <v-card-text class="px-6 py-2">
-          <v-alert v-if="formDialog.error" type="error" variant="tonal" density="compact" rounded="lg" class="mb-4" role="alert">{{ formDialog.error }}</v-alert>
-          <v-form ref="formRef">
-            <v-text-field v-model="form.label" label="Name *" :rules="[required]" :error-messages="fieldErrors.label" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-text-field>
-            <v-text-field v-model="form.label_fil" label="Name in Filipino" hint="Leave blank to show the English name" persistent-hint :error-messages="fieldErrors.label_fil" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-text-field>
-
-            <div class="d-flex justify-space-between align-center mb-2">
-              <span class="text-subtitle-2 font-weight-bold">Numbers</span>
-              <v-btn variant="text" size="small" class="text-none" prepend-icon="mdi-plus" :disabled="form.numbers.length >= 6" @click="form.numbers.push({ label: '', number: '' })">Add number</v-btn>
-            </div>
-            <div v-for="(n, i) in form.numbers" :key="i" class="d-flex align-start ga-2 mb-2">
-              <v-text-field v-model="n.label" label="Carrier / line" placeholder="e.g. Globe" variant="outlined" density="compact" rounded="lg" class="flex-0-0" style="width: 150px" :error-messages="fieldErrors[`numbers.${i}.label`]"></v-text-field>
-              <v-text-field :model-value="n.number" @input="(e) => (n.number = e.target.value = phoneChars(e.target.value))" inputmode="tel" maxlength="20" label="Number *" placeholder="0917-000-0000" :rules="[required]" variant="outlined" density="compact" rounded="lg" :error-messages="fieldErrors[`numbers.${i}.number`]"></v-text-field>
-              <!-- At least one number: the first row cannot be removed. -->
-              <v-btn v-if="i > 0" icon="mdi-close" variant="text" size="small" class="mt-1" aria-label="Remove number" @click="form.numbers.splice(i, 1)"></v-btn>
-            </div>
-          </v-form>
-        </v-card-text>
-        <v-card-actions class="pa-6 pt-2 justify-end gap-3">
-          <v-btn variant="outlined" color="primary" rounded="lg" class="text-none" :disabled="formDialog.loading" @click="formDialog.show = false">Cancel</v-btn>
-          <v-btn color="primary" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold" :loading="formDialog.loading" @click="save">
-            {{ formDialog.editing ? 'Save changes' : 'Add hotline' }}
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <EditDialog
+      ref="formRef"
+      v-model="formDialog.show"
+      :title="formDialog.editing ? 'Edit hotline' : 'Add hotline'"
+      :confirm-label="formDialog.editing ? 'Save changes' : 'Add hotline'"
+      :width="520"
+      :fields="hotlineFields"
+      :form="form"
+      :field-errors="fieldErrors"
+      :error="formDialog.error"
+      :loading="formDialog.loading"
+      @save="save"
+    />
 
     <!-- Delete confirm -->
     <v-dialog v-model="deleteDialog.show" max-width="420">
@@ -111,16 +97,17 @@
 
 <script setup>
 import { onMounted, ref } from 'vue'
-import { authHeaders, useSnackbar } from '@/composables/adminUi'
+import { authHeaders, pluralize, useSnackbar } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import { REFERENCE_TTL_MS, invalidate, useCachedFetch } from '@/composables/useCachedFetch'
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
+import EditDialog from '@/components/EditDialog.vue'
 
 const headers = [
-  { title: 'Hotline', key: 'label', sortable: false, width: '35%' },
+  { title: 'Hotline', key: 'label', sortable: false, width: '34%' },
   { title: 'Numbers', key: 'numbers', sortable: false },
-  { title: '', key: 'actions', sortable: false, align: 'end', width: '200px' },
+  { title: 'Actions', key: 'actions', sortable: false, align: 'end', width: '200px' },
 ]
 
 const rows = ref([])
@@ -133,6 +120,13 @@ const required = (v) => !!(v && String(v).trim()) || 'Required'
 // Letters are dropped as they are typed. Digits plus ( ) + - and spaces, the
 // same set EmergencyHotlineController accepts, so landlines like (078) 324-5410 still fit.
 const phoneChars = (v) => (v || '').replace(/[^0-9()+\- ]/g, '')
+
+// The add / edit dialog's fields. `numbers` is the repeatable carrier + number rows.
+const hotlineFields = [
+  { key: 'label', label: 'Name', required: true, rules: [required] },
+  { key: 'label_fil', label: 'Name in Filipino', hint: 'Leave blank to show the English name.' },
+  { key: 'numbers', label: 'Numbers', numbers: true, maxRows: 6, rules: [required], sanitize: phoneChars, inputmode: 'tel', maxlength: 20 },
+]
 
 const { get, refreshing } = useCachedFetch()
 
@@ -270,4 +264,27 @@ onMounted(load)
 <style scoped>
 /* Rows do nothing on click; only the buttons do. */
 .hotline-table.data-table-page :deep(tbody tr) { cursor: default; }
+
+.add-btn {
+  padding: 0 18px;
+  border-radius: 12px;
+  font-size: 14px;
+  letter-spacing: 0;
+  box-shadow: 0 8px 16px -4px rgba(var(--v-theme-primary), 0.28);
+}
+
+/* Hotline cell: the name, then the Filipino name (12/16). */
+.hotline-name { font-weight: 700; white-space: nowrap; }
+.hotline-sub { font-size: 12px; line-height: 16px; color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)); }
+/* Numbers: 20px lines in tabular figures, the carrier muted. */
+.hotline-line { line-height: 20px; font-variant-numeric: tabular-nums; }
+.hotline-line__label { color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)); }
+
+/* Actions: 40px square buttons, 10px radius, 18px icons. Move up / down at full
+   strength and dimmed to .35 when off (first row up, last row down). */
+.hotline-actions { gap: 4px; }
+.hotline-actions .v-btn { width: 40px; height: 40px; border-radius: 10px; }
+.hotline-actions .v-icon { font-size: 18px; }
+.hotline-actions .v-btn--disabled { opacity: 0.35 !important; }
+.hotline-actions__quiet { color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)); }
 </style>

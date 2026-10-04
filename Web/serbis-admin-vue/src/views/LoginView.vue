@@ -6,29 +6,34 @@
 
     <div class="login-card">
 
+      <!-- The dark half: a viewport-sized layer centred on the card, so its edge
+           continues the page's diagonal (the Login board). Decorative. -->
+      <div class="card-dark" aria-hidden="true"></div>
+
       <!-- Left Side -->
-      <div class="brand-panel d-flex flex-column align-center justify-center pa-8">
-        <div class="d-flex flex-column align-center text-center">
-          <img
-            src="@/assets/mdrrmo_logo.jpg"
-            alt="MDRRMO Echague logo"
-            class="mb-5 brand-seal"
-          />
+      <div class="brand-panel">
+        <img
+          src="@/assets/mdrrmo_logo.jpg"
+          alt="MDRRMO Echague logo"
+          class="brand-seal"
+        />
+        <div class="brand-text">
           <!-- This panel is a fixed off-white in both themes, so its text must
                stay dark. Theme tokens (text-high-emphasis) resolve to white in
                dark mode and make the title vanish against the light half. -->
-          <h1 class="text-h3 font-weight-black text-grey-darken-4 mb-2" style="letter-spacing: 6px; line-height: 1.2;">
-            SERBIS
-          </h1>
-          <div class="brand-subtitle">
-            MDRRMO Echague Disaster Communication<br>&amp; Service Coordination System
-          </div>
+          <h1 class="brand-title">SERBIS</h1>
+          <p class="brand-subtitle">MDRRMO Echague Disaster Communication &amp; Service Coordination System</p>
         </div>
+        <div class="brand-place">Echague, Isabela</div>
       </div>
 
       <!-- Right Side -->
-      <div class="form-panel d-flex flex-column justify-center pa-8">
+      <div class="form-panel">
         <div class="form-block">
+          <div class="form-head">
+            <h2 class="form-title">Sign in</h2>
+            <p class="form-sub">Staff access to the MDRRMO Echague panel.</p>
+          </div>
           <!-- Password step. Unchanged apart from handleLogin now branching
                into the MFA step on a 403/mfa_required instead of always
                storing a token — see script setup. -->
@@ -72,94 +77,64 @@
   </span>
 </v-alert>
 
-            <label for="login-username" class="d-block text-body-2 text-white mb-2 font-weight-medium">Username</label>
-            <v-text-field
-              id="login-username"
-              v-model="credentials.username"
-              type="text"
-              placeholder="e.g. juan.delacruz"
-              autocapitalize="none"
-              spellcheck="false"
-              variant="solo"
-              bg-color="white"
-              density="comfortable"
-              rounded="md"
-              hide-details
-              elevation="0"
-              autofocus
-              autocomplete="username"
-              class="mb-5 flat-input"
-            ></v-text-field>
-
-            <label for="login-password" class="d-block text-body-2 text-white mb-2 font-weight-medium">Password</label>
-            <v-text-field
-              id="login-password"
-              v-model="credentials.password"
-              :type="showPassword ? 'text' : 'password'"
-              placeholder="********"
-              variant="solo"
-              bg-color="white"
-              density="comfortable"
-              rounded="md"
-              hide-details
-              elevation="0"
-              autocomplete="current-password"
-              class="mb-4 flat-input"
-            >
-              <template #append-inner>
-                <v-btn
-                  :icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
-                  :aria-label="showPassword ? 'Hide password' : 'Show password'"
-                  :aria-pressed="showPassword"
-                  variant="text"
-                  density="comfortable"
-                  size="small"
-                  color="grey-darken-1"
-                  @click="showPassword = !showPassword"
-                ></v-btn>
-              </template>
-            </v-text-field>
-
-            <!-- No "Forgot password?" link: staff usernames are not mailboxes, so
-                 nothing can be emailed. Another admin resets it from Staff
-                 Accounts; the note under the button says so. -->
-            <div class="d-flex align-center mb-5">
+            <div class="form-fields">
+              <div>
+                <label for="login-username" class="login-label">Username</label>
+                <input
+                  id="login-username"
+                  v-model="credentials.username"
+                  class="login-field"
+                  type="text"
+                  placeholder="e.g. juan.delacruz"
+                  autocapitalize="none"
+                  spellcheck="false"
+                  autofocus
+                  autocomplete="username"
+                />
+              </div>
+              <div>
+                <label for="login-password" class="login-label">Password</label>
+                <div class="login-pw">
+                  <input
+                    id="login-password"
+                    v-model="credentials.password"
+                    class="login-field login-field--pw"
+                    :type="showPassword ? 'text' : 'password'"
+                    placeholder="Enter your password"
+                    autocomplete="current-password"
+                  />
+                  <button
+                    type="button" class="login-eye"
+                    :aria-label="showPassword ? 'Hide password' : 'Show password'"
+                    :aria-pressed="showPassword"
+                    @click="showPassword = !showPassword"
+                  >
+                    <v-icon size="20" aria-hidden="true">{{ showPassword ? 'mdi-eye-off-outline' : 'mdi-eye-outline' }}</v-icon>
+                  </button>
+                </div>
+              </div>
+              <!-- No "Forgot password?" link: staff usernames are not mailboxes, so
+                   nothing can be emailed. Another admin resets it from Staff
+                   Accounts; the note under the button says so. -->
               <!-- Was "for 30 days", which stopped being true when admin tokens
                    gained an 8-hour server-side TTL (audit #30): the server ends
                    the session first regardless of this box. It still decides how
                    long a dead token sits in localStorage on a shared desk. -->
-              <v-checkbox
-                v-model="rememberMe"
-                label="Keep me signed in on this device"
-                density="compact"
-                hide-details
-                class="custom-checkbox"
-              ></v-checkbox>
+              <label class="login-check">
+                <input v-model="rememberMe" type="checkbox" />
+                Keep me signed in on this device
+              </label>
             </div>
 
-            <!-- Fixed #297A67 rather than color="primary". This card is pinned
-                 light in both themes (same convention as the panels), and the
-                 primary token resolves to #34C39A in dark, which Vuetify pairs
-                 with black text. The button has to keep white text on the dark
-                 panel, so the value is pinned. #297A67 is the light primary
-                 value, not a new green. White on it measures 5.15:1. -->
-            <v-btn
-              type="submit"
-              color="#297A67"
-              block
-              height="52"
-              rounded="md"
-              elevation="0"
-              class="text-none font-weight-bold text-body-1 text-white"
-              :loading="loading"
-              :disabled="lockoutSeconds > 0"
-            >
-              {{ lockoutSeconds > 0 ? `LOCKED — ${lockoutSeconds}s` : 'SIGN IN' }}
-            </v-btn>
-
-            <p class="reset-note text-body-2 text-center mt-4 mb-0">
-              Ask another admin to reset your password.
-            </p>
+            <!-- The Sign in button is #34C39A with dark text on this dark half in
+                 both themes (the card is pinned, as the panels are). -->
+            <div class="form-actions">
+              <button type="submit" class="login-signin" :disabled="loading || lockoutSeconds > 0">
+                <span v-if="loading" class="login-spin" aria-hidden="true"></span>
+                {{ lockoutSeconds > 0 ? `LOCKED — ${lockoutSeconds}s` : 'Sign in' }}
+              </button>
+              <p class="login-helper">Forgot your password? Ask another admin to reset it.</p>
+            </div>
 
           </v-form>
 
@@ -210,25 +185,16 @@
               @finish="handleMfaSubmit"
             ></v-otp-input>
 
-            <v-btn
-              type="submit"
-              color="#297A67"
-              block
-              height="52"
-              rounded="md"
-              elevation="0"
-              class="text-none font-weight-bold text-body-1 text-white"
-              :loading="mfaLoading"
-              :disabled="mfaCode.length !== 6"
-            >
-              VERIFY
-            </v-btn>
+            <button type="submit" class="login-signin" :disabled="mfaLoading || mfaCode.length !== 6">
+              <span v-if="mfaLoading" class="login-spin" aria-hidden="true"></span>
+              Verify
+            </button>
 
             <!-- Same 60-second wait the server enforces (resend_too_soon). -->
             <v-btn
               variant="text"
               block
-              class="text-none text-white mt-2"
+              class="text-none text-white mt-2 login-link"
               :loading="resendLoading"
               :disabled="resendSeconds > 0"
               @click="handleResend"
@@ -239,7 +205,7 @@
             <v-btn
               variant="text"
               block
-              class="text-none text-white mt-2"
+              class="text-none text-white mt-2 login-link"
               @click="step = 'password'"
             >
               Back to sign in
@@ -498,8 +464,10 @@ const handleResend = async () => {
   position: relative;
   min-height: 100dvh;
   width: 100%;
-  padding: 4vh 3vw;
-  background: #EDF1F0;
+  padding: 32px;
+  box-sizing: border-box;
+  overflow: hidden;
+  background: #EEF1F0;
 }
 
 @supports not (height: 100dvh) {
@@ -522,7 +490,21 @@ const handleResend = async () => {
 .bleed-wedge {
   position: absolute;
   inset: 0;
-  background: linear-gradient(105deg, transparent 50%, #0E352D 50%);
+  background: #0A2620;
+  clip-path: polygon(58% 0, 100% 0, 100% 100%, 44% 100%);
+  pointer-events: none;
+}
+/* The card's dark half: the same polygon on a page-sized layer centred on the
+   card (it is centred on the page), so the two edges are one line. */
+.card-dark {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 100vw;
+  height: 100dvh;
+  transform: translate(-50%, -50%);
+  background: #12403A;
+  clip-path: polygon(58% 0, 100% 0, 100% 100%, 44% 100%);
   pointer-events: none;
 }
 
@@ -538,69 +520,57 @@ const handleResend = async () => {
      The cap stops the card sprawling on ultrawides (at 2560 it would otherwise
      be ~2000px, stranding the form far right). 1500px keeps it inactive at
      1920 and below, so those sizes get the full 78%. */
-  width: 78vw;
-  max-width: 1500px;
-  min-height: 70dvh;
-  border-radius: 14px;
+  width: min(1180px, 100%);
+  height: 640px;
+  min-height: 640px;
+  border-radius: 24px;
   overflow: hidden;
   box-shadow: 0 28px 64px rgba(2, 20, 16, 0.32);
-  /* 105deg leans the seam 15deg off plumb (90deg would be dead vertical).
-     Stop at 50% so this lands on the card's centre — which is also the page's
-     centre, and therefore exactly on the wedge's line. See .bleed-wedge. */
-  background: linear-gradient(105deg, #FAFAF8 50%, #113F36 50%);
+  background: #FBFBF9;
 }
 
-@supports not (height: 100dvh) {
-  .login-card { min-height: 70vh; }
-}
-
-/* 50/50 to match the seam. The seam is diagonal, so it sweeps ~±85px either
-   side of the 50% mark over the card's height — each panel's content is
-   centred/right-aligned well clear of that sweep. */
+/* Identity on the left 44%, the form on the right (72px from the edge, 380px
+   wide): both centred on the card's height, which is what keeps them clear of
+   the diagonal. */
 .brand-panel {
-  flex: 0 0 50%;
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 44%;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px;
+  padding: 0 24px 0 40px;
+  box-sizing: border-box;
+  text-align: center;
 }
+.brand-text { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.brand-title {
+  margin: 0; padding-left: 0.24em;
+  font-size: 36px; line-height: 44px; font-weight: 800; letter-spacing: 0.24em;
+  color: #0A2620;
+}
+.brand-subtitle { margin: 0; max-width: 300px; font-size: 14px; line-height: 22px; color: rgba(0, 0, 0, 0.62); }
+.brand-place { position: absolute; left: 40px; bottom: 32px; font-size: 12px; line-height: 16px; color: rgba(0, 0, 0, 0.6); }
 
-/* Centred, which puts the block on the usable dark area's centre rather than
-   the panel rectangle's — the two coincide here.
-
-   The dark area is a trapezoid: the seam cuts into its left edge, narrow at the
-   top and wide at the bottom. Its centre at height y is (seamX(y) + cardRight)/2.
-   Averaged over the block, the seam's lean cancels, because the block is
-   vertically centred and so its mid-line sits exactly on the card's centre —
-   where the seam crosses the card's mid-x. That leaves (cardMidX + cardRight)/2,
-   which is the panel rectangle's centre. So centring here is centring in the
-   usable space. The brand panel measures 0.0px off for the same reason.
-
-   This only holds while the block stays vertically centred; if it ever moves
-   off-centre the lean stops cancelling and this needs a real offset. */
 .form-panel {
-  flex: 0 0 50%;
-  align-items: center;
+  position: absolute;
+  right: 72px; top: 0; bottom: 0;
+  width: 380px;
+  display: flex; flex-direction: column; justify-content: center;
+  color: #fff;
 }
-
-.form-block {
-  width: 100%;
-  max-width: 380px;
-}
+.form-block { display: flex; flex-direction: column; gap: 28px; }
+.form-title { margin: 0; font-size: 28px; line-height: 36px; font-weight: 700; letter-spacing: -0.4px; }
+.form-sub { margin: 4px 0 0; font-size: 14px; line-height: 20px; color: rgba(255, 255, 255, 0.76); }
+.form-fields { display: flex; flex-direction: column; gap: 18px; }
+.form-actions { display: flex; flex-direction: column; gap: 16px; }
 
 /* The seal is a JPG on a pure-white background, and the panel is off-white, so
    it landed as a visible white disc. multiply drops the white to the panel
-   colour instead of cropping it to a circle — which only ever worked because
-   the old panel happened to be pure white too. */
+   colour. The board shows it 128px. */
 .brand-seal {
-  width: 180px;
-  height: 180px;
+  width: 128px;
+  height: 128px;
   object-fit: contain;
   mix-blend-mode: multiply;
-}
-
-.brand-subtitle {
-  max-width: 340px;
-  font-size: 0.8125rem;
-  font-style: italic;
-  line-height: 1.7;
-  color: #4A4A4A;
 }
 
 @media (max-width: 959px) {
@@ -621,52 +591,83 @@ const handleResend = async () => {
     flex-direction: column;
     width: 100%;
     max-width: none;
+    height: auto;
     min-height: 100dvh;
     border-radius: 0;
     box-shadow: none;
-    background: #113F36;
+    background: #12403A;
   }
+
+  .card-dark { display: none; }
 
   .brand-panel,
   .form-panel {
+    position: static;
+    width: auto;
     flex: 0 0 auto;
   }
 
   .brand-panel {
-    background: #FAFAF8;
+    padding: 32px 24px;
+    background: #FBFBF9;
   }
+  .brand-place { position: static; margin-top: -8px; }
 
   .form-panel {
-    background: #113F36;
+    padding: 32px 24px;
+    background: #12403A;
     align-items: center;
   }
+  .form-block { width: 100%; max-width: 380px; }
 }
 
-.flat-input :deep(.v-field) {
-  box-shadow: none !important;
-  border-radius: 6px;
+/* Form controls (Login board). The password-manager autofill buttons are
+   deliberately left visible: admins should be able to use a manager here. */
+.login-label {
+  display: block; margin-bottom: 8px;
+  font-size: 12px; line-height: 16px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.86);
 }
-
-/* The password-manager autofill buttons are deliberately left visible — admins
-   should be able to use a manager here. These fields previously hid them, and
-   hid every .v-icon with them, which also silently swallowed the show/hide
-   password toggle. */
-
-.custom-checkbox :deep(.v-label) {
-  color: white !important;
-  opacity: 1 !important;
-  font-size: 0.875rem !important;
+.login-field {
+  width: 100%; height: 48px; box-sizing: border-box; padding: 0 16px;
+  border: 0; border-radius: 12px; background: #fff;
+  font-family: inherit; font-size: 15px; color: rgba(0, 0, 0, 0.87);
 }
-
-.custom-checkbox :deep(.v-selection-control__input > .v-icon) {
-  color: white !important;
+.login-field:focus { outline: 3px solid rgba(52, 195, 154, 0.55); outline-offset: 0; }
+.login-field--pw { padding-right: 52px; }
+.login-pw { position: relative; }
+.login-eye {
+  position: absolute; right: 4px; top: 4px; width: 40px; height: 40px;
+  display: grid; place-items: center; border: 0; border-radius: 8px;
+  background: transparent; color: rgba(0, 0, 0, 0.6); cursor: pointer;
 }
-
-/* On the dark half of the card, so it needs light text. 0.85 white on #113F36
-   is well above the AA floor. */
-.reset-note {
-  color: rgba(255, 255, 255, 0.85);
+.login-eye:focus-visible,
+.login-signin:focus-visible,
+.login-check input:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+.login-check {
+  display: inline-flex; align-items: center; gap: 10px; align-self: flex-start;
+  font-size: 14px; line-height: 20px; color: rgba(255, 255, 255, 0.92); cursor: pointer;
 }
+.login-check input { width: 18px; height: 18px; margin: 0; accent-color: #34C39A; }
+.login-signin {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; height: 48px; border: 0; border-radius: 12px;
+  background: #34C39A; color: #04201A;
+  font-family: inherit; font-size: 15px; font-weight: 700; letter-spacing: 0.02em;
+  box-shadow: 0 8px 16px -4px rgba(52, 195, 154, 0.28); cursor: pointer;
+}
+.login-signin:disabled { opacity: 0.7; cursor: default; }
+.login-spin {
+  width: 16px; height: 16px; box-sizing: border-box; border-radius: 50%;
+  border: 2px solid rgba(4, 32, 26, 0.35); border-top-color: #04201A;
+  animation: btn-spin 700ms linear infinite;
+}
+/* On the dark half, so it needs light text (0.76 white, the board's helper). */
+.login-helper { margin: 0; font-size: 14px; line-height: 20px; color: rgba(255, 255, 255, 0.76); text-align: center; }
+.login-link { font-weight: 600; }
+/* The code step's boxes: white, 48px, 12px corners. */
+.form-block :deep(.v-otp-input .v-field) { border-radius: 12px; background: #fff; }
+.form-block :deep(.v-otp-input .v-field__input) { color: rgba(0, 0, 0, 0.87); }
 
 .hover-underline:hover {
   text-decoration: underline !important;

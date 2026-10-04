@@ -12,9 +12,11 @@
     <v-select
       :model-value="choice"
       :items="CHOICES"
-      label="Street / Purok (optional)"
+      :label="compact ? undefined : 'Street / Purok (optional)'"
+      aria-label="Street / Purok (optional)"
       variant="outlined"
-      density="comfortable"
+      :density="compact ? 'compact' : 'comfortable'"
+      :hide-details="compact ? 'auto' : false"
       rounded="lg"
       :error-messages="errorMessages"
       @update:model-value="onChoice"
@@ -23,10 +25,12 @@
     <v-text-field
       v-if="typing"
       :model-value="modelValue"
-      label="Street / purok"
+      :label="compact ? undefined : 'Street / purok'"
+      aria-label="Street / purok"
       placeholder="e.g. Zone 2, Sitio Malaki"
       variant="outlined"
-      density="comfortable"
+      :density="compact ? 'compact' : 'comfortable'"
+      :hide-details="compact ? 'auto' : false"
       rounded="lg"
       class="mt-1"
       @update:model-value="(value: string) => emit('update:modelValue', value ?? '')"
@@ -45,6 +49,8 @@ const CHOICES = [NOT_SPECIFIED, ...PUROK_OPTIONS, OTHER]
 const props = defineProps<{
   modelValue: string
   errorMessages?: string
+  /** The 40px field of the shared edit dialog, its label drawn outside. */
+  compact?: boolean
 }>()
 
 const emit = defineEmits<{

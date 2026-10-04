@@ -15,7 +15,7 @@
   followed).
 -->
 <template>
-  <div class="segmented-tabs" :class="{ 'segmented-tabs--tonal': tonal, 'segmented-tabs--switch': switchStyle }" role="tablist">
+  <div class="segmented-tabs" :class="{ 'segmented-tabs--tonal': tonal, 'segmented-tabs--switch': switchStyle, 'segmented-tabs--dense': dense }" role="tablist">
     <button
       v-for="item in items"
       :key="item.value"
@@ -54,6 +54,8 @@ defineProps<{
   tonal?: boolean
   /** A page-level switch: grey track, white pill on the active segment. */
   switchStyle?: boolean
+  /** The slimmer toggle inside a card (7px 14px). */
+  dense?: boolean
 }>()
 
 defineEmits<{ (e: 'update:modelValue', value: string | number): void }>()
@@ -62,6 +64,8 @@ defineEmits<{ (e: 'update:modelValue', value: string | number): void }>()
 <style scoped>
 .segmented-tabs {
   display: inline-flex;
+  /* Sized to its tabs even inside a flex column, which would stretch it. */
+  align-self: flex-start;
   max-width: 100%;
   overflow-x: auto;
   border: 1px solid rgba(var(--v-theme-on-surface), 0.14);
@@ -88,6 +92,8 @@ defineEmits<{ (e: 'update:modelValue', value: string | number): void }>()
 }
 
 
+/* No ring after a pointer click; the keyboard ring below stays. */
+.segmented-tabs__seg:focus:not(:focus-visible) { outline: none; }
 .segmented-tabs__seg:focus-visible {
   outline: 2px solid rgb(var(--v-theme-primary));
   outline-offset: -2px;
@@ -156,6 +162,7 @@ defineEmits<{ (e: 'update:modelValue', value: string | number): void }>()
   color: rgb(var(--v-theme-primary-strong));
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.14);
 }
+.segmented-tabs--dense .segmented-tabs__seg { padding: 7px 14px; }
 .segmented-tabs__count {
   font-weight: 800;
   opacity: 0.85;

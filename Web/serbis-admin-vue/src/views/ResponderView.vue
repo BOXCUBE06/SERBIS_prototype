@@ -1,9 +1,10 @@
 <template>
   <v-container fluid class="fill-height align-start page-background">
-    <PageHeader title="Responders">
+    <PageHeader title="Responders" class="mb-5">
+      <template v-slot:subtitle>{{ subtitle }}</template>
       <template v-slot:actions>
-        <v-btn color="primary" variant="flat" rounded="lg" height="36" class="px-5 text-none font-weight-bold" @click="openAdd">
-          <v-icon start size="18">mdi-plus</v-icon> Add Responder
+        <v-btn color="primary" variant="flat" class="text-none font-weight-bold" height="40" prepend-icon="mdi-plus" @click="openAdd">
+          Add responder
         </v-btn>
       </template>
     </PageHeader>
@@ -13,6 +14,8 @@
     <div class="w-100">
       <DataTablePage
         compact
+        filter-bar
+        range-summary
         collapse-mobile
         @click:row="(_event, { item }) => openEdit(item)"
         :tabs="statusTabs"
@@ -36,12 +39,7 @@
         @clear-all="clearAllFilters"
       >
         <template v-slot:filters>
-          <v-select
-            v-model="positionFilter"
-            :items="positionOptions"
-            label="Position"
-            variant="outlined" density="compact" hide-details rounded="lg"
-          ></v-select>
+          <FilterSelect v-model="positionFilter" :items="positionOptions" label="Position" />
         </template>
 
         <template v-slot:item.name="{ item }">
@@ -88,50 +86,23 @@
     </v-dialog>
 
     <!-- Add / Edit -->
-    <v-dialog v-model="formDialog.show" max-width="480" persistent>
-      <v-card rounded="xl" class="pa-2">
-        <v-card-title class="d-flex justify-space-between align-center pa-6 pb-2">
-          <span class="text-h6 font-weight-bold text-high-emphasis">{{ formDialog.editing ? 'Edit responder' : 'Add responder' }}</span>
-          <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" @click="formDialog.show = false"></v-btn>
-        </v-card-title>
-        <v-card-text class="px-6 py-2">
-          <v-alert v-if="formDialog.error" type="error" variant="tonal" density="compact" rounded="lg" class="mb-4" role="alert">{{ formDialog.error }}</v-alert>
-
-          <div v-if="formDialog.editing" class="d-flex align-center gap-3 mb-4">
-            <v-avatar size="56" color="primary" variant="tonal">
-              <v-img v-if="form.photo_url" :src="form.photo_url" cover></v-img>
-              <span v-else class="text-body-1 font-weight-bold">{{ initials(form.name) }}</span>
-            </v-avatar>
-            <v-file-input
-              v-model="photoFile"
-              accept="image/png,image/jpeg"
-              label="Change photo"
-              density="compact"
-              variant="outlined"
-              rounded="lg"
-              hide-details
-              prepend-icon=""
-              prepend-inner-icon="mdi-camera-outline"
-              :loading="photoUploading"
-              @update:model-value="uploadPhoto"
-            ></v-file-input>
-          </div>
-
-          <v-form ref="formRef">
-            <v-text-field v-model="form.name" label="Name *" placeholder="e.g. Juan Dela Cruz" :rules="[requiredRule('Name')]" :error-messages="fieldErrors.name" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-text-field>
-            <v-text-field v-model="form.position" label="Position *" placeholder="e.g. EMT" :rules="[requiredRule('Position')]" :error-messages="fieldErrors.position" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-text-field>
-            <v-text-field v-model="form.contact_no" label="Contact number *" placeholder="e.g. 09171234567" :rules="[requiredRule('Contact number')]" :error-messages="fieldErrors.contact_no" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-text-field>
-            <v-select v-model="form.status" :items="STATUSES" :item-title="statusLabel" label="Status *" :rules="[requiredRule('Status')]" :error-messages="fieldErrors.status" variant="outlined" density="comfortable" rounded="lg"></v-select>
-          </v-form>
-        </v-card-text>
-        <v-card-actions class="pa-6 pt-2 justify-end gap-3">
-          <v-btn variant="outlined" color="primary" rounded="lg" class="text-none" :disabled="formDialog.loading" @click="formDialog.show = false">Cancel</v-btn>
-          <v-btn color="primary" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold" :loading="formDialog.loading" @click="saveResponder">
-            {{ formDialog.editing ? 'Save' : 'Add responder' }}
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <!-- A photo needs an existing responder, so the avatar row is Edit only. -->
+    <EditDialog
+      ref="formRef"
+      v-model="formDialog.show"
+      :title="formDialog.editing ? 'Edit responder' : 'Add responder'"
+      :confirm-label="formDialog.editing ? 'Save' : 'Add responder'"
+      :fields="formFields"
+      :form="form"
+      :field-errors="fieldErrors"
+      :error="formDialog.error"
+      :loading="formDialog.loading"
+      :avatar="formDialog.editing ? initials(form.name) : undefined"
+      :photo="form.photo_url"
+      :photo-loading="photoUploading"
+      @photo="uploadPhoto"
+      @save="saveResponder"
+    />
 
     <!-- Delete confirm -->
     <v-dialog v-model="deleteDialog.show" max-width="420">
@@ -156,11 +127,14 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
 import { invalidate, useCachedFetch } from '@/composables/useCachedFetch'
+import { pluralize } from '@/composables/adminUi'
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
 import PersonCell from '@/components/PersonCell.vue'
 import StatusChip from '@/components/StatusChip.vue'
 import RowActions from '@/components/RowActions.vue'
+import FilterSelect from '@/components/FilterSelect.vue'
+import EditDialog from '@/components/EditDialog.vue'
 
 const API = `${API_BASE}/responders`
 const STATUSES = ['available', 'deployed', 'off_duty']
@@ -185,13 +159,17 @@ const formDialog = ref({ show: false, editing: false, loading: false, error: '' 
 const deleteDialog = ref({ show: false, responder: null, loading: false })
 const form = ref({ name: '', position: '', contact_no: '', status: 'available', photo_url: null })
 const snackbar = ref({ show: false, text: '', color: 'success' })
-const photoFile = ref(null)
 const photoUploading = ref(false)
 
+// Template ref for the EditDialog (validate / resetValidation).
 const formRef = ref(null)
 
-const requiredRule = (label) => (v) =>
-  (v !== null && v !== undefined && String(v).trim() !== '') || `${label} is required.`
+const formFields = [
+  { key: 'name', label: 'Name', required: true, placeholder: 'e.g. Juan Dela Cruz' },
+  { key: 'position', label: 'Position', required: true, placeholder: 'e.g. EMT' },
+  { key: 'contact_no', label: 'Contact number', required: true, placeholder: 'e.g. 09171234567' },
+  { key: 'status', label: 'Status', required: true, items: STATUSES, itemTitle: statusLabel },
+]
 
 const initials = (name) => (name || '').trim().split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join('').toUpperCase() || '?'
 
@@ -241,6 +219,8 @@ const statusTabs = computed(() => [
 
 const positionOptions = computed(() => ['All', ...[...new Set(responders.value.map((r) => r.position).filter(Boolean))].sort()])
 
+const subtitle = computed(() => `${pluralize(responders.value.length, 'responder')} ·${responders.value.filter((r) => r.status === 'deployed').length} deployed`)
+
 // Status is the tabs, so it is not a chip here.
 const activeFilters = computed(() => (positionFilter.value === 'All' ? [] : [{ key: 'position', label: `Position: ${positionFilter.value}` }]))
 const clearFilter = () => { positionFilter.value = 'All' }
@@ -254,7 +234,7 @@ const headers = [
   { title: 'Responder', key: 'name', width: '35%' },
   { title: 'Position', key: 'position', width: '200px', headerProps: HIDE_SM, cellProps: HIDE_SM },
   { title: 'Status', key: 'status', width: '160px' },
-  { title: 'Actions', key: 'actions', sortable: false, align: 'end', width: '96px' },
+  { title: 'Actions', key: 'actions', sortable: false, align: 'end', width: '120px' },
 ]
 
 const fetchResponders = async (fresh = false) => {
@@ -364,7 +344,6 @@ const uploadPhoto = async (file) => {
     notify(error.message, 'error')
   } finally {
     photoUploading.value = false
-    photoFile.value = null
   }
 }
 

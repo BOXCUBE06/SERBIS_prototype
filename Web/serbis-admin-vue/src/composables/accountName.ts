@@ -21,6 +21,12 @@ interface NamedAccount {
 export const fullName = (r: NamedAccount): string =>
   [r.last_name, [r.first_name, r.middle_name].filter(Boolean).join(' ')].filter(Boolean).join(', ')
 
+/** "Last, First M." as the Accounts table's Name column prints it. */
+export const nameWithInitial = (r: NamedAccount): string => {
+  const middle = r.middle_name?.trim()
+  return [r.last_name, [r.first_name, middle ? `${middle.charAt(0)}.` : ''].filter(Boolean).join(' ')].filter(Boolean).join(', ')
+}
+
 export const barangayOf = (r: NamedAccount): string => r.barangay?.barangay_name || r.barangay_name || 'N/A'
 
 /** The headline: a person for a head of the family, the institution otherwise. */

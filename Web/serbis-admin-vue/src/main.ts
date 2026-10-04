@@ -22,6 +22,7 @@ import '@fontsource/jetbrains-mono/400.css'
 import '@fontsource/jetbrains-mono/500.css'
 import '@/styles/motion.css'
 import '@/styles/filter-bar.css'
+import '@/styles/board-table.css'
 
 const app = createApp(App)
 

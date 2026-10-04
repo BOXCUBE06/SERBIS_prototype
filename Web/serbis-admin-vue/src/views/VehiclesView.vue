@@ -1,14 +1,12 @@
 <template>
   <v-container fluid class="fill-height align-start page-background">
-    <PageHeader title="Vehicles">
+    <PageHeader title="Vehicles" class="mb-5">
+      <template v-slot:subtitle>{{ subtitle }}</template>
       <template v-slot:actions>
-        <!-- One child, so the slot's 12px gap does not apply: 8px between the two. -->
-        <div class="d-flex align-center header-actions">
-          <ExportMenu type="vehicle" :rows="filteredVehicles" plain height="36" />
-          <v-btn color="primary" variant="flat" rounded="lg" height="36" class="px-5 text-none font-weight-bold" @click="openAdd">
-            <v-icon start size="18">mdi-plus</v-icon> Add Unit
-          </v-btn>
-        </div>
+        <ExportMenu type="vehicle" :rows="filteredVehicles" plain height="40" />
+        <v-btn color="primary" variant="flat" class="text-none font-weight-bold" height="40" prepend-icon="mdi-plus" @click="openAdd">
+          Add unit
+        </v-btn>
       </template>
     </PageHeader>
 
@@ -19,6 +17,8 @@
            fleet is one list to scan for the free unit. Status is the tabs. -->
       <DataTablePage
         compact
+        filter-bar
+        range-summary
         collapse-mobile
         @click:row="(_event, { item }) => openEdit(item)"
         :tabs="statusTabs"
@@ -42,19 +42,15 @@
         @clear-all="clearAllFilters"
       >
         <template v-slot:filters>
-          <v-select
-            v-model="typeFilter"
-            :items="typeOptions"
-            label="Type"
-            variant="outlined" density="compact" hide-details rounded="lg"
-          ></v-select>
+          <FilterSelect v-model="typeFilter" :items="typeOptions" label="Type" />
         </template>
 
         <template v-slot:item.unit_identifier="{ item }">
           <PersonCell
             :name="item.unit_identifier"
             :secondary="item.specification || 'Standard Unit'"
-            :icon="getVehicleIcon(item.type)"
+            :initials="unitMark(item)"
+            square
             tinted
             size="36"
           />
@@ -107,29 +103,18 @@
     </v-dialog>
 
     <!-- Add / Edit -->
-    <v-dialog v-model="formDialog.show" max-width="480" persistent>
-      <v-card rounded="xl" class="pa-2">
-        <v-card-title class="d-flex justify-space-between align-center pa-6 pb-2">
-          <span class="text-h6 font-weight-bold text-high-emphasis">{{ formDialog.editing ? 'Edit unit' : 'Add unit' }}</span>
-          <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" @click="formDialog.show = false"></v-btn>
-        </v-card-title>
-        <v-card-text class="px-6 py-2">
-          <v-alert v-if="formDialog.error" type="error" variant="tonal" density="compact" rounded="lg" class="mb-4" role="alert">{{ formDialog.error }}</v-alert>
-          <v-form ref="formRef">
-            <v-text-field v-model="form.unit_identifier" label="Unit identifier *" placeholder="e.g. AMB-01" :rules="[requiredRule('Unit identifier')]" :error-messages="fieldErrors.unit_identifier" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-text-field>
-            <v-select v-model="form.type" :items="VEHICLE_TYPES" label="Type *" :rules="[requiredRule('Type')]" :error-messages="fieldErrors.type" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-select>
-            <v-text-field v-model="form.specification" label="Specification" placeholder="e.g. TYPE I" :error-messages="fieldErrors.specification" variant="outlined" density="comfortable" rounded="lg" class="mb-3"></v-text-field>
-            <v-select v-model="form.status" :items="STATUSES" label="Status *" :rules="[requiredRule('Status')]" :error-messages="fieldErrors.status" variant="outlined" density="comfortable" rounded="lg"></v-select>
-          </v-form>
-        </v-card-text>
-        <v-card-actions class="pa-6 pt-2 justify-end gap-3">
-          <v-btn variant="outlined" color="primary" rounded="lg" class="text-none" :disabled="formDialog.loading" @click="formDialog.show = false">Cancel</v-btn>
-          <v-btn color="primary" variant="flat" rounded="lg" class="px-6 text-none font-weight-bold" :loading="formDialog.loading" @click="saveVehicle">
-            {{ formDialog.editing ? 'Save' : 'Add unit' }}
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+    <EditDialog
+      ref="formRef"
+      v-model="formDialog.show"
+      :title="formDialog.editing ? 'Edit unit' : 'Add unit'"
+      :confirm-label="formDialog.editing ? 'Save' : 'Add unit'"
+      :fields="formFields"
+      :form="form"
+      :field-errors="fieldErrors"
+      :error="formDialog.error"
+      :loading="formDialog.loading"
+      @save="saveVehicle"
+    />
 
     <!-- Delete confirm -->
     <v-dialog v-model="deleteDialog.show" max-width="420">
@@ -161,12 +146,15 @@ import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
 import { invalidate, useCachedFetch } from '@/composables/useCachedFetch'
 import { transactionNo } from '@/composables/requestDisplay'
+import { pluralize } from '@/composables/adminUi'
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
 import PersonCell from '@/components/PersonCell.vue'
 import StatusChip from '@/components/StatusChip.vue'
 import RowActions from '@/components/RowActions.vue'
 import ExportMenu from '@/components/ExportMenu.vue'
+import FilterSelect from '@/components/FilterSelect.vue'
+import EditDialog from '@/components/EditDialog.vue'
 
 const router = useRouter()
 
@@ -197,12 +185,16 @@ const deleteDialog = ref({ show: false, vehicle: null, loading: false })
 const form = ref({ unit_identifier: '', type: 'Ambulance', specification: '', status: 'Available' })
 const snackbar = ref({ show: false, text: '', color: 'success' })
 
-// Template ref for the Add/Edit <v-form> — named formRef, not form, because
-// `form` above is already the reactive object the fields are bound to.
+// Template ref for the EditDialog (validate / resetValidation) — named formRef,
+// not form, because `form` above is already the reactive object the fields are bound to.
 const formRef = ref(null)
 
-const requiredRule = (label) => (v) =>
-  (v !== null && v !== undefined && String(v).trim() !== '') || `${label} is required.`
+const formFields = [
+  { key: 'unit_identifier', label: 'Unit identifier', required: true, placeholder: 'e.g. AMB-01' },
+  { key: 'type', label: 'Type', required: true, items: VEHICLE_TYPES },
+  { key: 'specification', label: 'Specification', placeholder: 'e.g. TYPE I' },
+  { key: 'status', label: 'Status', required: true, items: STATUSES },
+]
 
 // Server-side errors, keyed by field, so a 422 lands on the input it belongs
 // to instead of being concatenated into the banner above the form.
@@ -264,6 +256,10 @@ const statusTabs = computed(() => [
   ...STATUSES.map((s) => ({ value: s, label: s, count: baseVehicles.value.filter((v) => v.status === s).length })),
 ])
 
+const subtitle = computed(() => `${pluralize(vehicles.value.length, 'unit')} ·${vehicles.value.filter((v) => v.status === 'Dispatched').length} dispatched`)
+// The text mark in the unit's tile: the identifier's prefix (AMB-01 is AMB).
+const unitMark = (v) => (v.unit_identifier || '').split('-')[0].slice(0, 3).toUpperCase()
+
 // Status is the tabs, so it is not a chip here.
 const activeFilters = computed(() => (typeFilter.value === 'All' ? [] : [{ key: 'type', label: `Type: ${typeFilter.value}` }]))
 const clearFilter = () => { typeFilter.value = 'All' }
@@ -279,15 +275,8 @@ const fleetHeaders = [
   { title: 'Unit', key: 'unit_identifier', width: '35%' },
   { title: 'Type', key: 'type', width: '200px', headerProps: HIDE_SM, cellProps: HIDE_SM },
   { title: 'Status', key: 'status', width: '160px' },
-  { title: 'Actions', key: 'actions', sortable: false, align: 'end', width: '96px' },
+  { title: 'Actions', key: 'actions', sortable: false, align: 'end', width: '120px' },
 ]
-
-const getVehicleIcon = (type) => ({
-  ambulance: 'mdi-ambulance',
-  'fire truck': 'mdi-fire-truck',
-  'rescue vehicle': 'mdi-car-emergency',
-  boat: 'mdi-ferry',
-}[type?.toLowerCase()] || 'mdi-car')
 
 const fetchVehicles = async ({ fresh = false } = {}) => {
   try {
@@ -416,5 +405,4 @@ onMounted(fetchVehicles)
 <style scoped>
 .page-background { background-color: rgb(var(--v-theme-background)) !important; }
 .gap-3 { gap: 12px; }
-.header-actions { gap: 8px; }
 </style>

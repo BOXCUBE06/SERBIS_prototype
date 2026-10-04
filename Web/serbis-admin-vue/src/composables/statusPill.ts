@@ -67,6 +67,21 @@ const RESOURCE_ACCENTS: Record<string, string> = {
   'Head of the Family': accentOf('Cancelled'),
   Barangay: accentOf('Cancelled'),
   Organization: accentOf('Cancelled'),
+  // The profile dialog: SMS blasts on, and how a returned item came back.
+  Receiving: '#297A67',
+  Good: '#297A67',
+  Bad: accentOf('Pending'),
+  // Text blast delivery counts (Pending is the amber above).
+  Queued: accentOf('Cancelled'),
+  Sent: '#297A67',
+  Failed: accentOf('Denied'),
+  // Activity log actions (the server's own words, capitalised).
+  Created: '#297A67',
+  Updated: accentOf('Approved'),
+  Deleted: accentOf('Denied'),
+  Login: '#5B21B6',
+  Exported: '#0F766E',
+  Printed: '#0F766E',
 }
 
 const ALL_ACCENTS: Record<string, string> = { ...SERVICE_REQUEST_ACCENTS, ...BORROWING_ACCENTS, ...RESOURCE_ACCENTS }

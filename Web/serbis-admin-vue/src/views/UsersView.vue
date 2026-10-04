@@ -2,29 +2,21 @@
   <v-container fluid class="fill-height align-start bg-background">
     <div class="w-100">
       <PageHeader title="Accounts">
-        <!-- On the title's own line, as a chip: a count that sat below the
-             title in grey read as a caption, not as a number worth
-             noticing. Says "of" only when something is being hidden. The
-             permanent "N of N" read as a standing accusation that a filter
-             was on. ("residents" here is deliberate and ruled on; the
-             heading beside it is the page/nav title.) -->
-        <template v-slot:badge>
-          <span v-if="!initialLoad" class="count-chip" role="status">
+        <!-- The count is the subtitle line, as on the board. Says "of" only when
+             something is being hidden: a permanent "N of N" read as a standing
+             accusation that a filter was on. -->
+        <template v-if="!initialLoad" v-slot:subtitle>
+          <span role="status">
             <template v-if="filteredAndSortedResidents.length === residents.length">
-              <strong>{{ residents.length }}</strong>
-              {{ residents.length === 1 ? 'account' : 'accounts' }}
+              {{ residents.length }} {{ residents.length === 1 ? 'account' : 'accounts' }}
             </template>
-            <template v-else>
-              <strong>{{ filteredAndSortedResidents.length }}</strong>
-              of {{ residents.length }} accounts
-            </template>
+            <template v-else>{{ filteredAndSortedResidents.length }} of {{ residents.length }} accounts</template>
           </span>
-          <span v-else class="skel skel-pill" style="width: 7.5em; height: 2em" aria-hidden="true"></span>
         </template>
 
         <template v-slot:actions>
-          <v-btn color="primary" variant="flat" rounded="lg" height="36" class="px-5 text-none font-weight-bold" @click="openAddModal">
-            <v-icon start size="18">mdi-plus</v-icon> Add account
+          <v-btn color="primary" variant="flat" height="40" class="add-btn text-none font-weight-bold" @click="openAddModal">
+            <v-icon start size="16">mdi-plus</v-icon> Add account
           </v-btn>
         </template>
       </PageHeader>
@@ -40,7 +32,10 @@
            the type itself, so switching tabs previews how many rows will show. -->
       <DataTablePage
         compact
+        filter-bar
         collapse-mobile
+        range-summary
+        :row-height="56"
         class="accounts-table"
         :sort-by="defaultSort"
         :tabs="typeTabs"
@@ -65,22 +60,17 @@
         @click:row="selectRow"
       >
         <template v-slot:filters>
-          <v-select
-            v-model="filters.status"
-            :items="RESIDENT_STATUS_FILTER_ITEMS"
-            label="Status"
-            aria-label="Filter by status"
-            variant="outlined" density="compact" hide-details rounded="lg"
-          ></v-select>
+          <FilterSelect v-model="filters.status" :items="RESIDENT_STATUS_FILTER_ITEMS" label="Status" />
           <!-- Replaces a row of 60+ barangay tabs that scrolled sideways. An
                autocomplete so 60+ names can be typed for, styled and defaulted
                ("All") like the Status select beside it. -->
           <v-autocomplete
             v-model="filters.barangay"
             :items="barangayItems"
-            label="Barangay"
+            prefix="Barangay"
             aria-label="Filter by barangay"
             variant="outlined" density="compact" hide-details rounded="lg"
+            class="filter-bar__select"
           ></v-autocomplete>
         </template>
 
@@ -125,27 +115,28 @@
           </div>
         </template>
 
-        <!-- The name columns are the person: the head of the family, or the
-             contact for a barangay or organization. The avatar is the account's
-             (its photo, else its initials). -->
-        <template v-slot:item.last_name="{ item }">
-          <PersonCell v-intersect.once="() => ensurePhoto(item)" :name="item.last_name" :initials="initials(item)" :photo="photoUrls[idOf(item)]" />
+        <!-- One Name column: the person (the head of the family, or the contact
+             for a barangay or organization) as "Last, First M.", their mobile
+             number under it. The number is the login, stored as +639…, read as
+             09…. The round mark is the account's (its photo, else its initials). -->
+        <template v-slot:item.name="{ item }">
+          <PersonCell
+            v-intersect.once="() => ensurePhoto(item)"
+            :name="nameWithInitial(item)"
+            :secondary="displayPhone(item.phone_number)"
+            :initials="initials(item)"
+            :photo="photoUrls[idOf(item)]"
+            size="36"
+            tinted
+          />
         </template>
 
-        <template v-slot:item.first_name="{ item }">
-          <span class="cell-truncate" :title="item.first_name">{{ item.first_name }}</span>
-        </template>
-
-        <template v-slot:item.middle_name="{ item }">
-          <span class="cell-truncate" :class="{ 'text-medium-emphasis': !item.middle_name }">{{ item.middle_name || '—' }}</span>
-        </template>
-
-        <!-- The type chip (same size as Status) on every account, on one line. An
-             organization adds its name, truncated with a tooltip; a barangay
-             account's name would only repeat the Barangay column. -->
+        <!-- The type tag on every account, on one line. An organization adds its
+             name, truncated with a tooltip; a barangay account's name would only
+             repeat the Barangay column. -->
         <template v-slot:item.account="{ item }">
           <div class="account-cell">
-            <StatusChip :status="accountTypeLabel(item.account_type)" class="flex-shrink-0" />
+            <StatusPill tag :label="accountTypeLabel(item.account_type)" class="flex-shrink-0" />
             <span v-if="item.account_type === ACCOUNT_TYPE.organization" class="cell-truncate" :title="item.organization_name">{{ item.organization_name || '—' }}</span>
           </div>
         </template>
@@ -154,20 +145,15 @@
           <span class="cell-truncate" :title="barangayOf(item)">{{ barangayOf(item) }}</span>
         </template>
 
-        <!-- The number is the resident's login. Stored as +639…, read as 09…. -->
-        <template v-slot:item.phone_number="{ item }">
-          <span class="cell-truncate">{{ displayPhone(item.phone_number) }}</span>
-        </template>
-
         <template v-slot:item.status="{ item }">
-          <StatusChip :status="residentStatusLabel(item.status)" />
+          <StatusPill :status="residentStatusLabel(item.status)" />
         </template>
 
         <!-- An exception column: nearly every row is Receiving, so only the
              accounts that opted out draw anything. The words stay for screen
              readers. -->
         <template v-slot:item.sms_opt_in="{ item }">
-          <StatusChip v-if="!residentSmsOptIn(item)" :status="residentSmsLabel(false)" />
+          <StatusPill v-if="!residentSmsOptIn(item)" :status="residentSmsLabel(false)" />
           <span v-else class="sr-only">{{ residentSmsLabel(true) }}</span>
         </template>
 
@@ -194,8 +180,8 @@
          Rendered from `shownResident`, which outlives `selectedResident` by the
          length of the fade-out: clearing the selection would otherwise empty the
          card while it is still on screen. -->
-    <v-dialog v-model="detailOpen" max-width="960">
-      <v-card v-if="shownResident" rounded="lg" elevation="10" class="bg-surface">
+    <v-dialog v-model="detailOpen" max-width="880">
+      <v-card v-if="shownResident" rounded="xl" class="detail-card bg-surface">
         <ResidentDetailPanel
           :resident="shownResident"
           :status-loading="statusToggleLoading"
@@ -211,157 +197,78 @@
     </v-dialog>
 
     <!-- Add / Edit -->
-    <v-dialog v-model="modal.isOpen" max-width="680" persistent>
-      <v-card rounded="lg" elevation="10">
-        <v-card-title class="d-flex justify-space-between align-center pa-6 border-b bg-surface">
-          <span class="text-h6 font-weight-bold text-high-emphasis">
-            {{ modal.isEditing ? 'Edit account' : 'New account' }}
-          </span>
-          <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close dialog" @click="closeModal"></v-btn>
-        </v-card-title>
+    <EditDialog
+      ref="form"
+      v-model="modal.isOpen"
+      :title="modal.isEditing ? 'Edit account' : 'New account'"
+      :confirm-label="modal.isEditing ? 'Save changes' : 'Create account'"
+      :fields="accountFields"
+      :form="formData"
+      :field-errors="fieldErrors"
+      :error="modalError"
+      :loading="loading"
+      :width="600"
+      :avatar="previewInitials"
+      :photo="editPhotoUrl"
+      :avatar-note="canEditPhoto ? 'JPG or PNG, up to 4 MB. The photo saves right away; Cancel does not undo it.' : ''"
+      @save="saveUser"
+    >
+      <template v-slot:avatar-actions>
+        <!-- Photo for a saved barangay or organization account only. A head
+             of the family's photo is their own face and is set from the
+             app; a new account has no id to attach a file to yet. The
+             upload happens the moment a file is chosen, on its own
+             request, so Cancel on this form does not undo it. -->
+        <div v-if="canEditPhoto" class="min-w-0">
+          <div class="d-flex flex-wrap ga-2">
+            <v-btn
+              variant="outlined"
+              height="40"
+              class="photo-btn text-none"
+              :loading="photoBusy"
+              @click="photoInput?.click()"
+            >
+              <v-icon start size="16">mdi-camera-outline</v-icon>
+              {{ editHasPhoto ? 'Replace photo' : 'Add photo' }}
+            </v-btn>
+            <v-btn
+              v-if="editHasPhoto"
+              variant="text"
+              height="40"
+              color="error"
+              class="text-none font-weight-bold"
+              :disabled="photoBusy"
+              @click="removePhoto"
+            >
+              Remove
+            </v-btn>
+          </div>
+          <div v-if="photoError" class="text-caption text-error mt-1" role="alert">{{ photoError }}</div>
+          <input
+            ref="photoInput"
+            type="file"
+            accept="image/png,image/jpeg"
+            class="d-none"
+            @change="onPhotoPicked"
+          />
+        </div>
+        <div v-else>
+          <div class="text-subtitle-2 font-weight-bold text-high-emphasis">Initials</div>
+        </div>
+      </template>
 
-        <v-card-text class="pa-6">
-          <v-alert v-if="modalError" type="error" variant="tonal" class="mb-6" density="comfortable" rounded="lg" role="alert">
-            {{ modalError }}
-          </v-alert>
+      <template v-slot:field-street_address>
+        <!-- Keyed on the dialog: the picker reads its value once, and this
+             form is reused for every resident. -->
+        <PurokSelect
+          compact
+          :key="`${modal.isOpen}-${modal.targetId ?? 'new'}`"
+          v-model="formData.street_address"
+          :error-messages="fieldErrors.street_address"
+        />
+      </template>
 
-          <v-form ref="form" @submit.prevent="saveUser">
-            <v-row>
-              <v-col cols="12" class="d-flex align-center gap-4 mb-2">
-                <v-avatar size="70" class="avatar-tint">
-                  <v-img v-if="editPhotoUrl" :src="editPhotoUrl" alt="" cover></v-img>
-                  <span v-else class="avatar-initials text-h5">
-                    {{ previewInitials }}
-                  </span>
-                </v-avatar>
-                <!-- Photo for a saved barangay or organization account only. A head
-                     of the family's photo is their own face and is set from the
-                     app; a new account has no id to attach a file to yet. The
-                     upload happens the moment a file is chosen, on its own
-                     request, so Cancel on this form does not undo it. -->
-                <div v-if="canEditPhoto" class="min-w-0">
-                  <div class="d-flex flex-wrap ga-2">
-                    <v-btn
-                      variant="tonal"
-                      size="small"
-                      class="text-none font-weight-bold"
-                      :loading="photoBusy"
-                      @click="photoInput?.click()"
-                    >
-                      <v-icon start size="18">mdi-camera-outline</v-icon>
-                      {{ editHasPhoto ? 'Replace photo' : 'Add photo' }}
-                    </v-btn>
-                    <v-btn
-                      v-if="editHasPhoto"
-                      variant="text"
-                      size="small"
-                      color="error"
-                      class="text-none font-weight-bold"
-                      :disabled="photoBusy"
-                      @click="removePhoto"
-                    >
-                      Remove
-                    </v-btn>
-                  </div>
-                  <div class="text-caption text-medium-emphasis mt-1">
-                    JPG or PNG, up to 4 MB. The photo saves right away; Cancel does not undo it.
-                  </div>
-                  <div v-if="photoError" class="text-caption text-error mt-1" role="alert">{{ photoError }}</div>
-                  <input
-                    ref="photoInput"
-                    type="file"
-                    accept="image/png,image/jpeg"
-                    class="d-none"
-                    @change="onPhotoPicked"
-                  />
-                </div>
-                <div v-else>
-                  <div class="text-subtitle-2 font-weight-bold text-high-emphasis">Initials</div>
-                </div>
-              </v-col>
-
-              <v-col cols="12" :md="isOrganization ? 5 : 12">
-                <v-select
-                  v-model="formData.account_type"
-                  :items="ACCOUNT_TYPE_ITEMS"
-                  label="Account type *"
-                  :error-messages="fieldErrors.account_type"
-                  variant="outlined"
-                  density="comfortable"
-                  rounded="lg"
-                ></v-select>
-              </v-col>
-
-              <v-col v-if="isOrganization" cols="12" md="7">
-                <v-text-field
-                  v-model="formData.organization_name"
-                  label="Organization name *"
-                  placeholder="Isabela State University"
-                  :rules="[requiredRule('Organization name')]"
-                  validate-on="blur lazy"
-                  :error-messages="fieldErrors.organization_name"
-                  variant="outlined"
-                  density="comfortable"
-                  rounded="lg"
-                ></v-text-field>
-              </v-col>
-
-              <v-col cols="12" md="4">
-                <v-text-field v-model="formData.first_name" :label="isHead ? 'First Name *' : 'Contact first name *'" placeholder="Juan" :rules="[requiredRule('First name')]" :error-messages="fieldErrors.first_name" variant="outlined" density="comfortable" rounded="lg" autocomplete="given-name"></v-text-field>
-              </v-col>
-              <v-col cols="12" md="4">
-                <v-text-field v-model="formData.middle_name" label="Middle Name" placeholder="Santos" :error-messages="fieldErrors.middle_name" variant="outlined" density="comfortable" rounded="lg" autocomplete="additional-name"></v-text-field>
-              </v-col>
-              <v-col cols="12" md="4">
-                <v-text-field v-model="formData.last_name" :label="isHead ? 'Last Name *' : 'Contact last name *'" placeholder="Dela Cruz" :rules="[requiredRule('Last name')]" :error-messages="fieldErrors.last_name" variant="outlined" density="comfortable" rounded="lg" autocomplete="family-name"></v-text-field>
-              </v-col>
-
-              <v-col cols="12" md="6">
-                <!-- The resident logs in with this number, and no two accounts may
-                     share one. A barangay or organization officer who is also a
-                     head of the family needs a different number for this account;
-                     the server says so on the field when it is taken. -->
-                <v-text-field v-model="formData.phone_number" label="Mobile Number (login) *" placeholder="09171234567" hint="They sign in with this number. It must be unique." persistent-hint :rules="[requiredRule('Mobile number'), phoneRule]" :error-messages="fieldErrors.phone_number" type="tel" variant="outlined" density="comfortable" rounded="lg" autocomplete="tel"></v-text-field>
-              </v-col>
-
-              <v-col cols="12" md="6" v-if="!modal.isEditing">
-                <!-- The hint/error overlap this field used to hit on blank
-                     submit (finding #5, docs/ui-audit/findings.md) is now
-                     fixed globally in src/styles/settings.scss, not locally
-                     here — see that file's comment for the root cause. -->
-                <v-text-field
-                  v-model="formData.password"
-                  label="Password *"
-                  :type="showPassword ? 'text' : 'password'"
-                  :append-inner-icon="showPassword ? 'mdi-eye-off' : 'mdi-eye'"
-                  hint="At least 8 characters, with upper and lower case and a number"
-                  persistent-hint
-                  :rules="[requiredRule('Password'), passwordRule]"
-                  :error-messages="fieldErrors.password"
-                  variant="outlined"
-                  density="comfortable"
-                  rounded="lg"
-                  autocomplete="new-password"
-                  @click:append-inner="showPassword = !showPassword"
-                ></v-text-field>
-              </v-col>
-
-              <v-col cols="12" :md="modal.isEditing ? 12 : 6">
-                <v-select v-model="formData.barangay_id" :items="barangays" item-title="barangay_name" item-value="barangay_id" label="Barangay *" :rules="[requiredRule('Barangay')]" :error-messages="fieldErrors.barangay_id" variant="outlined" density="comfortable" rounded="lg"></v-select>
-              </v-col>
-
-              <v-col cols="12">
-                <!-- Keyed on the dialog: the picker reads its value once, and this
-                     form is reused for every resident. -->
-                <PurokSelect
-                  :key="`${modal.isOpen}-${modal.targetId ?? 'new'}`"
-                  v-model="formData.street_address"
-                  :error-messages="fieldErrors.street_address"
-                />
-              </v-col>
-
-              <v-col cols="12">
-                <div class="text-subtitle-2 font-weight-bold text-high-emphasis mb-2">Account Status</div>
+      <template v-slot:before-status>
                 <!-- Active and Deactivated only. 'Inactive' — shown elsewhere as
                      "Pending" — is still a real stored value and still what
                      AuthController::register() writes for a self-registered
@@ -392,33 +299,8 @@
                     Saving leaves it pending; choose Active to activate it.
                   </span>
                 </v-alert>
-                <v-radio-group v-model="formData.status" inline hide-details color="primary">
-                  <v-radio label="Active" :value="RESIDENT_STATUS.active"></v-radio>
-                  <v-radio label="Deactivated" :value="RESIDENT_STATUS.deactivated"></v-radio>
-                </v-radio-group>
-              </v-col>
-            </v-row>
-          </v-form>
-        </v-card-text>
-
-        <v-card-actions class="pa-6 pt-0 d-flex justify-end gap-3 bg-surface">
-          <v-btn variant="outlined" color="primary" rounded="lg" height="48" class="px-4 text-none font-weight-bold" :disabled="loading" @click="closeModal">
-            Cancel
-          </v-btn>
-          <v-btn
-            color="primary"
-            variant="flat"
-            rounded="lg"
-            class="px-6 text-none font-weight-bold"
-            height="48"
-            :loading="loading"
-            @click="saveUser"
-          >
-            {{ modal.isEditing ? 'Save Changes' : 'Create Account' }}
-          </v-btn>
-        </v-card-actions>
-      </v-card>
-    </v-dialog>
+      </template>
+    </EditDialog>
 
     <!-- Delete confirm -->
     <v-dialog v-model="deleteDialog.show" max-width="470">
@@ -557,6 +439,7 @@ import {
   accountInitials,
   barangayOf,
   fullName,
+  nameWithInitial,
   primaryName,
   wordInitials,
 } from '@/composables/accountName'
@@ -583,7 +466,9 @@ import PageHeader from '@/components/PageHeader.vue'
 import PurokSelect from '@/components/PurokSelect.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
 import PersonCell from '@/components/PersonCell.vue'
-import StatusChip from '@/components/StatusChip.vue'
+import StatusPill from '@/components/StatusPill.vue'
+import FilterSelect from '@/components/FilterSelect.vue'
+import EditDialog from '@/components/EditDialog.vue'
 import RowActions from '@/components/RowActions.vue'
 
 const residents = ref([])
@@ -599,10 +484,8 @@ const modalError = ref('')
 const photoInput = ref(null)
 const photoBusy = ref(false)
 const photoError = ref('')
-const showPassword = ref(false)
-// Template ref for <v-form>. The markup carried `ref="form"` all along, but
-// nothing declared it in <script setup>, so it silently resolved to nothing —
-// which is consistent with the form's rules never having been run.
+// Template ref for the edit dialog, which hands `validate()` and
+// `resetValidation()` on from its <v-form>.
 const form = ref(null)
 
 const selectedResident = ref(null)
@@ -612,31 +495,28 @@ const filters = ref({ status: 'All', barangay: 'All', type: 'All' })
 // so the server has nothing to add. Each header sorts on what its cell prints
 // (`value`), not a raw column. The list itself arrives ordered by last name.
 //
-// Fixed-layout table with an explicit width per column, so nothing is left to
-// auto-size: the columns add up to 1284px, the table has a 1180px floor (see the
-// style block) and a narrower card scrolls sideways. On a phone Middle Name,
-// Account and SMS Blasts are dropped (`dtp-hide-sm`).
+// Fixed-layout table: the checkbox, Name and Actions columns carry a width and
+// the rest share what is left; the table has an 880px floor (see the style
+// block) and a narrower card scrolls sideways. On a phone Account and SMS blasts
+// are dropped (`dtp-hide-sm`). The checkbox column is 54px: 24px of card-edge
+// padding, the box, and the 12px gutter.
 const HIDE_SM = { class: 'dtp-hide-sm' }
 const headers = [
-  { title: '', key: 'select', sortable: false, align: 'center', width: '48px' },
-  { title: 'Last Name', key: 'last_name', width: '150px', value: (item) => item.last_name || '' },
-  { title: 'First Name', key: 'first_name', width: '140px', value: (item) => item.first_name || '' },
-  { title: 'Middle Name', key: 'middle_name', width: '130px', value: (item) => item.middle_name || '', headerProps: HIDE_SM, cellProps: HIDE_SM },
-  { title: 'Account', key: 'account', width: '220px', value: (item) => `${accountTypeLabel(item.account_type)} ${item.organization_name || ''}`, headerProps: HIDE_SM, cellProps: HIDE_SM },
-  // The longest real barangay name in the data is "San Antonio Ugad".
-  { title: 'Barangay', key: 'barangay_name', width: '160px', value: (item) => barangayOf(item) },
-  { title: 'Mobile Number', key: 'phone_number', width: '130px', value: (item) => displayPhone(item.phone_number) },
-  { title: 'Status', key: 'status', width: '100px', value: (item) => residentStatusLabel(item.status) },
+  { title: '', key: 'select', sortable: false, align: 'center', width: '54px' },
+  // Sorts by last name, then first name; the cell prints "Last, First M.".
+  { title: 'Name', key: 'name', width: '28%', value: (item) => `${item.last_name || ''}, ${item.first_name || ''}` },
+  { title: 'Account', key: 'account', value: (item) => `${accountTypeLabel(item.account_type)} ${item.organization_name || ''}`, headerProps: HIDE_SM, cellProps: HIDE_SM },
+  { title: 'Barangay', key: 'barangay_name', value: (item) => barangayOf(item) },
+  { title: 'Status', key: 'status', value: (item) => residentStatusLabel(item.status) },
   // 0 before 1, so ascending lists the opted-out accounts first.
   {
-    title: 'SMS Blasts',
+    title: 'SMS blasts',
     key: 'sms_opt_in',
-    width: '110px',
     value: (item) => (residentSmsOptIn(item) ? 1 : 0),
-    headerProps: { title: 'Blank means receiving text blasts. Only accounts that opted out show a chip.', class: 'dtp-hide-sm' },
+    headerProps: { title: 'Blank means receiving text blasts. Only accounts that opted out show a pill.', class: 'dtp-hide-sm' },
     cellProps: HIDE_SM,
   },
-  { title: 'Actions', key: 'actions', sortable: false, align: 'end', width: '96px' },
+  { title: 'Actions', key: 'actions', sortable: false, align: 'end', width: '120px' },
 ]
 
 // The order the list already arrives in, shown as the header's sort arrow.
@@ -675,6 +555,36 @@ const previewInitials = computed(() => {
   if (f.account_type === ACCOUNT_TYPE.barangay) return wordInitials(barangays.value.find((b) => b.barangay_id === f.barangay_id)?.barangay_name) || '?'
   return `${f.first_name?.charAt(0) || '?'}${f.last_name?.charAt(0) || ''}`.toUpperCase()
 })
+
+// The edit dialog's fields (labels and layout from the Edit/New account boards).
+// The rules and the server's 422 field errors stay the page's own.
+const accountFields = computed(() => [
+  { key: 'account_type', label: 'Account type', required: true, items: ACCOUNT_TYPE_ITEMS, half: isOrganization.value },
+  ...(isOrganization.value
+    ? [{ key: 'organization_name', label: 'Organization name', required: true, half: true, placeholder: 'Isabela State University', rules: [requiredRule('Organization name')] }]
+    : []),
+  { key: 'first_name', label: isHead.value ? 'First name' : 'Contact first name', required: true, third: true, placeholder: 'Juan', rules: [requiredRule('First name')], autocomplete: 'given-name' },
+  { key: 'middle_name', label: 'Middle name', third: true, placeholder: 'Santos', autocomplete: 'additional-name' },
+  { key: 'last_name', label: isHead.value ? 'Last name' : 'Contact last name', required: true, third: true, placeholder: 'Dela Cruz', rules: [requiredRule('Last name')], autocomplete: 'family-name' },
+  // The resident logs in with this number, and no two accounts may share one. A
+  // barangay or organization officer who is also a head of the family needs a
+  // different number for this account; the server says so on the field.
+  {
+    key: 'phone_number', label: 'Mobile number (login)', required: true, half: !modal.value.isEditing, type: 'tel',
+    placeholder: '09171234567', hint: 'They sign in with this number. It must be unique.',
+    rules: [requiredRule('Mobile number'), phoneRule], autocomplete: 'tel',
+  },
+  ...(modal.value.isEditing
+    ? []
+    : [{
+        key: 'password', label: 'Password', required: true, half: true, type: 'password',
+        hint: 'At least 8 characters, with upper and lower case and a number.',
+        rules: [requiredRule('Password'), passwordRule], autocomplete: 'new-password',
+      }]),
+  { key: 'barangay_id', label: 'Barangay', required: true, half: true, items: barangays.value, itemTitle: 'barangay_name', itemValue: 'barangay_id', rules: [requiredRule('Barangay')] },
+  { key: 'street_address', label: 'Street / Purok (optional)', half: true, slot: true },
+  { key: 'status', label: 'Account status', options: [{ title: 'Active', value: RESIDENT_STATUS.active }, { title: 'Deactivated', value: RESIDENT_STATUS.deactivated }] },
+])
 
 // The profile dialog is open exactly when a resident is selected. There is no
 // second piece of state that can disagree with the first; the setter is what
@@ -784,7 +694,7 @@ const statusExtra = (r) => {
   return {
     label: statusActionLabel(r),
     icon: active ? 'mdi-account-cancel-outline' : 'mdi-account-check-outline',
-    color: active ? 'warning' : 'primary',
+    color: active ? 'warning-strong' : 'primary',
     disabled: statusToggleLoading.value,
   }
 }
@@ -928,7 +838,6 @@ const loadAll = async () => {
 const openAddModal = () => {
   modalError.value = ''
   clearFieldErrors()
-  showPassword.value = false
   formData.value = {
     first_name: '', middle_name: '', last_name: '', phone_number: '',
     password: '', barangay_id: null, street_address: '',
@@ -1248,50 +1157,34 @@ onMounted(loadAll)
 </script>
 
 <style scoped>
-/* The account count beside the title. primary-strong text on the 14% primary
-   tint, the same AA-safe pairing the status pills use: primary itself is 4.28:1
-   there and this is small type. */
-.count-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 14px;
-  border-radius: 999px;
-  font-size: 0.875rem;
-  font-weight: 600;
-  line-height: 1.4;
-  white-space: nowrap;
-  background: rgba(var(--v-theme-primary), 0.14);
-  color: rgb(var(--v-theme-primary-strong));
-}
-.count-chip strong { font-weight: 800; }
-
 .gap-2 { gap: 8px; }
 .gap-3 { gap: 12px; }
 .gap-4 { gap: 16px; }
 
-/* Avatars in the add/edit dialog — the old blue-on-light-blue pairing measured
-   3.28:1. Tinting the primary token instead keeps the same soft look and passes
-   AA in both themes. */
-.avatar-tint {
-  background: rgba(var(--v-theme-primary), 0.14) !important;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
+/* Header and dialog buttons, from the board: 40px, 12px radius, 14px/700,
+   primary shadow. */
+.add-btn {
+  padding: 0 18px;
+  border-radius: 12px;
+  font-size: 14px;
+  letter-spacing: 0;
+  box-shadow: 0 8px 16px -4px rgba(var(--v-theme-primary), 0.28);
 }
-.avatar-initials {
-  /* Not primary: at body size primary on the 14% tint is 4.25:1 and fails AA.
-     See the token in plugins/vuetify.ts. */
-  color: rgb(var(--v-theme-primary-strong));
-  font-weight: 800;
-  letter-spacing: 0.02em;
+.photo-btn {
+  border-radius: 10px;
+  border-color: rgba(var(--v-theme-on-surface), 0.14);
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-weight: 600;
 }
+.detail-card { box-shadow: 0 28px 64px rgba(2, 20, 16, 0.32) !important; }
 
-/* Every column has an explicit width (see `headers`), so below this floor the
-   table scrolls sideways instead of crushing any of them. Phones drop three
-   columns and lose the floor, see DataTablePage's collapseMobile. */
-.accounts-table :deep(.dtp-table table) { min-width: 1180px; }
+/* Search 320px and the 10px field radius, per the toolbar board. */
+.accounts-table.dtp-board :deep(.dtp-search) { flex: 0 0 320px; width: 320px; }
+.accounts-table :deep(.dtp-toolbar .v-field) { border-radius: 10px; }
+
+/* Below this floor the table scrolls sideways instead of crushing a column.
+   Phones drop two columns and lose the floor, see DataTablePage's collapseMobile. */
+.accounts-table :deep(.dtp-table table) { min-width: 880px; }
 @media (max-width: 599px) {
   .accounts-table :deep(.dtp-table table) { min-width: 0; }
 }
@@ -1319,6 +1212,25 @@ onMounted(loadAll)
   white-space: nowrap;
 }
 .account-cell { display: flex; align-items: center; gap: 8px; min-width: 0; }
+
+/* Board table: 24px at the card's edges, a 1px .08 rule under each row. */
+.accounts-table :deep(.dtp-table th:first-child),
+.accounts-table :deep(.dtp-table td:first-child) { padding-left: 24px !important; }
+.accounts-table :deep(.dtp-table th:last-child),
+.accounts-table :deep(.dtp-table td:last-child) { padding-right: 24px !important; }
+.accounts-table :deep(.dtp-table tbody td) { border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08); }
+.accounts-table.dtp-compact :deep(.dtp-table tbody tr:not(.selected-row):hover) { background: rgba(var(--v-theme-on-surface), 0.025); }
+/* Name cell: the round mark sits 12px from the text, the number line is 16px. */
+.accounts-table :deep(.person-cell > .v-avatar) { margin-right: 12px !important; }
+.accounts-table :deep(.person-cell .text-caption) { line-height: 16px; }
+/* Row actions: 40px square buttons, 10px radius, 18px icons. */
+.accounts-table :deep(.row-actions__inline .v-btn) { width: 40px; height: 40px; border-radius: 10px; }
+.accounts-table :deep(.row-actions__inline .v-icon) { font-size: 18px; }
+/* The footer reads at 14px here, not the compact lists' 13px. */
+.accounts-table.dtp-compact :deep(.dtp-footer),
+.accounts-table.dtp-compact :deep(.dtp-footer .text-body-2),
+.accounts-table.dtp-compact :deep(.dtp-footer .v-field__input),
+.accounts-table.dtp-compact :deep(.dtp-footer .v-btn) { font-size: 0.875rem !important; }
 
 /* Selection — the open row, and ticked rows. */
 .accounts-table :deep(tr.selected-row) {

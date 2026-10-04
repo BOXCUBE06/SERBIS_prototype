@@ -14,7 +14,7 @@
         <div class="inner-wrapper" :class="{ 'inner-wrapper--fixed': isFixedHeight }">
           <!-- Only the page moves; sidebar and header stay put. -->
           <RouterView v-slot="{ Component }">
-            <Transition name="page" mode="out-in">
+            <Transition name="page">
               <component :is="Component" />
             </Transition>
           </RouterView>
@@ -94,7 +94,7 @@ useAppTheme().init()
   height: 100vh;
   padding: 12px;
   box-sizing: border-box;
-  margin-left: 260px;
+  margin-left: 272px;
 }
 
 /* Matches this codebase's existing 959px breakpoint (see LoginView.vue) and
@@ -158,14 +158,12 @@ useAppTheme().init()
    AmbulanceRequestQueue's container nested inside Ambulance Dispatch → Bookings,
    overriding its pa-0 and insetting that panel 40px/24px past its siblings. */
 .inner-wrapper > .v-container {
-  padding: 24px 24px 24px 40px !important;
+  padding: 24px 32px !important;
 }
 
 .modern-drawer {
-  /* #154c41 is a one-off lighter highlight for this gradient's near stop,
-     not used anywhere else -- nothing to collapse it onto. The far stop is
-     the secondary token (already exactly this value in vuetify.ts). */
-  background: radial-gradient(circle at -10% 50%, #154c41 0%, rgb(var(--v-theme-secondary)) 80%) !important;
+  /* The Sidebar board's gradient (light theme; dark has its own rule below). */
+  background: linear-gradient(180deg, #0f3d33 0%, #0a2620 100%) !important;
   border-right: none !important;
 }
 /* Dark mode: same neutral background token as .v-main, with at most a faint
