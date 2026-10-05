@@ -1,7 +1,7 @@
 ---
 title: "SERBIS Admin Panel — User Manual"
 subtitle: "MDRRMO Echague Disaster Communication & Service Coordination System"
-date: "September 2026"
+date: "October 2026"
 ---
 
 # Introduction
@@ -83,6 +83,17 @@ Ambulance bookings (Bookings tab) and the trip record of each run (Trip Logs tab
 On **Trip Logs**, filter by status, date or vehicle. Click **Ambulance Trip Record** to add a trip by hand.
 
 ![Trip Logs](img/10-ambulance-trip-records.png)
+
+### Ambulance schedule
+
+The schedule shows every ambulance's trips for one day, or for the whole month.
+
+1. On **Bookings**, click **Day view**. The schedule opens on today.
+2. Read the timeline: one row per ambulance and one block per trip. The red **Now** line marks the current time. The **Unassigned** row holds requests that still need a unit.
+3. Click a trip block, or a row under **Trips on this day**, to highlight it in both places.
+4. Use the arrows or **Today** to change the day. Click **Month** to see the whole month, then click a date to open that day.
+
+<!-- TODO: screenshots pending: img/37-ambulance-schedule-day.png (Day view) and img/38-ambulance-schedule-month.png (Month view). -->
 
 ## Equipment Borrowing
 
@@ -225,10 +236,20 @@ Which vehicle types can be sent on each service.
 Admin panel accounts and the pages each one can open.
 
 1. Click **Add staff account**, fill in the details and save. Pass the temporary password to the person; they must change it at first sign-in.
-2. Click **Access** on a row to choose which pages that account can open, then click **Save access**.
-3. Use **Reset password** if someone forgets theirs, and **Close account** when someone leaves.
+2. Click **Edit** on a row to change a person's details.
+3. Click the **More** button (three dots) on a row, then choose:
+   - **Manage access** to pick the pages that account can open, then click **Save access**.
+   - **Reset password** if someone forgets theirs.
+   - **Close account** when someone leaves. The account is deactivated, not deleted. To bring it back, open **More** on that row and click **Reactivate**.
+4. To change several accounts at once, tick their checkboxes, then use **Change access**, **Close accounts** or **Reactivate** in the bar that appears.
+
+You cannot close or select your own account.
 
 ![Staff Accounts](img/30-staff-accounts.png)
+
+![More menu](img/35-staff-more-menu.png)
+
+![Bulk actions bar](img/36-staff-bulk-bar.png)
 
 ![Add staff account](img/31-add-staff-account.png)
 
