@@ -93,3 +93,8 @@ the next build.
   `ServiceCatalogItem.fromJson` and resolve the Filipino name in this order:
   `service_name_fil` from the API, then the bundled translation for the code
   (`serviceNameFor`), then `service_name`.
+- **A neutral icon for unknown services.** `badgeForServiceCode` in
+  `lib/models/request_models.dart` falls back to `Icons.emergency_rounded`
+  for any code it does not know, so every service added in the panel shows
+  an emergency icon. Use a neutral one, such as
+  `Icons.miscellaneous_services_rounded`, on the same grey badge.
