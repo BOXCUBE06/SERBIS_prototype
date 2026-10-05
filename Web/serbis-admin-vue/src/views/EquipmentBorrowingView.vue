@@ -664,6 +664,7 @@ import BulkSelectionBar from '@/components/BulkSelectionBar.vue'
 import DetailDrawer from '@/components/DetailDrawer.vue'
 import '@/components/detail-dialog.css'
 import { borrowingTransactionNo } from '@/composables/requestDisplay'
+import { matchesTransaction } from '@/composables/transactionSearch'
 import { pendingOf } from '@/composables/useReasonActions'
 import { BORROWING_STATUSES, statusIcon } from '@/composables/borrowingStatus'
 
@@ -817,10 +818,9 @@ const matchesSearch = (b) => {
   // make every uncatalogued row a hit for the word "unknown".
   const item = `${b.equipment?.item_name || ''} ${b.other_equipment_text || ''}`.toLowerCase()
   const purpose = (b.purpose || '').toLowerCase()
-  // Same lookup path as the request queues (d2018bad): a borrower reading
-  // "BOR-000042" off the panel over the phone has to find that row too.
-  const txn = borrowingTransactionNo(b.borrow_id).toLowerCase()
-  return name.includes(q) || item.includes(q) || purpose.includes(q) || txn.includes(q)
+  // Same lookup as the request queues: a borrower reading "BOR-000042" off the
+  // panel over the phone (or just "42") has to find that row too.
+  return name.includes(q) || item.includes(q) || purpose.includes(q) || matchesTransaction(b.borrow_id, q)
 }
 
 const matchesItem = (b) =>
