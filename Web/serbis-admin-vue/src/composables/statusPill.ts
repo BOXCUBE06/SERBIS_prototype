@@ -22,7 +22,7 @@
  * old tint pill used — the text color there, now the fill here — measures
  * ~9:1 for white text).
  */
-import { BORROWING_STATUSES } from './borrowingStatus'
+import { BORROWING_STATUSES } from './borrowingStatus.ts'
 
 const accentOf = (status: string): string =>
   BORROWING_STATUSES.find((s) => s.status === status)?.accent || '#64748B'
@@ -88,4 +88,47 @@ const ALL_ACCENTS: Record<string, string> = { ...SERVICE_REQUEST_ACCENTS, ...BOR
 
 export function pillAccent(status?: string | null): string {
   return ALL_ACCENTS[status || ''] || '#64748B'
+}
+
+// Status-filter tab values (SegmentedTabs) and the pill key whose accent the
+// selected tab takes, so a tab always matches the pills in the table under it.
+// A whitelist, not every accent key: "All", and non-status tabs that happen to
+// share a word with the table (account types), keep the primary style.
+const TAB_PILL_KEYS: Record<string, string> = {
+  Pending: 'Pending',
+  Booked: 'Booked',
+  Responding: 'Responding',
+  Resolved: 'Resolved',
+  Disapproved: 'Disapproved',
+  Cancelled: 'Cancelled',
+  Approved: 'Approved',
+  Released: 'Released',
+  Returned: 'Returned',
+  Denied: 'Denied',
+  // Trip logs filter on the raw trip_status; its pill shows the shared status.
+  'Not dispatched': 'Booked',
+  'In transit': 'Responding',
+  Completed: 'Resolved',
+  'No arrival': 'Resolved — no arrival',
+  // Vehicles, Responders (snake_case values) and Services.
+  Available: 'Available',
+  Dispatched: 'Dispatched',
+  Maintenance: 'Maintenance',
+  available: 'Available',
+  deployed: 'Deployed',
+  off_duty: 'Off duty',
+  Active: 'Active',
+  Disabled: 'Deactivated',
+}
+
+/**
+ * The selected tab's accent for a status-filter value, or null for "All" and
+ * any non-status tab. Overdue is not a pill (an overdue loan still shows
+ * Released); it takes the theme's error red, as the due date and the
+ * dashboard's Overdue tile already do.
+ */
+export function tabAccent(value?: string | number | null): string | null {
+  if (value === 'Overdue') { return 'rgb(var(--v-theme-error))' }
+  const key = TAB_PILL_KEYS[String(value ?? '')]
+  return key ? pillAccent(key) : null
 }

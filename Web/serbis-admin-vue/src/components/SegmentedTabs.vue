@@ -4,8 +4,9 @@
   One connected control — shared border, rounded OUTER corners only (the
   wrapper's own border-radius + overflow:hidden clips every inner divider
   square, so only the two end segments read as rounded) — with the active
-  segment filled solid in the SERBIS accent. Replaces three independent
-  status-filter controls: ServiceRequestQueue's v-chip-group,
+  segment filled solid in the SERBIS accent, or on a status filter a tint of
+  that status's pill colour (statusPill.ts's tabAccent). Replaces three
+  independent status-filter controls: ServiceRequestQueue's v-chip-group,
   ConductionRequestView's plain status v-select, and EquipmentBorrowingView's
   outer v-tabs + inner stat-tile strip.
 
@@ -23,9 +24,12 @@
       role="tab"
       :class="[
         'segmented-tabs__seg',
-        `segmented-tabs__seg--${String(item.value).toLowerCase()}`,
-        {'segmented-tabs__seg--active': item.value === modelValue}
-     ]"
+        {
+          'segmented-tabs__seg--active': item.value === modelValue,
+          'segmented-tabs__seg--status': accentOf(item),
+        },
+      ]"
+      :style="accentOf(item) ? { '--tab-accent': accentOf(item) } : undefined"
       :aria-selected="item.value === modelValue"
       @click="$emit('update:modelValue', item.value)"
     >
@@ -39,13 +43,15 @@
 </template>
 
 <script setup lang="ts">
+import { tabAccent } from '@/composables/statusPill'
+
 export interface SegmentedTabItem {
   value: string | number
   label: string
   count?: number
 }
 
-defineProps<{
+const props = defineProps<{
   modelValue: string | number
   items: SegmentedTabItem[]
   /** First load: counts are placeholders, never a misleading 0. */
@@ -59,6 +65,10 @@ defineProps<{
 }>()
 
 defineEmits<{ (e: 'update:modelValue', value: string | number): void }>()
+
+// The switch style is page navigation, never a status filter.
+const accentOf = (item: SegmentedTabItem): string | undefined =>
+  (props.switchStyle ? null : tabAccent(item.value)) ?? undefined
 </script>
 
 <style scoped>
@@ -98,33 +108,6 @@ defineEmits<{ (e: 'update:modelValue', value: string | number): void }>()
   outline: 2px solid rgb(var(--v-theme-primary));
   outline-offset: -2px;
 }
-/* Text on a solid fill uses the theme's on-* colour for that fill: dark-theme
-   primary (#34C39A) and the status hues are light, and #fff on them fails AA. */
-.segmented-tabs__seg--pending.segmented-tabs__seg--active {
-  background: rgb(var(--v-theme-warning));
-  color: rgb(var(--v-theme-on-warning));
-}
-.segmented-tabs__seg--booked.segmented-tabs__seg--active {
-  background: #6D28D9;
-  color: #fff;
-}
-.segmented-tabs__seg--responding.segmented-tabs__seg--active {
-  background: rgb(var(--v-theme-info));
-  color: rgb(var(--v-theme-on-info));
-}
-.segmented-tabs__seg--resolved.segmented-tabs__seg--active {
-  background: rgb(var(--v-theme-success));
-  color: rgb(var(--v-theme-on-success));
-}
-.segmented-tabs__seg--disapproved.segmented-tabs__seg--active {
-  background: rgb(var(--v-theme-error));
-  color: rgb(var(--v-theme-on-error));
-}
-.segmented-tabs__seg--cancelled.segmented-tabs__seg--active {
-  background: rgb(var(--v-theme-secondary));
-  color: rgb(var(--v-theme-on-secondary));
-}
-
 .segmented-tabs__seg:hover:not(.segmented-tabs__seg--active) {
   background: rgba(var(--v-theme-on-surface), 0.05);
 }
@@ -139,6 +122,20 @@ defineEmits<{ (e: 'update:modelValue', value: string | number): void }>()
 .segmented-tabs--tonal .segmented-tabs__seg--active {
   background: rgba(var(--v-theme-primary), 0.14);
   color: rgb(var(--v-theme-primary-strong));
+}
+/* A selected status tab: StatusPill's own tint formula, so the tab matches the
+   pills below it in both themes. Worst case is Booked in dark theme, 4.71:1;
+   the count drops its 0.85 opacity here because at 0.85 that one fails AA. */
+.segmented-tabs__seg--status.segmented-tabs__seg--active {
+  background: color-mix(in srgb, var(--tab-accent) 16%, rgb(var(--v-theme-surface)));
+  color: color-mix(in srgb, var(--tab-accent) 60%, rgb(var(--v-theme-on-surface)));
+}
+.segmented-tabs__seg--status.segmented-tabs__seg--active .segmented-tabs__count { opacity: 1; }
+.segmented-tabs__seg--status.segmented-tabs__seg--active .skel {
+  --skel-bg: color-mix(in srgb, var(--tab-accent) 30%, transparent);
+}
+.segmented-tabs__seg--status:hover:not(.segmented-tabs__seg--active) {
+  background: color-mix(in srgb, var(--tab-accent) 6%, rgb(var(--v-theme-surface)));
 }
 /* Switch (canvas boards): 3px track padding, 2px gap, 11px / 8px radii. */
 .segmented-tabs--switch {
