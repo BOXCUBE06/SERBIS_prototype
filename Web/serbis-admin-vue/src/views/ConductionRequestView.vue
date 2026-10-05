@@ -70,7 +70,7 @@
           :loading="initialLoad"
           :refreshing="reloading"
           v-model:search="search"
-          search-placeholder="Search patient, origin or destination"
+          search-placeholder="Search booking no., patient, origin or destination"
           :tabs="statusTabItems"
           :status="statusFilter"
           @update:status="statusFilter = $event"
@@ -99,7 +99,7 @@
             <PersonCell
               :name="item.patient_name || 'Unnamed patient'"
               :initials="nameInitials(item.patient_name)"
-              :secondary="item.patient_contact_number"
+              :secondary="displayPhone(item.patient_contact_number)"
             />
           </template>
 
@@ -128,7 +128,12 @@
           </template>
 
           <template v-slot:no-data>
-            <div class="text-center py-12">
+            <div v-if="items.length > 0 && hasTripFilters" class="text-center py-12">
+              <v-icon size="40" class="text-medium-emphasis mb-2">mdi-filter-off-outline</v-icon>
+              <div class="text-body-2 font-weight-bold text-high-emphasis">No trip records match your filters</div>
+              <v-btn variant="text" color="primary" class="text-none font-weight-bold mt-2" @click="clearTripFilters">Clear filters</v-btn>
+            </div>
+            <div v-else class="text-center py-12">
               <v-icon size="40" class="text-medium-emphasis mb-2">mdi-ambulance</v-icon>
               <div class="text-body-2 font-weight-bold text-high-emphasis">No ambulance trip records yet</div>
             </div>
@@ -373,7 +378,7 @@
         <section class="detail-section">
           <h3 class="sect-label">Patient</h3>
           <dl class="kv">
-            <dt>Contact</dt><dd>{{ selected.patient_contact_number || NOT_RECORDED }}</dd>
+            <dt>Contact</dt><dd>{{ displayPhone(selected.patient_contact_number) || NOT_RECORDED }}</dd>
             <dt>Age</dt><dd>{{ selected.patient_age ?? NOT_RECORDED }}</dd>
             <dt>Address</dt><dd>{{ selected.patient_address || NOT_RECORDED }}</dd>
             <dt>Diagnosis</dt><dd>{{ selected.medical_diagnosis || NOT_RECORDED }}</dd>
@@ -600,7 +605,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { getToken } from '@/composables/authToken'
 import { displayPhone } from '@/composables/phoneNumber'
 import { sharedStatusLabel, tripStatusLabel, outcomeLabel } from '@/composables/adminUi'
@@ -618,6 +624,8 @@ import DetailDrawer from '@/components/DetailDrawer.vue'
 import '@/components/detail-dialog.css'
 import ExportMenu from '@/components/ExportMenu.vue'
 import { useSelection, transactionNo } from '@/composables/requestDisplay'
+import { manilaDateTime, manilaDay, manilaInputValue } from '@/composables/requestFields'
+import { matchesTransaction } from '@/composables/transactionSearch'
 
 // 'bookings' first: a staffer arriving on this page is more often checking on
 // a resident's request than filling in a trip log by hand.
@@ -689,28 +697,28 @@ const headers = [
 
 const notify = (text, color = 'success') => { snackbar.value = { show: true, text, color } }
 // One path for every timestamp on this page — created_at and all four trip log
-// checkpoints. The checkpoints used to arrive without an offset, which new Date()
-// reads as local time; that happened to render correctly only because the column
-// held office wall clock. They are real UTC instants now and carry a 'Z', so the
-// same conversion is right for all five and there is no special case to keep.
-const fmtDateTime = (iso) => iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : ''
+// checkpoints. They are UTC instants (they carry a 'Z'), shown in the office's
+// Asia/Manila time whatever the browser's zone is.
+const fmtDateTime = manilaDateTime
 
+// Patient, route, the unit, and the booking number (as the Bookings search reads it).
 const matchesSearch = (r) => {
   const q = (search.value || '').trim().toLowerCase()
   if (!q) return true
-  return [r.patient_name, r.origin, r.destination].some((v) => (v || '').toLowerCase().includes(q))
+  return [r.patient_name, r.origin, r.destination, tripVehicleLabel(r)].some((v) => (v || '').toLowerCase().includes(q))
+    || matchesTransaction(r.service_request_id, q)
 }
 // The one status tab a trip belongs to, so it is counted exactly once.
 const tabOf = (r) => (r.no_arrival_reason ? NO_ARRIVAL : r.trip_status)
 const matchesStatus = (r) => statusFilter.value === ALL_STATUS || tabOf(r) === statusFilter.value
 
 // Presets on the day the unit left (filed day if it has not left yet), and
-// one unit. Both compare in the office's local day, which is the viewer's.
+// one unit. Both compare in the office's own (Manila) day.
 const DEPARTED_RANGES = ['Any time', 'Today', 'Last 7 days', 'Last 30 days']
 const RANGE_DAYS = { 'Today': 0, 'Last 7 days': 6, 'Last 30 days': 29 }
 const departedRange = ref(DEPARTED_RANGES[0])
 const vehicleFilter = ref(ALL_STATUS)
-const localDay = (iso) => toInputValue(iso).slice(0, 10)
+const localDay = manilaDay
 const rangeStart = computed(() => {
   const back = RANGE_DAYS[departedRange.value]
   if (back === undefined) return ''
@@ -758,6 +766,12 @@ const clearFilter = (key) => {
 }
 const clearAllFilters = () => {
   for (const key of ['status', 'departed', 'vehicle']) clearFilter(key)
+}
+// Any search or filter narrowing the list, and the empty state's way out of it.
+const hasTripFilters = computed(() => (search.value || '').trim() !== '' || activeFilters.value.length > 0)
+const clearTripFilters = () => {
+  search.value = ''
+  clearAllFilters()
 }
 
 // The page header's line on the Trip logs tab.
@@ -1064,18 +1078,16 @@ const handleOpenTripRecord = async (conductionRequestId) => {
 
 // The reverse of the above — a trip's own detail dialog linking back to the
 // booking that dispatched it (item 7 of the layout redesign: this link only
-// ever went one way before). AmbulanceRequestQueue.vue keeps its own request
-// list and selection state private, so this reaches in via defineExpose
-// rather than duplicating that state here. v-window keeps both tabs
-// mounted (confirmed while building the sticky footer for item 1 — inactive
-// tab content is hidden, not destroyed), so the ref is already valid the
-// instant the tab switches; nextTick is just to let that switch paint
-// before the child's own scroll/selection work runs.
+// ever went one way before). The request id travels in the route query:
+// AmbulanceRequestQueue.vue reads ?open, opens that booking (or sends a
+// non-ambulance request to its own board) and clears it.
+const route = useRoute()
+const router = useRouter()
 const bookingsQueueRef = ref(null)
 const openBooking = (requestId) => {
   detail.value.open = false
   activeTab.value = 'bookings'
-  nextTick(() => bookingsQueueRef.value?.selectRequestById(requestId))
+  router.replace({ query: { ...route.query, open: requestId } })
 }
 
 const printTrip = async (record) => {
@@ -1174,14 +1186,9 @@ const tripLog = ref({ open: false, form: emptyTripLogForm(), error: '', target: 
 const tripLogAction = (record) => (record?.departed_office_at ? 'Update trip log' : 'Complete trip log')
 
 // The API sends an ISO instant with an offset; <input type="datetime-local">
-// wants 'YYYY-MM-DDTHH:mm' with none. new Date() resolves the offset and the
-// local getters below render it in the viewer's zone, which is the office's.
-const toInputValue = (iso) => {
-  if (!iso) return ''
-  const d = new Date(iso)
-  const pad = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
+// wants 'YYYY-MM-DDTHH:mm' with none, here as the Manila wall clock the server
+// reads typed values as.
+const toInputValue = manilaInputValue
 
 const openTripLog = (record) => {
   // Opened from the detail drawer: swap it out, and come back to it on close.

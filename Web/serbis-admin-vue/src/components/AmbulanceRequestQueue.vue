@@ -785,7 +785,7 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { getToken } from '@/composables/authToken'
 import { outcomeLabel, isBookingOverdue, bookingCountdownLabel, pendingWaitLabel, openWaitDays, waitTone, authHeaders, pluralize } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
@@ -810,6 +810,7 @@ import { emptyReasonDialog, useReasonActions } from '@/composables/useReasonActi
 const emit = defineEmits(['dispatch-booking', 'open-trip-record', 'trip-record-created'])
 
 const route = useRoute()
+const router = useRouter()
 const getHeaders = authHeaders
 
 const search = ref('')
@@ -1505,10 +1506,27 @@ watch(search, () => { page.value = 1 })
 watch(() => filters.barangay, () => { page.value = 1 })
 watch(() => filters.unit, () => { page.value = 1 })
 
+// ?open=<request_id>, from a link on another record (a trip's "Open booking").
+// An ambulance booking opens here; any other request goes to its own board.
+// The query is dropped once used, so a refresh does not reopen it.
+const openLinked = () => {
+  const id = Number(route.query.open)
+  if (!id) return
+  if (requests.value.some((r) => itemId(r) === id)) {
+    const { open: _open, ...rest } = route.query
+    selectRequestById(id)
+    router.replace({ query: rest })
+  } else {
+    router.push({ path: '/manage-requests', query: { request: id } })
+  }
+}
+watch(() => route.query.open, () => { if (!initialLoad.value) openLinked() })
+
 onMounted(async () => {
   await fetchData()
   // Dashboard rows deep-link here with ?request=<request_id>.
   selectRequestById(Number(route.query.request))
+  openLinked()
 })
 onUnmounted(releaseAttachments)
 onUnmounted(() => listAbortController.abort())

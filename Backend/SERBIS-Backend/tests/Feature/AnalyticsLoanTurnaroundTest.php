@@ -128,6 +128,28 @@ class AnalyticsLoanTurnaroundTest extends TestCase
         $this->assertSame(50, $loans['returnedLate']['percent']);
     }
 
+    public function test_a_returned_loan_without_a_due_date_is_outside_the_late_share(): void
+    {
+        $this->borrowing([
+            'status' => 'Returned',
+            'due_date' => '2026-09-10',
+            'released_at' => '2026-09-01 00:00:00',
+            'returned_at' => '2026-09-12 00:00:00',
+        ], '2026-09-01 00:00:00');
+
+        $this->borrowing([
+            'status' => 'Returned',
+            'due_date' => null,
+            'released_at' => '2026-09-01 00:00:00',
+            'returned_at' => '2026-09-12 00:00:00',
+        ], '2026-09-01 00:00:00');
+
+        $late = $this->report(['preset' => 'custom', 'from' => '2026-09-01', 'to' => '2026-09-30'])['returnedLate'];
+
+        $this->assertSame(1, $late['of']);
+        $this->assertSame(100, $late['percent']);
+    }
+
     /**
      * The load-bearing test: a loan created well outside the queried window
      * (and therefore invisible to daysOut/returnedLate) must still be caught

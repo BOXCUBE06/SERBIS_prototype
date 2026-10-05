@@ -34,48 +34,51 @@
             <h2 class="form-title">Sign in</h2>
             <p class="form-sub">Staff access to the MDRRMO Echague panel.</p>
           </div>
+          <!-- Error banner. Out of the form's flow so it never moves the form:
+               absolute above the heading on the card, a fixed-height slot when
+               the card stacks. role="alert" so a failed login is announced;
+               without it the only failure signal is visual. The session-expiry
+               notice is not an error (the admin did nothing wrong), so it must
+               not look like a failed sign-in; it stacks above any error. -->
+          <div class="login-banner">
+            <Transition name="login-banner">
+              <v-alert
+                v-if="step === 'password' && sessionExpired"
+                role="status"
+                variant="flat"
+                rounded="lg"
+                density="comfortable"
+                closable
+                @click:close="sessionExpired = false"
+                style="background-color: rgba(245, 165, 36, 0.15); border: 1px solid rgba(245, 165, 36, 0.4);"
+              >
+                <span class="text-body-2 font-weight-medium" style="color: #ffe0b2;">
+                  Your session expired. Sign in again to continue.
+                </span>
+              </v-alert>
+            </Transition>
+            <Transition name="login-banner">
+              <v-alert
+                v-if="step === 'password' ? errorMessage : mfaError"
+                role="alert"
+                type="error"
+                variant="flat"
+                rounded="lg"
+                density="comfortable"
+                closable
+                @click:close="step === 'password' ? (errorMessage = '') : (mfaError = '')"
+                style="background-color: rgba(211, 47, 47, 0.15); border: 1px solid rgba(211, 47, 47, 0.4);"
+              >
+                <span class="text-body-2 font-weight-medium" style="color: #ffcdd2;">
+                  {{ step === 'password' ? errorMessage : mfaError }}
+                </span>
+              </v-alert>
+            </Transition>
+          </div>
           <!-- Password step. Unchanged apart from handleLogin now branching
                into the MFA step on a 403/mfa_required instead of always
                storing a token — see script setup. -->
           <v-form v-if="step === 'password'" @submit.prevent="handleLogin" class="w-100">
-
-            <!-- Session-expiry notice. Not an error — the admin did nothing
-                 wrong — so it must not look like a failed sign-in. Without it,
-                 an expired token drops the visitor here with no explanation. -->
-            <v-alert
-              v-if="sessionExpired"
-              role="status"
-              variant="flat"
-              rounded="lg"
-              density="comfortable"
-              class="mb-4"
-              closable
-              @click:close="sessionExpired = false"
-              style="background-color: rgba(245, 165, 36, 0.15); border: 1px solid rgba(245, 165, 36, 0.4);"
-            >
-              <span class="text-body-2 font-weight-medium" style="color: #ffe0b2;">
-                Your session expired. Sign in again to continue.
-              </span>
-            </v-alert>
-
-            <!-- Error Alert. role="alert" so a failed login is announced;
-                 without it the only failure signal is visual. -->
-            <v-alert
-  v-if="errorMessage"
-  role="alert"
-  type="error"
-  variant="flat"
-  rounded="lg"
-  density="comfortable"
-  class="mb-4"
-  closable
-  @click:close="errorMessage = ''"
-  style="background-color: rgba(211, 47, 47, 0.15); border: 1px solid rgba(211, 47, 47, 0.4);"
->
-  <span class="text-body-2 font-weight-medium" style="color: #ffcdd2;">
-    {{ errorMessage }}
-  </span>
-</v-alert>
 
             <div class="form-fields">
               <div>
@@ -143,23 +146,6 @@
                needs no changes: this whole page still looks unauthenticated
                to it until handleMfaSubmit succeeds. -->
           <v-form v-else @submit.prevent="handleMfaSubmit" class="w-100">
-            <v-alert
-              v-if="mfaError"
-              role="alert"
-              type="error"
-              variant="flat"
-              rounded="lg"
-              density="comfortable"
-              class="mb-4"
-              closable
-              @click:close="mfaError = ''"
-              style="background-color: rgba(211, 47, 47, 0.15); border: 1px solid rgba(211, 47, 47, 0.4);"
-            >
-              <span class="text-body-2 font-weight-medium" style="color: #ffcdd2;">
-                {{ mfaError }}
-              </span>
-            </v-alert>
-
             <!-- The QR only ever appears once per admin — see the code
                  comment on enrollment in AuthController::adminLogin. A second
                  login after enrollment sticks skips straight to the plain
@@ -558,10 +544,22 @@ const handleResend = async () => {
   color: #fff;
 }
 .form-block { display: flex; flex-direction: column; gap: 28px; }
+/* Out of flow: the form stays where it is whether or not the banner shows. */
+.login-banner { position: absolute; top: 24px; left: 0; right: 0; display: flex; flex-direction: column; gap: 8px; }
+.login-banner-enter-active { transition: opacity var(--motion-overlay-in) var(--ease-out); }
+.login-banner-leave-active { transition: opacity var(--motion-overlay-out) var(--ease-out); }
+.login-banner-enter-from,
+.login-banner-leave-to { opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .login-banner-enter-active,
+  .login-banner-leave-active { transition: none; }
+}
 .form-title { margin: 0; font-size: 28px; line-height: 36px; font-weight: 700; letter-spacing: -0.4px; }
 .form-sub { margin: 4px 0 0; font-size: 14px; line-height: 20px; color: rgba(255, 255, 255, 0.76); }
 .form-fields { display: flex; flex-direction: column; gap: 18px; }
 .form-actions { display: flex; flex-direction: column; gap: 16px; }
+/* The v-form wrapper has no gap of its own, so the checkbox sat flush on the button. */
+.form-fields + .form-actions { margin-top: 28px; }
 
 /* The seal is a JPG on a pure-white background, and the panel is off-white, so
    it landed as a visible white disc. multiply drops the white to the panel
@@ -619,6 +617,8 @@ const handleResend = async () => {
     align-items: center;
   }
   .form-block { width: 100%; max-width: 380px; }
+  /* No room above the heading: reserve two banner lines between subtitle and form. */
+  .login-banner { position: static; height: 76px; }
 }
 
 /* Form controls (Login board). The password-manager autofill buttons are

@@ -257,25 +257,52 @@ class AnalyticsReportEndpointTest extends TestCase
         $this->assertSame(10, $aging['oldestDays']);
     }
 
-    /**
-     * The condition this whole pass exists for: both endpoints run the same
-     * window through BarangayRequestCounts, so they cannot disagree about how
-     * many requests there were.
-     */
-    public function test_the_dashboard_and_the_report_agree_on_the_total(): void
+    public function test_the_totals_count_requests_and_walk_ins_and_honour_the_filters(): void
     {
-        $this->requestAt(now()->subDay()->toDateTimeString());
-        $this->requestAt(now()->subDay()->toDateTimeString(), ['resident_id' => null, 'walk_in_name' => 'Jose Cruz']);
-        $this->requestAt(now()->subDay()->toDateTimeString(), ['resident_id' => null, 'walk_in_name' => 'Ana Lim']);
+        $other = Service::create(['service_name' => 'Fire Rescue', 'description' => 'Fire']);
 
-        $dashboardTotal = $this->getJson('/api/admin/dashboard')->assertOk()->json('totalsByPeriod.all');
-        $reportTotals = $this->report(['preset' => 'year'])['totals'];
+        $this->requestAt('2026-09-02 01:00:00');
+        $this->requestAt('2026-09-02 02:00:00', ['resident_id' => null, 'walk_in_name' => 'Jose Cruz']);
+        $this->requestAt('2026-09-02 03:00:00', ['resident_id' => null, 'walk_in_name' => 'Ana Lim', 'service_id' => $other->getKey()]);
 
-        $raw = DB::table('tbl_service_request')->count();
+        $whole = $this->report($this->wholeOf('2026-09-01', '2026-09-30'))['totals'];
+        $this->assertSame(3, $whole['serviceRequests']);
+        $this->assertSame(3, $whole['combined']);
+        $this->assertSame(2, $whole['walkIn']);
 
-        $this->assertSame($raw, $dashboardTotal);
-        $this->assertSame($raw, $reportTotals['combined']);
-        $this->assertSame(2, $reportTotals['walkIn']);
+        // The service filter narrows the walk-in count too, not just the requests.
+        $byService = $this->report($this->wholeOf('2026-09-01', '2026-09-30') + ['service_id' => $other->getKey()])['totals'];
+        $this->assertSame(1, $byService['serviceRequests']);
+        $this->assertSame(1, $byService['walkIn']);
+
+        // A walk-in records no barangay, so a barangay filter leaves none.
+        $byBarangay = $this->report($this->wholeOf('2026-09-01', '2026-09-30') + ['barangay_id' => $this->barangay->barangay_id])['totals'];
+        $this->assertSame(1, $byBarangay['serviceRequests']);
+        $this->assertSame(0, $byBarangay['walkIn']);
+    }
+
+    public function test_the_month_is_the_manila_month_not_the_utc_one(): void
+    {
+        // 16:30 UTC on 31 Aug is 00:30 Manila on 1 Sep.
+        $this->requestAt('2026-08-31 16:30:00');
+        $this->requestAt('2026-08-31 15:30:00');
+
+        $volume = $this->report($this->wholeOf('2026-08-01', '2026-09-30'))['volume'];
+
+        $this->assertSame(['Aug 2026', 'Sep 2026'], $volume['labels']);
+        $this->assertSame([1, 1], $volume['series'][0]['data']);
+    }
+
+    public function test_a_request_with_no_service_is_its_own_others_segment(): void
+    {
+        $this->requestAt('2026-09-02 01:00:00');
+        $this->requestAt('2026-09-02 02:00:00', ['service_id' => null]);
+
+        $report = $this->report($this->wholeOf('2026-09-01', '2026-09-30'));
+
+        $this->assertSame(2, $report['volume']['total']);
+        $this->assertEqualsCanonicalizing(['Others', $this->service->service_name], array_column($report['volume']['series'], 'label'));
+        $this->assertSame($report['totals']['serviceRequests'], $report['volume']['total']);
     }
 
     public function test_a_status_change_is_visible_on_the_next_report_read(): void
@@ -314,6 +341,19 @@ class AnalyticsReportEndpointTest extends TestCase
         );
 
         $this->assertSame(1, $filtered['demand']['total'], 'a walk-in records no barangay, so it cannot match one');
+    }
+
+    public function test_all_time_starts_on_the_manila_day_of_the_earliest_request(): void
+    {
+        // 20:00 UTC on 1 Mar is 04:00 Manila on 2 Mar.
+        $this->requestAt('2025-03-01 20:00:00');
+        $this->requestAt(now()->subDay()->toDateTimeString());
+
+        $report = $this->report(['preset' => 'all']);
+
+        $this->assertSame('all', $report['range']['preset']);
+        $this->assertSame('2025-03-02', $report['range']['from']);
+        $this->assertSame(2, $report['totals']['serviceRequests']);
     }
 
     public function test_it_defaults_to_this_quarter(): void

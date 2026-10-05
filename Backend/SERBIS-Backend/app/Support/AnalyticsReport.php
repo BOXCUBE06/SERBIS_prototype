@@ -18,12 +18,13 @@ use Illuminate\Support\Facades\DB;
  *    stored values is eight hours out, which moves the 08:00-17:00 working
  *    day onto 00:00-09:00 and throws anything before 08:00 onto the previous
  *    weekday.
- * 2. **Portable SQL.** The aggregate uses CAST(x AS DATE) and
- *    EXTRACT(HOUR FROM x), which MySQL and Postgres both accept. DAYOFWEEK()
+ * 2. **Portable SQL, one exception.** The weekday grid uses CAST(x AS DATE)
+ *    and EXTRACT(HOUR FROM x), which MySQL and Postgres both accept. DAYOFWEEK()
  *    is MySQL-only and EXTRACT(DOW ...) is Postgres-only, so the weekday is
  *    derived in PHP from the bucket's date instead. Manila is a whole number
  *    of hours from UTC and has never observed DST, so shifting a (date, hour)
- *    bucket by the offset is exact rather than approximate.
+ *    bucket by the offset is exact rather than approximate. The month rollup
+ *    shifts in SQL with DATE_FORMAT, which is MySQL-only (production's engine).
  * 3. **Nulls are excluded and counted.** Turnaround reads columns that are
  *    only partly backfilled, so every figure carries its own sample size.
  * 4. **Median, not mean.** At these volumes one request left open for a month
@@ -40,7 +41,10 @@ class AnalyticsReport
      */
     private const OFFICE_TIMEZONE = 'Asia/Manila';
 
-    public const PRESETS = ['month', 'quarter', 'year', 'custom'];
+    /** Manila's fixed offset from UTC (no DST), for the SQL month shift. */
+    private const OFFICE_UTC_OFFSET_HOURS = 8;
+
+    public const PRESETS = ['month', 'quarter', 'year', 'all', 'custom'];
 
     /** Monday-first, because a duty roster is read that way. */
     private const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -49,9 +53,19 @@ class AnalyticsReport
         private readonly CarbonImmutable $from,
         private readonly CarbonImmutable $to,
         private readonly string $preset,
-        private readonly ?int $barangayId = null,
-        private readonly ?int $serviceId = null,
+        /** @var list<int> Empty means no filter. */
+        private readonly array $barangayIds = [],
+        /** @var list<int> Empty means no filter. */
+        private readonly array $serviceIds = [],
+        /** Also (or only) the requests filed with no barangay. */
+        private readonly bool $includeWalkIn = false,
     ) {}
+
+    /** Any barangay choice, including walk-in only. */
+    private function barangayFiltered(): bool
+    {
+        return $this->barangayIds || $this->includeWalkIn;
+    }
 
     /**
      * Resolves a preset or an explicit pair of dates into a half-open window
@@ -84,6 +98,15 @@ class AnalyticsReport
             return [$start->utc(), $end->utc(), 'custom'];
         }
 
+        // The endpoint has no open-ended start, so "all" begins on the Manila day
+        // of the earliest request (today, when there are none).
+        if ($preset === 'all') {
+            $first = DB::table('tbl_service_request')->min('created_at');
+            $start = $first ? CarbonImmutable::parse($first, 'UTC')->timezone(self::OFFICE_TIMEZONE)->startOfDay() : $today;
+
+            return [$start->utc(), $today->addDay()->utc(), 'all'];
+        }
+
         $start = match ($preset) {
             'month' => $today->startOfMonth(),
             'year' => $today->startOfYear(),
@@ -105,11 +128,10 @@ class AnalyticsReport
                 'timezone' => self::OFFICE_TIMEZONE,
             ],
             'filters' => [
-                'barangay_id' => $this->barangayId,
-                'service_id' => $this->serviceId,
+                'barangay_ids' => $this->barangayIds,
+                'service_ids' => $this->serviceIds,
+                'include_walk_in' => $this->includeWalkIn,
             ],
-            // From the shared helper, so this page and the dashboard cannot
-            // report different totals for the same window.
             'totals' => $this->totals(),
             'demand' => $this->demandByWeekdayHour(),
             'volume' => $this->volumeByMonth(),
@@ -126,13 +148,19 @@ class AnalyticsReport
 
     private function totals(): array
     {
-        $counts = BarangayRequestCounts::forWindow($this->from, $this->to);
+        $requests = (int) $this->scoped()->count();
+
+        // A walk-in is a request with no barangay, so a barangay filter leaves none.
+        $walkIn = (int) $this->scoped()->whereNull('tbl_service_request.barangay_id')->count();
+
+        // Loans carry no service, so any service filter leaves none.
+        $loans = $this->serviceIds ? 0 : (int) $this->borrowingsScoped()->count();
 
         return [
-            'combined' => $counts['total'],
-            'walkIn' => $counts['walkIn'],
-            'barangayLinked' => $counts['total'] - $counts['walkIn'],
-            'serviceRequests' => (int) $this->scoped()->count(),
+            'combined' => $requests + $loans,
+            'walkIn' => $walkIn,
+            'barangayLinked' => $requests + $loans - $walkIn,
+            'serviceRequests' => $requests,
         ];
     }
 
@@ -146,14 +174,12 @@ class AnalyticsReport
      */
     private function scoped()
     {
-        return DB::table('tbl_service_request')
+        return BarangayRequestCounts::onlyBarangays(DB::table('tbl_service_request'), $this->barangayIds, $this->includeWalkIn)
             ->where('tbl_service_request.created_at', '>=', $this->from)
             ->where('tbl_service_request.created_at', '<', $this->to)
-            ->when($this->serviceId, fn ($q) => $q->where('tbl_service_request.service_id', $this->serviceId))
             // The barangay the request was filed under, not the resident's
-            // current one. A walk-in has none, so the filter excludes it.
-            ->when($this->barangayId, fn ($q) => $q
-                ->where('tbl_service_request.barangay_id', $this->barangayId));
+            // current one. A walk-in has none, so only the walk-in choice includes it.
+            ->when($this->serviceIds, fn ($q) => $q->whereIn('tbl_service_request.service_id', $this->serviceIds));
     }
 
     /** Monday-first day labels, paired with the four-block day split below. */
@@ -227,16 +253,26 @@ class AnalyticsReport
         };
     }
 
+    /** Manila calendar month ('YYYY-MM') of a UTC column, computed in SQL. */
+    private static function manilaMonth(string $column): string
+    {
+        return "DATE_FORMAT({$column} + INTERVAL ".self::OFFICE_UTC_OFFSET_HOURS." HOUR, '%Y-%m')";
+    }
+
     /**
      * Section 2 — volume by month, split by service. Stacked bar: months are
-     * ordered discrete buckets and the segments sum to a real total.
+     * ordered discrete buckets and the segments sum to a real total. A request
+     * with no service (an "Others" request) is its own segment, not dropped.
      */
     private function volumeByMonth(): array
     {
+        $month = self::manilaMonth('tbl_service_request.created_at');
+        $label = "COALESCE(tbl_services.service_name, 'Others')";
+
         $rows = $this->scoped()
-            ->join('tbl_services', 'tbl_service_request.service_id', '=', 'tbl_services.service_id')
-            ->groupByRaw('CAST(tbl_service_request.created_at AS DATE), tbl_services.service_name')
-            ->selectRaw('CAST(tbl_service_request.created_at AS DATE) as bucket_date, tbl_services.service_name as label, COUNT(*) as total')
+            ->leftJoin('tbl_services', 'tbl_service_request.service_id', '=', 'tbl_services.service_id')
+            ->groupByRaw("{$month}, {$label}")
+            ->selectRaw("{$month} as month, {$label} as label, COUNT(*) as total")
             ->get();
 
         return $this->stackByMonth($rows);
@@ -248,21 +284,23 @@ class AnalyticsReport
      */
     private function outcomeByMonth(): array
     {
+        $month = self::manilaMonth('tbl_service_request.created_at');
+
         $rows = $this->scoped()
-            ->groupByRaw('CAST(tbl_service_request.created_at AS DATE), tbl_service_request.status')
-            ->selectRaw('CAST(tbl_service_request.created_at AS DATE) as bucket_date, tbl_service_request.status as label, COUNT(*) as total')
+            ->groupByRaw("{$month}, tbl_service_request.status")
+            ->selectRaw("{$month} as month, tbl_service_request.status as label, COUNT(*) as total")
             ->get();
 
         return $this->stackByMonth($rows);
     }
 
     /**
-     * Rolls day buckets up into Manila months.
+     * Stacks rows of (month, label, total) into one series per label.
      *
-     * The rollup happens here rather than in SQL because the month a row
-     * belongs to depends on the timezone — a request filed at 07:00 Manila on
-     * the 1st is stored as 23:00 UTC on the previous day, and in December that
-     * is also the previous year.
+     * The month is already the Manila one: it is shifted in SQL before it is
+     * grouped, because a request filed at 07:00 Manila on the 1st is stored as
+     * 23:00 UTC on the previous day (the previous year, in December), and a
+     * UTC date bucket cannot be moved into the right month afterwards.
      */
     private function stackByMonth($rows): array
     {
@@ -270,11 +308,7 @@ class AnalyticsReport
         $labels = [];
 
         foreach ($rows as $row) {
-            $month = CarbonImmutable::parse($row->bucket_date, 'UTC')
-                ->timezone(self::OFFICE_TIMEZONE)
-                ->format('Y-m');
-
-            $months[$month][$row->label] = ($months[$month][$row->label] ?? 0) + (int) $row->total;
+            $months[$row->month][$row->label] = ($months[$row->month][$row->label] ?? 0) + (int) $row->total;
             $labels[$row->label] = true;
         }
 
@@ -290,8 +324,10 @@ class AnalyticsReport
             ];
         }
 
+        // Day pinned to 01: 'Y-m' alone would borrow today's day and roll Feb
+        // over to March when the report is read on the 29th-31st.
         $monthLabels = array_map(
-            fn ($key) => CarbonImmutable::createFromFormat('Y-m', $key, self::OFFICE_TIMEZONE)->format('M Y'),
+            fn ($key) => CarbonImmutable::createFromFormat('Y-m-d', $key.'-01', self::OFFICE_TIMEZONE)->format('M Y'),
             array_keys($months)
         );
 
@@ -398,7 +434,7 @@ class AnalyticsReport
      */
     private function aging(): array
     {
-        return self::openRequestAging($this->serviceId, $this->barangayId);
+        return self::openRequestAging($this->serviceIds, $this->barangayIds, $this->includeWalkIn);
     }
 
     /**
@@ -408,17 +444,16 @@ class AnalyticsReport
      * — so both surfaces read this, and neither can drift into its own
      * definition of what "open" or "7+ days" means.
      */
-    public static function openRequestAging(?int $serviceId = null, ?int $barangayId = null): array
+    public static function openRequestAging(array $serviceIds = [], array $barangayIds = [], bool $includeWalkIn = false): array
     {
         // Deliberately ignores any date window. A request filed last quarter
         // that is still open is exactly what this exists to surface, and
         // scoping it to a range would hide the oldest ones — the only ones
         // that matter here.
-        $rows = DB::table('tbl_service_request')
+        // The request's own barangay, as filed.
+        $rows = BarangayRequestCounts::onlyBarangays(DB::table('tbl_service_request'), $barangayIds, $includeWalkIn)
             ->whereNotIn('tbl_service_request.status', ServiceRequest::TERMINAL_STATUSES)
-            ->when($serviceId, fn ($q) => $q->where('tbl_service_request.service_id', $serviceId))
-            // The request's own barangay, as filed.
-            ->when($barangayId, fn ($q) => $q->where('tbl_service_request.barangay_id', $barangayId))
+            ->when($serviceIds, fn ($q) => $q->whereIn('tbl_service_request.service_id', $serviceIds))
             ->select('tbl_service_request.created_at')
             ->get();
 
@@ -480,6 +515,8 @@ class AnalyticsReport
         $borrowed = DB::table('tbl_equipment_borrowing')
             ->where('created_at', '>=', $this->from)
             ->where('created_at', '<', $this->to)
+            // Only loans that left the shelf; Pending, Denied and Cancelled never did.
+            ->whereIn('status', ['Released', 'Returned'])
             ->whereNotNull('equipment_id')
             ->groupBy('equipment_id')
             ->selectRaw('equipment_id, COUNT(*) as times, COALESCE(SUM(quantity), 0) as qty')
@@ -528,7 +565,7 @@ class AnalyticsReport
             ->get();
 
         $daysOut = [];
-        $returnedCount = 0;
+        $returnedWithDue = 0;
         $lateCount = 0;
 
         foreach ($rows as $row) {
@@ -537,15 +574,15 @@ class AnalyticsReport
                     ->diffInMinutes(CarbonImmutable::parse($row->returned_at, 'UTC')) / 1440;
             }
 
-            if ($row->returned_at !== null) {
-                $returnedCount++;
+            // Late is only defined against a due date, so a loan without one
+            // stays out of the denominator as well as the numerator.
+            if ($row->returned_at !== null && $row->due_date !== null) {
+                $returnedWithDue++;
 
-                if ($row->due_date !== null) {
-                    $returnedDate = CarbonImmutable::parse($row->returned_at, 'UTC')->timezone(self::OFFICE_TIMEZONE)->toDateString();
+                $returnedDate = CarbonImmutable::parse($row->returned_at, 'UTC')->timezone(self::OFFICE_TIMEZONE)->toDateString();
 
-                    if ($returnedDate > $row->due_date) {
-                        $lateCount++;
-                    }
+                if ($returnedDate > $row->due_date) {
+                    $lateCount++;
                 }
             }
         }
@@ -557,8 +594,8 @@ class AnalyticsReport
             ],
             'returnedLate' => [
                 'count' => $lateCount,
-                'of' => $returnedCount,
-                'percent' => $returnedCount > 0 ? (int) round(($lateCount / $returnedCount) * 100) : null,
+                'of' => $returnedWithDue,
+                'percent' => $returnedWithDue > 0 ? (int) round(($lateCount / $returnedWithDue) * 100) : null,
             ],
             'currentlyOverdue' => $this->currentlyOverdueLoans(),
         ];
@@ -574,9 +611,10 @@ class AnalyticsReport
         return DB::table('tbl_equipment_borrowing')
             ->where('tbl_equipment_borrowing.created_at', '>=', $this->from)
             ->where('tbl_equipment_borrowing.created_at', '<', $this->to)
-            ->when($this->barangayId, fn ($q) => $q
+            ->when($this->barangayFiltered(), fn ($q) => $q
                 ->join('tbl_residents', 'tbl_equipment_borrowing.resident_id', '=', 'tbl_residents.resident_id')
-                ->where('tbl_residents.barangay_id', $this->barangayId));
+                // A walk-in has no borrower account, so a walk-in-only choice matches no loan.
+                ->whereIn('tbl_residents.barangay_id', $this->barangayIds));
     }
 
     /**
@@ -589,21 +627,21 @@ class AnalyticsReport
             ->where('tbl_equipment_borrowing.status', 'Released')
             ->whereNotNull('tbl_equipment_borrowing.due_date')
             ->where('tbl_equipment_borrowing.due_date', '<', CarbonImmutable::now(self::OFFICE_TIMEZONE)->toDateString())
-            ->when($this->barangayId, fn ($q) => $q
+            ->when($this->barangayFiltered(), fn ($q) => $q
                 ->join('tbl_residents', 'tbl_equipment_borrowing.resident_id', '=', 'tbl_residents.resident_id')
-                ->where('tbl_residents.barangay_id', $this->barangayId))
+                ->whereIn('tbl_residents.barangay_id', $this->barangayIds))
             ->count();
     }
 
     /**
      * Section 8 — most used vehicles: trips per vehicle, ranked, from the
-     * conduction (ambulance dispatch) trip log.
+     * conduction (ambulance dispatch) trip log, over the page's date range.
      *
-     * `range` follows the page's date filter. Today / This week / This month
-     * are the older fixed windows, all computed in one pass. Manila calendar boundaries: 'today' is
-     * midnight-to-now, 'week' is Monday-to-now, 'month' is the 1st-to-now,
-     * matching this class's other calendar-boxed windows (resolveRange())
-     * rather than a rolling N-day lookback.
+     * A trip is a log row the vehicle actually left on, so it counts by
+     * `departed_office_at`, in the range that instant falls in. Rows with no
+     * departure (a log started but never dispatched) fall out of the
+     * comparison, and a trip entered a day late still lands on its own day.
+     * The range is the same Manila window, taken to UTC, as every other section.
      *
      * Built from the full vehicle catalogue outward, the same shape as
      * equipmentUtilization() — a vehicle with no trips in the period still
@@ -617,78 +655,52 @@ class AnalyticsReport
      */
     private function mostUsedVehicles(): array
     {
-        $now = CarbonImmutable::now(self::OFFICE_TIMEZONE);
+        $tripsByVehicle = DB::table('tbl_conduction_requests')
+            ->where('departed_office_at', '>=', $this->from)
+            ->where('departed_office_at', '<', $this->to)
+            ->whereNotNull('vehicle_id')
+            ->groupBy('vehicle_id')
+            ->selectRaw('vehicle_id, COUNT(*) as total')
+            ->pluck('total', 'vehicle_id');
 
-        $boundaries = [
-            'today' => $now->startOfDay(),
-            'week' => $now->startOfWeek(CarbonImmutable::MONDAY),
-            'month' => $now->startOfMonth(),
-        ];
-
-        $vehicles = DB::table('tbl_vehicles')
+        return DB::table('tbl_vehicles')
             ->orderBy('unit_identifier')
             ->select('vehicle_id', 'unit_identifier', 'type')
-            ->get();
-
-        // 'range' follows the page's date filter; the panel reads only this.
-        // today/week/month stay for the existing consumers of the payload.
-        $windows = [
-            'today' => [$boundaries['today']->utc(), null],
-            'week' => [$boundaries['week']->utc(), null],
-            'month' => [$boundaries['month']->utc(), null],
-            'range' => [$this->from, $this->to],
-        ];
-
-        $result = [];
-
-        foreach ($windows as $key => [$since, $until]) {
-            $tripsByVehicle = DB::table('tbl_conduction_requests')
-                ->where('created_at', '>=', $since)
-                ->when($until, fn ($q) => $q->where('created_at', '<', $until))
-                ->whereNotNull('vehicle_id')
-                ->groupBy('vehicle_id')
-                ->selectRaw('vehicle_id, COUNT(*) as total')
-                ->pluck('total', 'vehicle_id');
-
-            $result[$key] = $vehicles
-                ->map(fn ($v) => [
-                    'label' => $v->unit_identifier,
-                    'type' => $v->type,
-                    'trips' => (int) ($tripsByVehicle[$v->vehicle_id] ?? 0),
-                ])
-                ->sortByDesc('trips')
-                ->values();
-        }
-
-        return $result;
+            ->get()
+            ->map(fn ($v) => [
+                'label' => $v->unit_identifier,
+                'type' => $v->type,
+                'trips' => (int) ($tripsByVehicle[$v->vehicle_id] ?? 0),
+            ])
+            ->sortByDesc('trips')
+            ->values()
+            ->all();
     }
 
     /**
-     * Section 9 — barangay: residents vs requests.
+     * Section 9 — barangay: residents, requests and loans.
      *
      * Built from the full barangay roster outward, the same shape as
      * equipmentUtilization(): a query that starts at the requests and groups
      * by barangay can only ever list a barangay that has at least one, which
      * is exactly what hides "accounts but no requests" and "neither" — the
-     * two facts this section exists to surface.
+     * two facts this section exists to surface. Rows are matched to counts by
+     * barangay id, never by name.
      *
-     * Request counts reuse BarangayRequestCounts, the same helper the
-     * dashboard and totals() use, so this cannot disagree with the rest of
-     * the page about how many requests a barangay has. That helper counts
-     * service requests and equipment loans together and does not take a
-     * service filter, so neither does this section; resident counts are not
-     * date-windowed at all — an account does not expire, and windowing it
-     * would make a barangay's own resident count depend on which quarter is
-     * selected.
-     *
-     * No barangay filter either: filtering the one section whose whole
-     * purpose is the cross-barangay comparison down to a single barangay
-     * would defeat it.
+     * Requests are service requests only, narrowed by the page's barangay and
+     * service filters, so the rows plus walkIn add up to totals.serviceRequests.
+     * Loans are a separate column: they follow the barangay filter, and carry
+     * no service, so a service filter leaves none. Resident counts are not
+     * date-windowed — an account does not expire, and windowing it would make a
+     * barangay's own resident count depend on which quarter is selected — but
+     * they follow the barangay choice: unselected barangays carry none.
      */
     private function barangayResidentsVsRequests(): array
     {
-        $counts = BarangayRequestCounts::forWindow($this->from, $this->to);
-        $placedByName = collect($counts['barangays'])->keyBy('name');
+        $counts = BarangayRequestCounts::forWindow($this->from, $this->to, $this->barangayIds, $this->serviceIds, $this->includeWalkIn);
+        $requestsById = array_column($counts['barangays'], 'requests', 'id');
+        $walkInOnly = $this->includeWalkIn && ! $this->barangayIds;
+        $loansById = $this->serviceIds || $walkInOnly ? [] : BarangayRequestCounts::loansByBarangay($this->from, $this->to, $this->barangayIds);
 
         $residentCounts = DB::table('tbl_residents')
             ->where('account_type', 'head_of_family')
@@ -697,21 +709,33 @@ class AnalyticsReport
             ->selectRaw('barangay_id, COUNT(*) as total')
             ->pluck('total', 'barangay_id');
 
+        // With a barangay choice, only the chosen barangays count: the rest are
+        // unselected, with no resident figure (null). Walk-in only selects none.
+        $chosen = array_flip($this->barangayIds);
+
         $barangays = DB::table('tbl_barangay')
             ->orderBy('barangay_name')
-            ->select('barangay_id', 'barangay_name')
+            ->select('barangay_id', 'barangay_name', 'psgc_code')
             ->get()
-            ->map(fn ($b) => [
-                'name' => $b->barangay_name,
-                'residents' => (int) ($residentCounts[$b->barangay_id] ?? 0),
-                'requests' => (int) ($placedByName[$b->barangay_name]['requests'] ?? 0),
-            ]);
+            ->map(function ($b) use ($residentCounts, $requestsById, $loansById, $chosen) {
+                $selected = ! $this->barangayFiltered() || isset($chosen[$b->barangay_id]);
+
+                return [
+                    'psgc_code' => $b->psgc_code,
+                    'name' => $b->barangay_name,
+                    'selected' => $selected,
+                    'residents' => $selected ? (int) ($residentCounts[$b->barangay_id] ?? 0) : null,
+                    'requests' => (int) ($requestsById[$b->barangay_id] ?? 0),
+                    'loans' => (int) ($loansById[$b->barangay_id] ?? 0),
+                ];
+            });
 
         return [
             'barangays' => $barangays,
             'walkIn' => $counts['walkIn'],
-            'totalResidents' => (int) $residentCounts->sum(),
+            'totalResidents' => (int) $barangays->sum('residents'),
             'totalRequests' => $counts['total'],
+            'totalLoans' => array_sum($loansById),
         ];
     }
 
@@ -727,9 +751,12 @@ class AnalyticsReport
      */
     private function appAdoptionByMonth(): array
     {
+        $month = self::manilaMonth('tbl_service_request.created_at');
+        $origin = "CASE WHEN tbl_service_request.resident_id IS NULL THEN 'Walk-in' ELSE 'App' END";
+
         $rows = $this->scoped()
-            ->groupByRaw("CAST(tbl_service_request.created_at AS DATE), CASE WHEN tbl_service_request.resident_id IS NULL THEN 'Walk-in' ELSE 'App' END")
-            ->selectRaw("CAST(tbl_service_request.created_at AS DATE) as bucket_date, CASE WHEN tbl_service_request.resident_id IS NULL THEN 'Walk-in' ELSE 'App' END as label, COUNT(*) as total")
+            ->groupByRaw("{$month}, {$origin}")
+            ->selectRaw("{$month} as month, {$origin} as label, COUNT(*) as total")
             ->get();
 
         return $this->stackByMonth($rows);

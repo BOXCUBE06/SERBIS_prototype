@@ -177,15 +177,15 @@ class AccountTypeTest extends TestCase
             ->assertJsonPath('count', 1);
     }
 
-    public function test_the_dashboard_resident_count_is_heads_of_the_family_only(): void
+    public function test_the_analytics_resident_count_is_heads_of_the_family_only(): void
     {
         $this->account();
         $this->account(['fill' => ['email_address' => 'hall@test.local', 'phone_number' => '09175555555'],
             'type' => ['account_type' => 'barangay']]);
 
-        $this->actingAs($this->admin)->getJson('/api/admin/dashboard')
+        $this->actingAs($this->admin)->getJson('/api/admin/analytics')
             ->assertOk()
-            ->assertJsonFragment(['title' => 'Total Residents', 'value' => '1']);
+            ->assertJsonPath('barangayCoverage.totalResidents', 1);
     }
 
     public function test_borrower_type_comes_from_the_account_not_the_request(): void

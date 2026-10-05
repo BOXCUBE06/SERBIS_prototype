@@ -31,6 +31,7 @@
         <v-btn value="month" class="text-none font-weight-bold px-3">This month</v-btn>
         <v-btn value="quarter" class="text-none font-weight-bold px-3">This quarter</v-btn>
         <v-btn value="year" class="text-none font-weight-bold px-3">This year</v-btn>
+        <v-btn value="all" class="text-none font-weight-bold px-3">All time</v-btn>
         <v-btn value="custom" class="text-none font-weight-bold px-3">Custom</v-btn>
       </v-btn-toggle>
 
@@ -56,28 +57,44 @@
       </template>
 
       <v-select
-        v-model="barangayId"
+        v-model="barangayIds"
         :items="barangayOptions"
         item-title="label"
         item-value="value"
         aria-label="Barangay"
+        placeholder="All barangays"
+        persistent-placeholder
+        multiple
         density="compact"
         variant="outlined"
         hide-details
         class="filter-bar__select filter-select"
-      />
+      >
+        <!-- One line of plain text, drawn once: the name, or a count, so the field stays single-select height. -->
+        <template #selection="{ index }">
+          <span v-if="index === 0" class="filter-text" :title="selectedNames(barangayIds, barangayOptions).join(', ')">{{ selectedText(barangayIds, barangayOptions, 'barangays') }}</span>
+        </template>
+      </v-select>
 
       <v-select
-        v-model="serviceId"
+        v-model="serviceIds"
         :items="serviceOptions"
         item-title="label"
         item-value="value"
         aria-label="Service"
+        placeholder="All services"
+        persistent-placeholder
+        multiple
         density="compact"
         variant="outlined"
         hide-details
         class="filter-bar__select filter-select"
-      />
+      >
+        <!-- First choice as a chip, the rest counted, so the control keeps its width. -->
+        <template #selection="{ index }">
+          <span v-if="index === 0" class="filter-text" :title="selectedNames(serviceIds, serviceOptions).join(', ')">{{ selectedText(serviceIds, serviceOptions, 'services') }}</span>
+        </template>
+      </v-select>
 
       <v-btn
         v-if="hasFilters"
@@ -259,8 +276,7 @@
       <!-- 9. Barangays: the map and the residents-vs-requests ranking are one
            set of numbers, so one section. Built from the full barangay
            roster, so a barangay with accounts but no requests still shows at
-           zero. No barangay filter — narrowing the one cross-barangay
-           comparison to one barangay would defeat its purpose. -->
+           zero. The barangay filter narrows it to the chosen barangays. -->
       <v-col cols="12">
         <AnalyticsSection
           title="Barangays"
@@ -276,6 +292,7 @@
             :walk-in="barangayCoverage.walkIn"
             :total-residents="barangayCoverage.totalResidents"
             :total-requests="barangayCoverage.totalRequests"
+            :total-loans="barangayCoverage.totalLoans"
           />
         </AnalyticsSection>
       </v-col>
@@ -406,7 +423,7 @@
                 {{ loans.returnedLate.percent === null ? '—' : `${loans.returnedLate.percent}%` }}
               </div>
               <div class="text-caption text-medium-emphasis">
-                {{ loans.returnedLate.count }} of {{ loans.returnedLate.of }} returned in this range
+                {{ loans.returnedLate.count }} of {{ loans.returnedLate.of }} returned with a due date in this range
               </div>
             </div>
           </div>
@@ -478,8 +495,6 @@ ChartJS.register(Tooltip, Legend, CategoryScale, LinearScale, BarElement)
  * a quarter of bookings), and per-capita rates (no barangay population).
  */
 
-const ALL = 'all'
-
 /*
  * Categorical series colours, one fixed order per theme, assigned by position
  * and never cycled — a ninth service folds into "Other" rather than reusing a
@@ -516,8 +531,9 @@ const preset = ref('quarter')
 const volumeView = ref('chart')
 const customFrom = ref('')
 const customTo = ref('')
-const barangayId = ref(ALL)
-const serviceId = ref(ALL)
+// Empty means every barangay / every service.
+const barangayIds = ref([])
+const serviceIds = ref([])
 
 const report = ref(null)
 const loading = ref(true)
@@ -529,28 +545,36 @@ const refreshing = computed(() => loading.value && !!report.value)
 const barangays = ref([])
 const services = ref([])
 
+// Sent as barangay_id[]=walkin: requests filed with no barangay.
+const WALK_IN = 'walkin'
 const barangayOptions = computed(() => [
-  { label: 'All barangays', value: ALL },
+  { label: 'Walk-in (no barangay)', value: WALK_IN },
   ...barangays.value.map(b => ({ label: b.barangay_name, value: b.barangay_id })),
 ])
 
-const serviceOptions = computed(() => [
-  { label: 'All services', value: ALL },
-  ...services.value.map(s => ({ label: s.service_name, value: s.service_id })),
-])
+const serviceOptions = computed(() => services.value.map(s => ({ label: s.service_name, value: s.service_id })))
+
+const selectedNames = (ids, options) => ids.map(id => options.find(o => o.value === id)?.label).filter(Boolean)
+/** The name when one is selected, else a count; walk-ins are appended, never counted. */
+const selectedText = (ids, options, noun) => {
+  const real = ids.filter(id => id !== WALK_IN)
+  const base = real.length === 1 ? (selectedNames(real, options)[0] ?? '') : `${real.length} ${noun}`
+  if (!ids.includes(WALK_IN)) return base
+  return real.length === 0 ? 'Walk-ins' : `${base} + walk-ins`
+}
 
 const awaitingCustomRange = computed(() =>
   preset.value === 'custom' && !(customFrom.value && customTo.value)
 )
 
 const hasFilters = computed(() =>
-  barangayId.value !== ALL || serviceId.value !== ALL || preset.value !== 'quarter'
+  barangayIds.value.length > 0 || serviceIds.value.length > 0 || preset.value !== 'quarter'
 )
 
 const clearFilters = () => {
   preset.value = 'quarter'
-  barangayId.value = ALL
-  serviceId.value = ALL
+  barangayIds.value = []
+  serviceIds.value = []
   customFrom.value = ''
   customTo.value = ''
 }
@@ -571,8 +595,8 @@ const queryString = () => {
     params.set('to', customTo.value)
   }
 
-  if (barangayId.value !== ALL) params.set('barangay_id', barangayId.value)
-  if (serviceId.value !== ALL) params.set('service_id', serviceId.value)
+  for (const id of barangayIds.value) params.append('barangay_id[]', id)
+  for (const id of serviceIds.value) params.append('service_id[]', id)
 
   return params.toString()
 }
@@ -596,8 +620,8 @@ const fetchReport = async () => {
 }
 
 const fetchFilterOptions = async () => {
-  // A filter list that fails to load leaves "All" selected, which is the
-  // correct default anyway — not worth failing the page over.
+  // A filter list that fails to load leaves nothing selected (all), which is
+  // the correct default anyway — not worth failing the page over.
   await Promise.all([
     // /services answers {data: [...]} while /barangays answers a bare
     // array. Three response envelopes are already in use across this API;
@@ -609,7 +633,7 @@ const fetchFilterOptions = async () => {
 
 // A custom range with only one end filled is not yet a range, so it must not
 // fire a fetch that would silently return the quarter.
-watch([preset, barangayId, serviceId, customFrom, customTo], () => {
+watch([preset, barangayIds, serviceIds, customFrom, customTo], () => {
   if (preset.value === 'custom' && !(customFrom.value && customTo.value)) return
   fetchReport()
 })
@@ -669,9 +693,9 @@ const loans = computed(() => report.value?.loans ?? {
   daysOut: { medianDays: null, n: 0 },
   returnedLate: { count: 0, of: 0, percent: null },
 })
-const selectedVehicleTrips = computed(() => report.value?.vehicleTrips?.range ?? [])
+const selectedVehicleTrips = computed(() => report.value?.vehicleTrips ?? [])
 const barangayCoverage = computed(() => report.value?.barangayCoverage ?? {
-  barangays: [], walkIn: 0, totalResidents: 0, totalRequests: 0,
+  barangays: [], walkIn: 0, totalResidents: 0, totalRequests: 0, totalLoans: 0,
 })
 
 const turnaround = computed(() => report.value?.turnaround ?? { resolution: { medianDays: null, n: 0 } })
@@ -690,10 +714,21 @@ const days = (d) => {
   if (d === null || d === undefined) return '—'
   return d < 1 ? count(Math.max(1, Math.round(d * 24)), 'hour') : `${d.toFixed(1)} days`
 }
-/** Index and value of the largest entry, or null when everything is zero. */
+/** Entries tied for the largest value, or null: all zero, all equal (nothing stands out), or more than 3 tied. */
 const top = (values) => {
-  const max = Math.max(0, ...values)
-  return max > 0 ? { index: values.indexOf(max), value: max } : null
+  const value = Math.max(0, ...values)
+  const indexes = values.flatMap((v, i) => (v === value ? [i] : []))
+  const stands = indexes.length < values.length || values.length === 1
+  return value > 0 && indexes.length <= 3 && stands ? { indexes, value, tied: indexes.length > 1 } : null
+}
+/** "A", "A and B", "A, B and C". */
+const nameList = (names) => (names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0])
+/** "40%", or "40% each" for a tie. */
+const share = (t, total) => `${pct(t.value, total)}%${t.tied ? ' each' : ''}`
+/** The first line leads and the rest is detail; null when nothing stands out. */
+const compose = (icon, lines) => {
+  const [lead, ...rest] = lines.filter(Boolean)
+  return lead ? { icon, lead, detail: rest.join(' ') } : null
 }
 const statusTotal = (status) => sum(outcomes.value.series.find(s => s.label === status)?.data ?? [])
 
@@ -709,18 +744,18 @@ const finding = computed(() => {
   if (tab.value === 'demand') {
     const day = top(demand.value.days.data)
     const block = top(demand.value.timeOfDay.data)
-    if (!day || !block) return null
-    const dayName = DAY_NAMES[demand.value.days.labels[day.index]] ?? demand.value.days.labels[day.index]
     const service = top(volume.value.series.map(s => sum(s.data)))
     const months = volume.value.labels.map((_, i) => sum(volume.value.series.map(s => s.data[i])))
-    return {
-      icon: 'mdi-chart-bar',
-      lead: `Most requests arrive in the ${demand.value.timeOfDay.labels[block.index].toLowerCase()} (${pct(block.value, demand.value.total)}%), and ${dayName} is the busiest day at ${pct(day.value, demand.value.total)}%.`,
-      detail: [
-        service && `${volume.value.series[service.index].label} is the most requested service: ${service.value} of ${volume.value.total}.`,
-        months.length > 1 && `Requests went from ${months[0]} in ${volume.value.labels[0]} to ${months.at(-1)} in ${volume.value.labels.at(-1)}.`,
+    const dayNames = day?.indexes.map(i => DAY_NAMES[demand.value.days.labels[i]] ?? demand.value.days.labels[i])
+    const serviceNames = service?.indexes.map(i => volume.value.series[i].label)
+    return compose('mdi-chart-bar', [
+      [
+        block && `Most requests arrive in the ${nameList(block.indexes.map(i => demand.value.timeOfDay.labels[i].toLowerCase()))} (${share(block, demand.value.total)}).`,
+        day && `${nameList(dayNames)} ${day.tied ? 'are the busiest days' : 'is the busiest day'} at ${share(day, demand.value.total)}.`,
       ].filter(Boolean).join(' '),
-    }
+      service && `${nameList(serviceNames)} ${service.tied ? 'are the most requested services' : 'is the most requested service'}: ${service.value}${service.tied ? ' each' : ''} of ${volume.value.total}.`,
+      months.length > 1 && `Requests went from ${months[0]} in ${volume.value.labels[0]} to ${months.at(-1)} in ${volume.value.labels.at(-1)}.`,
+    ])
   }
 
   if (tab.value === 'operations') {
@@ -747,43 +782,48 @@ const finding = computed(() => {
     const items = equipmentUtilization.value.items
     const item = top(items.map(i => i.timesBorrowed))
     const unit = top(selectedVehicleTrips.value.map(v => v.trips))
-    if (!item && !unit) return null
     const zero = equipmentUtilization.value.zeroBorrowCount
     const late = loans.value.returnedLate
-    return {
-      icon: 'mdi-package-variant-closed',
-      lead: item
-        ? `${items[item.index].label} is borrowed most: ${item.value} of ${equipmentUtilization.value.total} loans (${pct(item.value, equipmentUtilization.value.total)}%)${zero > 0 ? `, while ${zero} of ${items.length} items were not borrowed at all` : ''}.`
-        : `No equipment was borrowed in this range.`,
-      detail: [
-        unit && `${selectedVehicleTrips.value[unit.index].label} made ${pct(unit.value, tripTotal.value)}% of vehicle trips.`,
-        late.of > 0 && `${late.count} of ${late.of} returned loans came back after the due date.`,
-      ].filter(Boolean).join(' '),
+    const total = equipmentUtilization.value.total
+    const unused = zero > 0 ? `, while ${zero} of ${items.length} items were not borrowed at all` : ''
+    let itemLine = null
+    if (item) {
+      itemLine = `${nameList(item.indexes.map(i => items[i].label))} ${item.tied ? 'are' : 'is'} borrowed most: ${item.value}${item.tied ? ' each' : ''} of ${total} loans (${share(item, total)})${unused}.`
+    } else if (total === 0 && unit) {
+      itemLine = 'No equipment was borrowed in this range.'
     }
+    return compose('mdi-package-variant-closed', [
+      itemLine,
+      unit && `${nameList(unit.indexes.map(i => selectedVehicleTrips.value[i].label))} ${unit.tied ? 'each made' : 'made'} ${share(unit, tripTotal.value)} of vehicle trips.`,
+      late.of > 0 && `${late.count} of ${late.of} returned loans with a due date came back after it.`,
+    ])
   }
 
-  // Barangays. These counts include equipment loans, as the map does.
-  const rows = barangayCoverage.value.barangays
+  // Barangays. Service requests only; loans have their own column. With a
+  // barangay choice, only the chosen barangays are compared and counted.
+  const rows = barangayCoverage.value.barangays.filter(b => b.selected)
   const place = top(rows.map(b => b.requests))
-  if (!place) return null
   const active = rows.filter(b => b.requests > 0).length
-  return {
-    icon: 'mdi-map-marker-radius-outline',
-    lead: `${rows[place.index].name} files the most: ${place.value} of ${barangayCoverage.value.totalRequests} requests and loans (${pct(place.value, barangayCoverage.value.totalRequests)}%).`,
-    detail: [
-      `${active} of ${rows.length} barangays filed at least one.`,
-      barangayCoverage.value.walkIn > 0 && `${count(barangayCoverage.value.walkIn, 'walk-in')} carry no barangay.`,
-    ].filter(Boolean).join(' '),
-  }
+  const totalRequests = barangayCoverage.value.totalRequests
+  const walkIns = barangayCoverage.value.walkIn
+  return compose('mdi-map-marker-radius-outline', [
+    place && `${nameList(place.indexes.map(i => rows[i].name))} ${place.tied ? 'file' : 'files'} the most: ${place.value}${place.tied ? ' each' : ''} of ${totalRequests} requests (${share(place, totalRequests)}).`,
+    totalRequests > 0 && rows.length > 0 && `${active} of ${rows.length} barangays filed at least one.`,
+    totalRequests > 0 && walkIns > 0 && `${count(walkIns, 'walk-in')} ${walkIns === 1 ? 'carries' : 'carry'} no barangay.`,
+  ])
 })
 
 /** Open now ignores the date range but not Service or Barangay, so the note says which applies. */
 const openNote = computed(() => {
-  const label = (options, id) => options.find(o => o.value === id)?.label
-  const scope = [
-    serviceId.value === ALL ? null : label(serviceOptions.value, serviceId.value),
-    barangayId.value === ALL ? null : label(barangayOptions.value, barangayId.value),
-  ].filter(Boolean).join(' in ')
+  // Up to three names, then a count.
+  const named = (ids, options, noun) => (ids.length > 3
+    ? `${ids.length} ${noun}`
+    : ids.map(id => options.find(o => o.value === id)?.label).filter(Boolean).join(', '))
+  const places = [
+    named(barangayIds.value.filter(id => id !== WALK_IN), barangayOptions.value, 'barangays'),
+    barangayIds.value.includes(WALK_IN) && 'walk-ins',
+  ].filter(Boolean).join(' and ')
+  const scope = [named(serviceIds.value, serviceOptions.value, 'services'), places].filter(Boolean).join(' in ')
   const oldest = aging.value.total > 0 ? `Oldest ${count(aging.value.oldestDays, 'day')}.` : 'None waiting.'
   return scope ? `Open requests for ${scope}, any date. ${oldest}` : `All open requests, any date. ${oldest}`
 })
@@ -823,7 +863,7 @@ const kpis = computed(() => {
     const late = loans.value.returnedLate
     return [
       { title: 'Equipment loans', value: equipmentUtilization.value.total.toLocaleString(), note: `Across ${items.length - unused.length} of ${items.length} catalogue items` },
-      { title: 'Returned late', value: late.percent === null ? '—' : `${late.percent}%`, note: `${late.count} of ${late.of} returned in this range` },
+      { title: 'Returned late', value: late.percent === null ? '—' : `${late.percent}%`, note: `${late.count} of ${late.of} returned with a due date in this range` },
       { title: 'Items never borrowed', value: `${unused.length} of ${items.length}`, note: unused.length > 0 ? unused.slice(0, 3).join(', ') + (unused.length > 3 ? ` and ${unused.length - 3} more` : '') : 'Every item was borrowed' },
       { title: 'Vehicle trips', value: tripTotal.value.toLocaleString(), note: `Across ${count(selectedVehicleTrips.value.filter(v => v.trips > 0).length, 'vehicle')}` },
     ]
@@ -922,19 +962,28 @@ const busiestTimeOfDayChartData = computed(() => ({
   }],
 }))
 
-const baseOptions = computed(() => ({
-  responsive: true,
-  maintainAspectRatio: false,
-  interaction: { mode: 'index', intersect: false },
-  plugins: {
-    legend: { display: false },
-    tooltip: { boxPadding: 4 },
-  },
-  scales: {
-    x: { grid: { display: false }, ticks: { color: tickColor.value } },
-    y: { beginAtZero: true, ticks: { precision: 0, color: tickColor.value }, grid: { color: gridColor.value } },
-  },
-}))
+/**
+ * The one options base for every bar chart here. A horizontal bar reads its
+ * category along y, so hover follows that axis; the count axis starts at zero
+ * and counts in whole numbers. The tooltip does not animate between bars.
+ */
+const barOptions = (horizontal) => {
+  const count = { beginAtZero: true, ticks: { precision: 0, color: tickColor.value }, grid: { color: gridColor.value } }
+  const category = { grid: { display: false }, ticks: { color: tickColor.value } }
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    indexAxis: horizontal ? 'y' : 'x',
+    interaction: { mode: 'index', intersect: false, axis: horizontal ? 'y' : 'x' },
+    plugins: {
+      legend: { display: false },
+      tooltip: { boxPadding: 4, animation: false },
+    },
+    scales: horizontal ? { x: count, y: category } : { x: category, y: count },
+  }
+}
+
+const baseOptions = computed(() => barOptions(false))
 
 // A legend is mandatory once there are two or more series: identity must not
 // rest on colour alone.
@@ -955,7 +1004,7 @@ const percentStackedOptions = computed(() => ({
   plugins: {
     ...stackedOptions.value.plugins,
     tooltip: {
-      boxPadding: 4,
+      ...baseOptions.value.plugins.tooltip,
       callbacks: {
         // The axis is a percentage but the useful number is the count, so the
         // tooltip gives both rather than making the reader multiply. ctx.raw
@@ -975,7 +1024,7 @@ const percentStackedOptions = computed(() => ({
       ...baseOptions.value.scales.y,
       stacked: true,
       max: 100,
-      ticks: { color: tickColor.value, callback: (v) => `${v}%` },
+      ticks: { ...baseOptions.value.scales.y.ticks, callback: (v) => `${v}%` },
       grid: { color: gridColor.value },
     },
   },
@@ -998,14 +1047,7 @@ const outcomeChartDataNormalised = computed(() => {
   }
 })
 
-const horizontalBarOptions = computed(() => ({
-  ...baseOptions.value,
-  indexAxis: 'y',
-  scales: {
-    x: { beginAtZero: true, ticks: { precision: 0, color: tickColor.value }, grid: { color: gridColor.value } },
-    y: { grid: { display: false }, ticks: { color: tickColor.value } },
-  },
-}))
+const horizontalBarOptions = computed(() => barOptions(true))
 
 defineExpose({ fetchReport })
 </script>
@@ -1035,6 +1077,30 @@ defineExpose({ fetchReport })
 /* Service names run long; 160px (filter-bar__select) clips most of them. */
 .filter-select {
   width: 200px;
+}
+/* One line: a long name ellipsises inside the 200px control. */
+.filter-select :deep(.v-select__selection) {
+  min-width: 0;
+  max-width: 100%;
+}
+.filter-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 24px;
+}
+/* The empty placeholder and the selected text share one centred 24px line, so the field looks the same either way. */
+.filter-select :deep(.v-field__input) {
+  align-items: center;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.filter-select :deep(.v-field__input input) {
+  height: 24px;
+  min-height: 0;
+  padding: 0;
+  line-height: 24px;
 }
 
 /* The range toggle wraps onto a second line when it outgrows the row; it

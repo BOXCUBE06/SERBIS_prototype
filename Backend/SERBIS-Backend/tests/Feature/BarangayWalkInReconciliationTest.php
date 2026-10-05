@@ -114,14 +114,14 @@ class BarangayWalkInReconciliationTest extends TestCase
 
         $this->assertSame(
             [['name' => 'San Fabian', 'requests' => 2]],
-            $counts['barangays'],
+            array_map(fn ($b) => ['name' => $b['name'], 'requests' => $b['requests']], $counts['barangays']),
             'only the two app-filed requests carry a barangay'
         );
 
         $this->assertSame(5, $counts['total']);
     }
 
-    public function test_section_total_equals_the_raw_row_count(): void
+    public function test_section_total_equals_the_raw_request_count_and_ignores_loans(): void
     {
         $this->appRequest();
         $this->walkInRequest();
@@ -141,31 +141,14 @@ class BarangayWalkInReconciliationTest extends TestCase
             'status' => 'Pending',
         ]);
 
-        $raw = DB::table('tbl_service_request')->count()
-            + DB::table('tbl_equipment_borrowing')->count();
+        $raw = DB::table('tbl_service_request')->count();
 
         $counts = BarangayRequestCounts::forWindow();
 
-        $this->assertSame($raw, $counts['total'], 'no row may be dropped by the join');
+        $this->assertSame($raw, $counts['total'], 'no request may be dropped by the join, and a loan is not one');
 
         $placed = array_sum(array_column($counts['barangays'], 'requests'));
         $this->assertSame($counts['total'], $placed + $counts['walkIn'], 'placed + unplaced must reconcile');
-    }
-
-    public function test_dashboard_endpoint_reports_the_reconciled_total(): void
-    {
-        $this->appRequest();
-        $this->walkInRequest();
-        $this->walkInRequest();
-        $this->walkInRequest();
-
-        $response = $this->getJson('/api/admin/dashboard')->assertOk();
-
-        $raw = DB::table('tbl_service_request')->count();
-
-        $this->assertSame($raw, $response->json('totalsByPeriod.all'));
-        $this->assertSame(3, $response->json('walkInByPeriod.all'));
-        $this->assertSame(1, $response->json('mapDataByPeriod.all.0.requests'));
     }
 
     /**

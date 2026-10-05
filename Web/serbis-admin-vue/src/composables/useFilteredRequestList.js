@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import { API_BASE } from '@/config/api'
 import { requestBarangayName } from '@/composables/requestDisplay'
+import { matchesTransaction } from '@/composables/transactionSearch'
 
 export function useFilteredRequestList(requests, filters, search, { requesterName, secondaryFn, decorate }) {
   // The full list, so a barangay with no requests yet is still pickable. The
@@ -47,7 +48,7 @@ export function useFilteredRequestList(requests, filters, search, { requesterNam
              (r.service?.service_name || '').toLowerCase().includes(searchLower) ||
              requestBarangayName(r).toLowerCase().includes(searchLower) ||
              (r.resident?.phone_number || r.walk_in_contact_number || '').includes(searchLower) ||
-             String(r.request_id ?? '').toLowerCase().includes(searchLower)
+             matchesTransaction(r.request_id, search.value)
     }).map(r => ({
       ...r,
       _requesterName: requesterName(r),
