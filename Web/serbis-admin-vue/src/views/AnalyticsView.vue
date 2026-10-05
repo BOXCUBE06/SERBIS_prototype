@@ -714,10 +714,21 @@ const days = (d) => {
   if (d === null || d === undefined) return '—'
   return d < 1 ? count(Math.max(1, Math.round(d * 24)), 'hour') : `${d.toFixed(1)} days`
 }
-/** Index and value of the largest entry, or null when everything is zero. */
+/** Entries tied for the largest value, or null: all zero, all equal (nothing stands out), or more than 3 tied. */
 const top = (values) => {
-  const max = Math.max(0, ...values)
-  return max > 0 ? { index: values.indexOf(max), value: max } : null
+  const value = Math.max(0, ...values)
+  const indexes = values.flatMap((v, i) => (v === value ? [i] : []))
+  const stands = indexes.length < values.length || values.length === 1
+  return value > 0 && indexes.length <= 3 && stands ? { indexes, value, tied: indexes.length > 1 } : null
+}
+/** "A", "A and B", "A, B and C". */
+const nameList = (names) => (names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names.at(-1)}` : names[0])
+/** "40%", or "40% each" for a tie. */
+const share = (t, total) => `${pct(t.value, total)}%${t.tied ? ' each' : ''}`
+/** The first line leads and the rest is detail; null when nothing stands out. */
+const compose = (icon, lines) => {
+  const [lead, ...rest] = lines.filter(Boolean)
+  return lead ? { icon, lead, detail: rest.join(' ') } : null
 }
 const statusTotal = (status) => sum(outcomes.value.series.find(s => s.label === status)?.data ?? [])
 
@@ -733,18 +744,18 @@ const finding = computed(() => {
   if (tab.value === 'demand') {
     const day = top(demand.value.days.data)
     const block = top(demand.value.timeOfDay.data)
-    if (!day || !block) return null
-    const dayName = DAY_NAMES[demand.value.days.labels[day.index]] ?? demand.value.days.labels[day.index]
     const service = top(volume.value.series.map(s => sum(s.data)))
     const months = volume.value.labels.map((_, i) => sum(volume.value.series.map(s => s.data[i])))
-    return {
-      icon: 'mdi-chart-bar',
-      lead: `Most requests arrive in the ${demand.value.timeOfDay.labels[block.index].toLowerCase()} (${pct(block.value, demand.value.total)}%), and ${dayName} is the busiest day at ${pct(day.value, demand.value.total)}%.`,
-      detail: [
-        service && `${volume.value.series[service.index].label} is the most requested service: ${service.value} of ${volume.value.total}.`,
-        months.length > 1 && `Requests went from ${months[0]} in ${volume.value.labels[0]} to ${months.at(-1)} in ${volume.value.labels.at(-1)}.`,
+    const dayNames = day?.indexes.map(i => DAY_NAMES[demand.value.days.labels[i]] ?? demand.value.days.labels[i])
+    const serviceNames = service?.indexes.map(i => volume.value.series[i].label)
+    return compose('mdi-chart-bar', [
+      [
+        block && `Most requests arrive in the ${nameList(block.indexes.map(i => demand.value.timeOfDay.labels[i].toLowerCase()))} (${share(block, demand.value.total)}).`,
+        day && `${nameList(dayNames)} ${day.tied ? 'are the busiest days' : 'is the busiest day'} at ${share(day, demand.value.total)}.`,
       ].filter(Boolean).join(' '),
-    }
+      service && `${nameList(serviceNames)} ${service.tied ? 'are the most requested services' : 'is the most requested service'}: ${service.value}${service.tied ? ' each' : ''} of ${volume.value.total}.`,
+      months.length > 1 && `Requests went from ${months[0]} in ${volume.value.labels[0]} to ${months.at(-1)} in ${volume.value.labels.at(-1)}.`,
+    ])
   }
 
   if (tab.value === 'operations') {
@@ -771,43 +782,48 @@ const finding = computed(() => {
     const items = equipmentUtilization.value.items
     const item = top(items.map(i => i.timesBorrowed))
     const unit = top(selectedVehicleTrips.value.map(v => v.trips))
-    if (!item && !unit) return null
     const zero = equipmentUtilization.value.zeroBorrowCount
     const late = loans.value.returnedLate
-    return {
-      icon: 'mdi-package-variant-closed',
-      lead: item
-        ? `${items[item.index].label} is borrowed most: ${item.value} of ${equipmentUtilization.value.total} loans (${pct(item.value, equipmentUtilization.value.total)}%)${zero > 0 ? `, while ${zero} of ${items.length} items were not borrowed at all` : ''}.`
-        : `No equipment was borrowed in this range.`,
-      detail: [
-        unit && `${selectedVehicleTrips.value[unit.index].label} made ${pct(unit.value, tripTotal.value)}% of vehicle trips.`,
-        late.of > 0 && `${late.count} of ${late.of} returned loans with a due date came back after it.`,
-      ].filter(Boolean).join(' '),
+    const total = equipmentUtilization.value.total
+    const unused = zero > 0 ? `, while ${zero} of ${items.length} items were not borrowed at all` : ''
+    let itemLine = null
+    if (item) {
+      itemLine = `${nameList(item.indexes.map(i => items[i].label))} ${item.tied ? 'are' : 'is'} borrowed most: ${item.value}${item.tied ? ' each' : ''} of ${total} loans (${share(item, total)})${unused}.`
+    } else if (total === 0 && unit) {
+      itemLine = 'No equipment was borrowed in this range.'
     }
+    return compose('mdi-package-variant-closed', [
+      itemLine,
+      unit && `${nameList(unit.indexes.map(i => selectedVehicleTrips.value[i].label))} ${unit.tied ? 'each made' : 'made'} ${share(unit, tripTotal.value)} of vehicle trips.`,
+      late.of > 0 && `${late.count} of ${late.of} returned loans with a due date came back after it.`,
+    ])
   }
 
-  // Barangays. Service requests only; loans have their own column.
-  const rows = barangayCoverage.value.barangays
+  // Barangays. Service requests only; loans have their own column. With a
+  // barangay choice, only the chosen barangays are compared and counted.
+  const rows = barangayCoverage.value.barangays.filter(b => b.selected)
   const place = top(rows.map(b => b.requests))
-  if (!place) return null
   const active = rows.filter(b => b.requests > 0).length
-  return {
-    icon: 'mdi-map-marker-radius-outline',
-    lead: `${rows[place.index].name} files the most: ${place.value} of ${barangayCoverage.value.totalRequests} requests (${pct(place.value, barangayCoverage.value.totalRequests)}%).`,
-    detail: [
-      `${active} of ${rows.length} barangays filed at least one.`,
-      barangayCoverage.value.walkIn > 0 && `${count(barangayCoverage.value.walkIn, 'walk-in')} carry no barangay.`,
-    ].filter(Boolean).join(' '),
-  }
+  const totalRequests = barangayCoverage.value.totalRequests
+  const walkIns = barangayCoverage.value.walkIn
+  return compose('mdi-map-marker-radius-outline', [
+    place && `${nameList(place.indexes.map(i => rows[i].name))} ${place.tied ? 'file' : 'files'} the most: ${place.value}${place.tied ? ' each' : ''} of ${totalRequests} requests (${share(place, totalRequests)}).`,
+    totalRequests > 0 && rows.length > 0 && `${active} of ${rows.length} barangays filed at least one.`,
+    totalRequests > 0 && walkIns > 0 && `${count(walkIns, 'walk-in')} ${walkIns === 1 ? 'carries' : 'carry'} no barangay.`,
+  ])
 })
 
 /** Open now ignores the date range but not Service or Barangay, so the note says which applies. */
 const openNote = computed(() => {
-  const label = (options, id) => options.find(o => o.value === id)?.label
-  const scope = [
-    serviceId.value === ALL ? null : label(serviceOptions.value, serviceId.value),
-    barangayId.value === ALL ? null : label(barangayOptions.value, barangayId.value),
-  ].filter(Boolean).join(' in ')
+  // Up to three names, then a count.
+  const named = (ids, options, noun) => (ids.length > 3
+    ? `${ids.length} ${noun}`
+    : ids.map(id => options.find(o => o.value === id)?.label).filter(Boolean).join(', '))
+  const places = [
+    named(barangayIds.value.filter(id => id !== WALK_IN), barangayOptions.value, 'barangays'),
+    barangayIds.value.includes(WALK_IN) && 'walk-ins',
+  ].filter(Boolean).join(' and ')
+  const scope = [named(serviceIds.value, serviceOptions.value, 'services'), places].filter(Boolean).join(' in ')
   const oldest = aging.value.total > 0 ? `Oldest ${count(aging.value.oldestDays, 'day')}.` : 'None waiting.'
   return scope ? `Open requests for ${scope}, any date. ${oldest}` : `All open requests, any date. ${oldest}`
 })
