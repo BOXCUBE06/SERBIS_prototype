@@ -670,7 +670,7 @@ const loans = computed(() => report.value?.loans ?? {
   daysOut: { medianDays: null, n: 0 },
   returnedLate: { count: 0, of: 0, percent: null },
 })
-const selectedVehicleTrips = computed(() => report.value?.vehicleTrips?.range ?? [])
+const selectedVehicleTrips = computed(() => report.value?.vehicleTrips ?? [])
 const barangayCoverage = computed(() => report.value?.barangayCoverage ?? {
   barangays: [], walkIn: 0, totalResidents: 0, totalRequests: 0, totalLoans: 0,
 })

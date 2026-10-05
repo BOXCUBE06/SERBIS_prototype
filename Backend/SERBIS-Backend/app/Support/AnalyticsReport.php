@@ -637,50 +637,26 @@ class AnalyticsReport
      */
     private function mostUsedVehicles(): array
     {
-        $now = CarbonImmutable::now(self::OFFICE_TIMEZONE);
+        $tripsByVehicle = DB::table('tbl_conduction_requests')
+            ->where('departed_office_at', '>=', $this->from)
+            ->where('departed_office_at', '<', $this->to)
+            ->whereNotNull('vehicle_id')
+            ->groupBy('vehicle_id')
+            ->selectRaw('vehicle_id, COUNT(*) as total')
+            ->pluck('total', 'vehicle_id');
 
-        $boundaries = [
-            'today' => $now->startOfDay(),
-            'week' => $now->startOfWeek(CarbonImmutable::MONDAY),
-            'month' => $now->startOfMonth(),
-        ];
-
-        $vehicles = DB::table('tbl_vehicles')
+        return DB::table('tbl_vehicles')
             ->orderBy('unit_identifier')
             ->select('vehicle_id', 'unit_identifier', 'type')
-            ->get();
-
-        // 'range' follows the page's date filter; the panel reads only this.
-        // today/week/month stay for the existing consumers of the payload.
-        $windows = [
-            'today' => [$boundaries['today']->utc(), null],
-            'week' => [$boundaries['week']->utc(), null],
-            'month' => [$boundaries['month']->utc(), null],
-            'range' => [$this->from, $this->to],
-        ];
-
-        $result = [];
-
-        foreach ($windows as $key => [$since, $until]) {
-            $tripsByVehicle = DB::table('tbl_conduction_requests')
-                ->where('created_at', '>=', $since)
-                ->when($until, fn ($q) => $q->where('created_at', '<', $until))
-                ->whereNotNull('vehicle_id')
-                ->groupBy('vehicle_id')
-                ->selectRaw('vehicle_id, COUNT(*) as total')
-                ->pluck('total', 'vehicle_id');
-
-            $result[$key] = $vehicles
-                ->map(fn ($v) => [
-                    'label' => $v->unit_identifier,
-                    'type' => $v->type,
-                    'trips' => (int) ($tripsByVehicle[$v->vehicle_id] ?? 0),
-                ])
-                ->sortByDesc('trips')
-                ->values();
-        }
-
-        return $result;
+            ->get()
+            ->map(fn ($v) => [
+                'label' => $v->unit_identifier,
+                'type' => $v->type,
+                'trips' => (int) ($tripsByVehicle[$v->vehicle_id] ?? 0),
+            ])
+            ->sortByDesc('trips')
+            ->values()
+            ->all();
     }
 
     /**

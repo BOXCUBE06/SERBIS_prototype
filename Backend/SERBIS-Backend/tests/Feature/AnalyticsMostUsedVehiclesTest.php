@@ -59,9 +59,7 @@ class AnalyticsMostUsedVehiclesTest extends TestCase
 
         $this->actingAs($this->admin);
 
-        // Thursday 10 Sep 2026, noon Manila (04:00 UTC). Boundaries this
-        // freezes: today = 10 Sep 00:00 Manila, week = Mon 7 Sep 00:00
-        // Manila, month = 1 Sep 00:00 Manila.
+        // Thursday 10 Sep 2026, noon Manila (04:00 UTC).
         Carbon::setTestNow(Carbon::parse('2026-09-10 04:00:00', 'UTC'));
     }
 
@@ -72,10 +70,12 @@ class AnalyticsMostUsedVehiclesTest extends TestCase
         parent::tearDown();
     }
 
-    private function trip(array $overrides, string $createdAtUtc): ConductionRequest
+    /** A trip log row. $departedUtc null means never dispatched; the log date defaults to the departure. */
+    private function trip(array $overrides, ?string $departedUtc, ?string $createdAtUtc = null): ConductionRequest
     {
         $trip = ConductionRequest::create(array_merge([
             'vehicle_id' => $this->ambulance1->getKey(),
+            'departed_office_at' => $departedUtc,
             'patient_name' => 'Juan Dela Cruz',
             'patient_address' => 'Purok 1',
             'patient_contact_number' => '09171234567',
@@ -86,28 +86,22 @@ class AnalyticsMostUsedVehiclesTest extends TestCase
 
         DB::table('tbl_conduction_requests')
             ->where('conduction_request_id', $trip->conduction_request_id)
-            ->update(['created_at' => $createdAtUtc]);
+            ->update(['created_at' => $createdAtUtc ?? $departedUtc ?? '2026-09-10 01:00:00']);
 
         return $trip->fresh();
     }
 
+    /** Vehicle trips for September 2026, Manila. */
     private function vehicleTrips(): array
     {
-        return $this->getJson('/api/admin/analytics')
+        return $this->getJson('/api/admin/analytics?preset=custom&from=2026-09-01&to=2026-09-30')
             ->assertOk()
             ->json()['vehicleTrips'];
     }
 
-    public function test_today_counts_only_todays_trips(): void
+    private function tripsOf(string $label): int
     {
-        // 10:00 Manila, 10 Sep — today.
-        $this->trip([], '2026-09-10 02:00:00');
-        // 09:00 Manila, 8 Sep — this week, not today.
-        $this->trip([], '2026-09-08 01:00:00');
-
-        $today = collect($this->vehicleTrips()['today'])->firstWhere('label', 'Ambulance 1');
-
-        $this->assertSame(1, $today['trips']);
+        return collect($this->vehicleTrips())->firstWhere('label', $label)['trips'];
     }
 
     public function test_range_follows_the_date_filter(): void
@@ -116,35 +110,16 @@ class AnalyticsMostUsedVehiclesTest extends TestCase
         $this->trip([], '2026-09-02 01:00:00');
         $this->trip([], '2026-08-25 01:00:00');
 
-        $range = $this->getJson('/api/admin/analytics?preset=custom&from=2026-09-01&to=2026-09-30')
-            ->assertOk()
-            ->json()['vehicleTrips']['range'];
-
-        $this->assertSame(1, collect($range)->firstWhere('label', 'Ambulance 1')['trips']);
+        $this->assertSame(1, $this->tripsOf('Ambulance 1'));
     }
 
-    public function test_this_week_starts_monday_manila(): void
+    public function test_the_range_edges_are_manila_days(): void
     {
-        // 09:00 Manila, Monday 7 Sep — inside this week.
-        $this->trip([], '2026-09-07 01:00:00');
-        // 09:00 Manila, Sunday 6 Sep — last week, must not count.
-        $this->trip([], '2026-09-06 01:00:00');
+        // 00:30 Manila on 1 Sep is 16:30 UTC on 31 Aug: inside. 00:30 Manila on 1 Oct: outside.
+        $this->trip([], '2026-08-31 16:30:00');
+        $this->trip([], '2026-09-30 16:30:00');
 
-        $week = collect($this->vehicleTrips()['week'])->firstWhere('label', 'Ambulance 1');
-
-        $this->assertSame(1, $week['trips']);
-    }
-
-    public function test_this_month_starts_the_1st_manila(): void
-    {
-        // 09:00 Manila, 2 Sep — inside this month, before this week.
-        $this->trip([], '2026-09-02 01:00:00');
-        // 09:00 Manila, 25 Aug — last month, must not count.
-        $this->trip([], '2026-08-25 01:00:00');
-
-        $month = collect($this->vehicleTrips()['month'])->firstWhere('label', 'Ambulance 1');
-
-        $this->assertSame(1, $month['trips']);
+        $this->assertSame(1, $this->tripsOf('Ambulance 1'));
     }
 
     public function test_vehicles_are_ranked_highest_trip_count_first(): void
@@ -153,31 +128,43 @@ class AnalyticsMostUsedVehiclesTest extends TestCase
         $this->trip(['vehicle_id' => $this->ambulance1->getKey()], '2026-09-10 02:00:00');
         $this->trip(['vehicle_id' => $this->ambulance2->getKey()], '2026-09-10 03:00:00');
 
-        $today = $this->vehicleTrips()['today'];
+        $trips = $this->vehicleTrips();
 
-        $this->assertSame('Ambulance 1', $today[0]['label']);
-        $this->assertSame(2, $today[0]['trips']);
-        $this->assertSame('Ambulance 2', $today[1]['label']);
-        $this->assertSame(1, $today[1]['trips']);
+        $this->assertSame(['Ambulance 1', 2], [$trips[0]['label'], $trips[0]['trips']]);
+        $this->assertSame(['Ambulance 2', 1], [$trips[1]['label'], $trips[1]['trips']]);
     }
 
     public function test_a_vehicle_with_no_trips_in_the_period_still_shows_at_zero(): void
     {
-        // Only Ambulance 1 has a trip today; Ambulance 2 has none at all.
+        // Only Ambulance 1 has a trip; Ambulance 2 has none at all.
         $this->trip(['vehicle_id' => $this->ambulance1->getKey()], '2026-09-10 01:00:00');
 
-        $today = collect($this->vehicleTrips()['today'])->firstWhere('label', 'Ambulance 2');
-
-        $this->assertNotNull($today, 'a never-used vehicle must still appear, not drop off the chart');
-        $this->assertSame(0, $today['trips']);
+        $this->assertSame(0, $this->tripsOf('Ambulance 2'), 'a never-used vehicle must still appear, not drop off the chart');
     }
 
     public function test_a_trip_with_no_vehicle_assigned_is_excluded(): void
     {
         $this->trip(['vehicle_id' => null], '2026-09-10 01:00:00');
 
-        $today = $this->vehicleTrips()['today'];
+        $this->assertSame(0, array_sum(array_column($this->vehicleTrips(), 'trips')), 'an unassigned trip cannot be credited to any vehicle');
+    }
 
-        $this->assertSame(0, array_sum(array_column($today, 'trips')), 'an unassigned trip cannot be credited to any vehicle');
+    public function test_a_log_with_no_departure_is_not_a_trip(): void
+    {
+        $this->trip([], '2026-09-10 01:00:00');
+        // Logged in September but never dispatched.
+        $this->trip([], null, '2026-09-10 02:00:00');
+
+        $this->assertSame(1, $this->tripsOf('Ambulance 1'));
+    }
+
+    public function test_the_window_follows_the_departure_date_not_the_log_date(): void
+    {
+        // Left in September, logged in October: counts.
+        $this->trip([], '2026-09-10 01:00:00', '2026-10-02 01:00:00');
+        // Logged in September, left in August: does not.
+        $this->trip([], '2026-08-25 01:00:00', '2026-09-10 01:00:00');
+
+        $this->assertSame(1, $this->tripsOf('Ambulance 1'));
     }
 }
