@@ -204,7 +204,6 @@ Route::middleware(['auth:sanctum', 'is.admin', 'throttle:admin-api'])->group(fun
     // never did and 500'd on every call; it now points at real code. Same
     // admin-only group as the dashboard.
     Route::get('/admin/analytics', [AnalyticsController::class, 'report'])->middleware('section:analytics');
-    Route::get('/admin/analytics/barangays', [AnalyticsController::class, 'barangays'])->middleware('section:analytics');
 
     // The panel prints and exports in the browser; these only record that it
     // happened. One route per record type so each is gated by the section that

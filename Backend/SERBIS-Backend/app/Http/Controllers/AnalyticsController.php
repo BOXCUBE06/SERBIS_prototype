@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\ConductionRequest;
 use App\Models\EquipmentBorrowing;
-use App\Models\Resident;
 use App\Models\Responder;
 use App\Models\ServiceRequest;
 use App\Models\SystemLog;
@@ -20,8 +19,8 @@ use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
 
 class AnalyticsController extends Controller
 {
@@ -75,47 +74,6 @@ class AnalyticsController extends Controller
             // cache comes back as __PHP_Incomplete_Class on a hit.
             return json_decode(json_encode($report->build()), true);
         }));
-    }
-
-    /**
-     * GET /admin/analytics/barangays — one row per barangay for the map's hover
-     * card: how many households are registered there and how many requests are
-     * waiting on staff right now.
-     *
-     * Built from the barangay roster outward, so a barangay with no residents
-     * and no requests is still a row, at zero. Residents are heads of the
-     * family, as everywhere else; pending is service requests in status
-     * Pending, by the filing account's barangay. A walk-in has no barangay and
-     * is not in any row. Live rather than cached: three grouped counts over a
-     * 64-row roster.
-     */
-    public function barangays(): JsonResponse
-    {
-        $residents = DB::table('tbl_residents')
-            ->where('account_type', Resident::TYPE_HEAD_OF_FAMILY)
-            ->groupBy('barangay_id')
-            ->selectRaw('barangay_id, COUNT(*) as total')
-            ->pluck('total', 'barangay_id');
-
-        // By the barangay each request was filed under (walk-ins have none).
-        $pending = DB::table('tbl_service_request')
-            ->whereNotNull('barangay_id')
-            ->where('status', 'Pending')
-            ->groupBy('barangay_id')
-            ->selectRaw('barangay_id, COUNT(*) as total')
-            ->pluck('total', 'barangay_id');
-
-        $rows = DB::table('tbl_barangay')
-            ->orderBy('barangay_name')
-            ->get(['barangay_id', 'barangay_name', 'psgc_code'])
-            ->map(fn ($b) => [
-                'psgc_code' => $b->psgc_code,
-                'name' => $b->barangay_name,
-                'residents_count' => (int) ($residents[$b->barangay_id] ?? 0),
-                'pending_requests_count' => (int) ($pending[$b->barangay_id] ?? 0),
-            ]);
-
-        return response()->json(['data' => $rows]);
     }
 
     /** A booking starting this soon already holds its unit; later ones only show in the Today rail. */
