@@ -70,7 +70,7 @@
           :loading="initialLoad"
           :refreshing="reloading"
           v-model:search="search"
-          search-placeholder="Search patient, origin or destination"
+          search-placeholder="Search booking no., patient, origin or destination"
           :tabs="statusTabItems"
           :status="statusFilter"
           @update:status="statusFilter = $event"
@@ -128,7 +128,12 @@
           </template>
 
           <template v-slot:no-data>
-            <div class="text-center py-12">
+            <div v-if="items.length > 0 && hasTripFilters" class="text-center py-12">
+              <v-icon size="40" class="text-medium-emphasis mb-2">mdi-filter-off-outline</v-icon>
+              <div class="text-body-2 font-weight-bold text-high-emphasis">No trip records match your filters</div>
+              <v-btn variant="text" color="primary" class="text-none font-weight-bold mt-2" @click="clearTripFilters">Clear filters</v-btn>
+            </div>
+            <div v-else class="text-center py-12">
               <v-icon size="40" class="text-medium-emphasis mb-2">mdi-ambulance</v-icon>
               <div class="text-body-2 font-weight-bold text-high-emphasis">No ambulance trip records yet</div>
             </div>
@@ -600,7 +605,8 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue'
+import { ref, reactive, computed, watch, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { getToken } from '@/composables/authToken'
 import { displayPhone } from '@/composables/phoneNumber'
 import { sharedStatusLabel, tripStatusLabel, outcomeLabel } from '@/composables/adminUi'
@@ -760,6 +766,12 @@ const clearFilter = (key) => {
 }
 const clearAllFilters = () => {
   for (const key of ['status', 'departed', 'vehicle']) clearFilter(key)
+}
+// Any search or filter narrowing the list, and the empty state's way out of it.
+const hasTripFilters = computed(() => (search.value || '').trim() !== '' || activeFilters.value.length > 0)
+const clearTripFilters = () => {
+  search.value = ''
+  clearAllFilters()
 }
 
 // The page header's line on the Trip logs tab.
@@ -1066,18 +1078,16 @@ const handleOpenTripRecord = async (conductionRequestId) => {
 
 // The reverse of the above — a trip's own detail dialog linking back to the
 // booking that dispatched it (item 7 of the layout redesign: this link only
-// ever went one way before). AmbulanceRequestQueue.vue keeps its own request
-// list and selection state private, so this reaches in via defineExpose
-// rather than duplicating that state here. v-window keeps both tabs
-// mounted (confirmed while building the sticky footer for item 1 — inactive
-// tab content is hidden, not destroyed), so the ref is already valid the
-// instant the tab switches; nextTick is just to let that switch paint
-// before the child's own scroll/selection work runs.
+// ever went one way before). The request id travels in the route query:
+// AmbulanceRequestQueue.vue reads ?open, opens that booking (or sends a
+// non-ambulance request to its own board) and clears it.
+const route = useRoute()
+const router = useRouter()
 const bookingsQueueRef = ref(null)
 const openBooking = (requestId) => {
   detail.value.open = false
   activeTab.value = 'bookings'
-  nextTick(() => bookingsQueueRef.value?.selectRequestById(requestId))
+  router.replace({ query: { ...route.query, open: requestId } })
 }
 
 const printTrip = async (record) => {
