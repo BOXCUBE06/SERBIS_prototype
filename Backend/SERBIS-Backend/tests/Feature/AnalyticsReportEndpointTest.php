@@ -343,6 +343,19 @@ class AnalyticsReportEndpointTest extends TestCase
         $this->assertSame(1, $filtered['demand']['total'], 'a walk-in records no barangay, so it cannot match one');
     }
 
+    public function test_all_time_starts_on_the_manila_day_of_the_earliest_request(): void
+    {
+        // 20:00 UTC on 1 Mar is 04:00 Manila on 2 Mar.
+        $this->requestAt('2025-03-01 20:00:00');
+        $this->requestAt(now()->subDay()->toDateTimeString());
+
+        $report = $this->report(['preset' => 'all']);
+
+        $this->assertSame('all', $report['range']['preset']);
+        $this->assertSame('2025-03-02', $report['range']['from']);
+        $this->assertSame(2, $report['totals']['serviceRequests']);
+    }
+
     public function test_it_defaults_to_this_quarter(): void
     {
         $report = $this->report();

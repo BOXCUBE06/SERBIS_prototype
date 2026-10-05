@@ -140,4 +140,80 @@ class AnalyticsReconciliationTest extends TestCase
         $this->assertSame(1, $unfiltered['totals']['walkIn'], 'totals.walkIn');
         $this->assertSame(1, $unfiltered['barangayCoverage']['walkIn'], 'a loan must not change walkIn');
     }
+
+    private function extraRequest(Barangay $barangay, Service $service, string $phone): void
+    {
+        $resident = Resident::create([
+            'barangay_id' => $barangay->barangay_id,
+            'first_name' => 'Extra',
+            'last_name' => 'Resident',
+            'phone_number' => $phone,
+            'email_address' => $phone.'@test.local',
+            'password' => Hash::make('password123'),
+            'status' => 'Active',
+        ]);
+
+        ServiceRequest::create(['resident_id' => $resident->getKey(), 'service_id' => $service->getKey(), 'description' => 'Test', 'status' => 'Pending']);
+    }
+
+    public function test_several_barangays_can_be_selected_and_still_reconcile(): void
+    {
+        $second = Barangay::create(['barangay_name' => 'Reconciliation Test Barangay Two']);
+        $this->extraRequest($second, $this->service, '09173333333');
+
+        $report = $this->report('2026-08-12', '2026-09-10', ['barangay_id' => [$second->barangay_id, $this->barangay->barangay_id]]);
+        $coverage = $report['barangayCoverage'];
+
+        // The two barangays' requests, and no walk-in: a walk-in has no barangay.
+        $this->assertSame(3, $report['totals']['serviceRequests']);
+        $this->assertSame(0, $report['totals']['walkIn']);
+        $this->assertSame(3, array_sum(array_column($coverage['barangays'], 'requests')) + $coverage['walkIn']);
+        $this->assertSame(1, collect($coverage['barangays'])->firstWhere('name', $second->barangay_name)['requests']);
+    }
+
+    public function test_several_services_can_be_selected_and_still_reconcile(): void
+    {
+        $second = Service::create(['service_name' => 'Fire Rescue', 'description' => 'Fire']);
+        $this->extraRequest($this->barangay, $second, '09174444444');
+
+        $report = $this->report('2026-08-12', '2026-09-10', ['service_id' => [$second->getKey(), $this->service->getKey()]]);
+        $coverage = $report['barangayCoverage'];
+
+        // The no-service walk-in is outside both services; any service filter leaves no loans.
+        $this->assertSame(3, $report['totals']['serviceRequests']);
+        $this->assertSame(3, array_sum(array_column($coverage['barangays'], 'requests')) + $coverage['walkIn']);
+        $this->assertSame(0, $coverage['totalLoans']);
+
+        $tooMany = range(1, 11);
+        $this->getJson('/api/admin/analytics?'.http_build_query(['service_id' => $tooMany]))->assertStatus(422);
+    }
+
+    public function test_walk_in_can_be_selected_alone_or_with_a_barangay_and_still_reconcile(): void
+    {
+        // Walk-in alone: the one request with no barangay, and no loans.
+        $alone = $this->report('2026-08-12', '2026-09-10', ['barangay_id' => ['walkin']]);
+        $coverage = $alone['barangayCoverage'];
+
+        $this->assertSame(1, $alone['totals']['serviceRequests']);
+        $this->assertSame(1, $alone['totals']['walkIn']);
+        $this->assertSame(1, array_sum(array_column($coverage['barangays'], 'requests')) + $coverage['walkIn']);
+        $this->assertSame(0, $coverage['totalLoans']);
+        // Walk-in only selects no barangay: no resident figure anywhere.
+        $this->assertSame([null], array_unique(array_column($coverage['barangays'], 'residents')));
+        $this->assertSame(0, $coverage['totalResidents']);
+
+        // Walk-in plus a barangay: its two requests and the walk-in, and its loan.
+        $both = $this->report('2026-08-12', '2026-09-10', ['barangay_id' => ['walkin', $this->barangay->barangay_id]]);
+        $coverage = $both['barangayCoverage'];
+        $row = collect($coverage['barangays'])->firstWhere('name', $this->barangay->barangay_name);
+
+        $this->assertSame(3, $both['totals']['serviceRequests']);
+        $this->assertSame(1, $both['totals']['walkIn']);
+        $this->assertSame(3, array_sum(array_column($coverage['barangays'], 'requests')) + $coverage['walkIn']);
+        $this->assertSame(1, $row['loans']);
+        // Residents only for the chosen barangay (the requester and the borrower); the footer total follows.
+        $this->assertSame(2, $row['residents']);
+        $this->assertTrue($row['selected']);
+        $this->assertSame(2, $coverage['totalResidents']);
+    }
 }

@@ -24,8 +24,9 @@ class BarangayRequestCounts
     /**
      * Service requests per barangay, plus the ones with no barangay.
      *
-     * Optional filters narrow the requests the same way the page's filters do;
-     * a barangay filter leaves no walk-ins, since a walk-in has no barangay.
+     * Optional id lists narrow the requests the same way the page's filters do
+     * (empty means no filter); a barangay filter leaves no walk-ins, since a
+     * walk-in has no barangay.
      *
      * @return array{barangays: list<array{id: int, name: string, requests: int}>, walkIn: int, total: int}
      *
@@ -40,14 +41,13 @@ class BarangayRequestCounts
      * `$until` is exclusive so a caller can pass a period's own end boundary
      * without double-counting the row that lands exactly on it.
      */
-    public static function forWindow(?CarbonInterface $since = null, ?CarbonInterface $until = null, ?int $barangayId = null, ?int $serviceId = null): array
+    public static function forWindow(?CarbonInterface $since = null, ?CarbonInterface $until = null, array $barangayIds = [], array $serviceIds = [], bool $includeWalkIn = false): array
     {
-        $rows = DB::table('tbl_service_request')
+        $rows = self::onlyBarangays(DB::table('tbl_service_request'), $barangayIds, $includeWalkIn)
             ->leftJoin('tbl_barangay', 'tbl_service_request.barangay_id', '=', 'tbl_barangay.barangay_id')
             ->when($since, fn ($q) => $q->where('tbl_service_request.created_at', '>=', $since))
             ->when($until, fn ($q) => $q->where('tbl_service_request.created_at', '<', $until))
-            ->when($barangayId, fn ($q) => $q->where('tbl_service_request.barangay_id', $barangayId))
-            ->when($serviceId, fn ($q) => $q->where('tbl_service_request.service_id', $serviceId))
+            ->when($serviceIds, fn ($q) => $q->whereIn('tbl_service_request.service_id', $serviceIds))
             ->groupBy('tbl_service_request.barangay_id', 'tbl_barangay.barangay_name')
             ->selectRaw('tbl_service_request.barangay_id as id, tbl_barangay.barangay_name as name, COUNT(*) as total')
             ->get();
@@ -77,18 +77,29 @@ class BarangayRequestCounts
     }
 
     /**
+     * Narrows a tbl_service_request query to the chosen barangays, the requests
+     * with no barangay (walk-ins), or both; no ids and no walk-in means no filter.
+     */
+    public static function onlyBarangays($query, array $barangayIds, bool $includeWalkIn)
+    {
+        return $query->when($barangayIds || $includeWalkIn, fn ($q) => $q->where(fn ($w) => $w
+            ->when($barangayIds, fn ($w) => $w->whereIn('tbl_service_request.barangay_id', $barangayIds))
+            ->when($includeWalkIn, fn ($w) => $w->orWhereNull('tbl_service_request.barangay_id'))));
+    }
+
+    /**
      * Equipment loans per barangay id, by the borrower's current barangay
      * (a loan records none of its own; accepted mismatch).
      *
      * @return array<int, int>
      */
-    public static function loansByBarangay(?CarbonInterface $since = null, ?CarbonInterface $until = null, ?int $barangayId = null): array
+    public static function loansByBarangay(?CarbonInterface $since = null, ?CarbonInterface $until = null, array $barangayIds = []): array
     {
         return DB::table('tbl_equipment_borrowing')
             ->join('tbl_residents', 'tbl_equipment_borrowing.resident_id', '=', 'tbl_residents.resident_id')
             ->when($since, fn ($q) => $q->where('tbl_equipment_borrowing.created_at', '>=', $since))
             ->when($until, fn ($q) => $q->where('tbl_equipment_borrowing.created_at', '<', $until))
-            ->when($barangayId, fn ($q) => $q->where('tbl_residents.barangay_id', $barangayId))
+            ->when($barangayIds, fn ($q) => $q->whereIn('tbl_residents.barangay_id', $barangayIds))
             ->groupBy('tbl_residents.barangay_id')
             ->selectRaw('tbl_residents.barangay_id as id, COUNT(*) as total')
             ->pluck('total', 'id')

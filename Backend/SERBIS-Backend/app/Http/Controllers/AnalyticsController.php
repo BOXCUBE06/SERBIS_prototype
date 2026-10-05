@@ -40,12 +40,28 @@ class AnalyticsController extends Controller
      */
     public function report(Request $request): JsonResponse
     {
+        // A lone barangay_id=3 is still accepted: wrapped into a one-item list.
+        foreach (['barangay_id', 'service_id'] as $key) {
+            if ($request->filled($key)) {
+                $request->merge([$key => Arr::wrap($request->input($key))]);
+            }
+        }
+
+        // "walkin" is a pseudo-barangay: the requests filed with no barangay. Taken
+        // out before validation, which then sees only real ids.
+        $includeWalkIn = in_array('walkin', (array) $request->input('barangay_id', []), true);
+        if ($includeWalkIn) {
+            $request->merge(['barangay_id' => array_values(array_diff((array) $request->input('barangay_id'), ['walkin']))]);
+        }
+
         $validated = $request->validate([
             'preset' => ['nullable', 'string', 'in:'.implode(',', AnalyticsReport::PRESETS)],
             'from' => ['nullable', 'date_format:Y-m-d'],
             'to' => ['nullable', 'date_format:Y-m-d'],
-            'barangay_id' => ['nullable', 'integer', 'exists:tbl_barangay,barangay_id'],
-            'service_id' => ['nullable', 'integer', 'exists:tbl_services,service_id'],
+            'barangay_id' => ['nullable', 'array', 'max:10'],
+            'barangay_id.*' => ['integer', 'exists:tbl_barangay,barangay_id'],
+            'service_id' => ['nullable', 'array', 'max:10'],
+            'service_id.*' => ['integer', 'exists:tbl_services,service_id'],
         ]);
 
         [$from, $to, $preset] = AnalyticsReport::resolveRange(
@@ -54,20 +70,22 @@ class AnalyticsController extends Controller
             $validated['to'] ?? null,
         );
 
-        $barangayId = isset($validated['barangay_id']) ? (int) $validated['barangay_id'] : null;
-        $serviceId = isset($validated['service_id']) ? (int) $validated['service_id'] : null;
+        // Sorted and de-duplicated, so the same selection in any order shares one cache entry.
+        $ids = fn (string $key) => collect($validated[$key] ?? [])->map(fn ($id) => (int) $id)->unique()->sort()->values()->all();
+        $barangayIds = $ids('barangay_id');
+        $serviceIds = $ids('service_id');
 
         $key = AnalyticsCache::key(sprintf(
             'report:%s:%s:%s:%s:%s',
             $preset,
             $from->toDateString(),
             $to->toDateString(),
-            $barangayId ?? 'all',
-            $serviceId ?? 'all',
+            implode(',', [...$barangayIds, ...($includeWalkIn ? ['walkin'] : [])]) ?: 'all',
+            implode(',', $serviceIds) ?: 'all',
         ));
 
-        return response()->json(Cache::remember($key, AnalyticsCache::TTL_SECONDS, function () use ($from, $to, $preset, $barangayId, $serviceId) {
-            $report = new AnalyticsReport($from, $to, $preset, $barangayId, $serviceId);
+        return response()->json(Cache::remember($key, AnalyticsCache::TTL_SECONDS, function () use ($from, $to, $preset, $barangayIds, $serviceIds, $includeWalkIn) {
+            $report = new AnalyticsReport($from, $to, $preset, $barangayIds, $serviceIds, $includeWalkIn);
 
             // Same json round-trip as index(): config/cache.php sets
             // serializable_classes to false, so any Collection reaching the

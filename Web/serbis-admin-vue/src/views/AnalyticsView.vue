@@ -31,6 +31,7 @@
         <v-btn value="month" class="text-none font-weight-bold px-3">This month</v-btn>
         <v-btn value="quarter" class="text-none font-weight-bold px-3">This quarter</v-btn>
         <v-btn value="year" class="text-none font-weight-bold px-3">This year</v-btn>
+        <v-btn value="all" class="text-none font-weight-bold px-3">All time</v-btn>
         <v-btn value="custom" class="text-none font-weight-bold px-3">Custom</v-btn>
       </v-btn-toggle>
 
@@ -56,28 +57,44 @@
       </template>
 
       <v-select
-        v-model="barangayId"
+        v-model="barangayIds"
         :items="barangayOptions"
         item-title="label"
         item-value="value"
         aria-label="Barangay"
+        placeholder="All barangays"
+        persistent-placeholder
+        multiple
         density="compact"
         variant="outlined"
         hide-details
         class="filter-bar__select filter-select"
-      />
+      >
+        <!-- One line of plain text, drawn once: the name, or a count, so the field stays single-select height. -->
+        <template #selection="{ index }">
+          <span v-if="index === 0" class="filter-text" :title="selectedNames(barangayIds, barangayOptions).join(', ')">{{ selectedText(barangayIds, barangayOptions, 'barangays') }}</span>
+        </template>
+      </v-select>
 
       <v-select
-        v-model="serviceId"
+        v-model="serviceIds"
         :items="serviceOptions"
         item-title="label"
         item-value="value"
         aria-label="Service"
+        placeholder="All services"
+        persistent-placeholder
+        multiple
         density="compact"
         variant="outlined"
         hide-details
         class="filter-bar__select filter-select"
-      />
+      >
+        <!-- First choice as a chip, the rest counted, so the control keeps its width. -->
+        <template #selection="{ index }">
+          <span v-if="index === 0" class="filter-text" :title="selectedNames(serviceIds, serviceOptions).join(', ')">{{ selectedText(serviceIds, serviceOptions, 'services') }}</span>
+        </template>
+      </v-select>
 
       <v-btn
         v-if="hasFilters"
@@ -259,8 +276,7 @@
       <!-- 9. Barangays: the map and the residents-vs-requests ranking are one
            set of numbers, so one section. Built from the full barangay
            roster, so a barangay with accounts but no requests still shows at
-           zero. No barangay filter — narrowing the one cross-barangay
-           comparison to one barangay would defeat its purpose. -->
+           zero. The barangay filter narrows it to the chosen barangays. -->
       <v-col cols="12">
         <AnalyticsSection
           title="Barangays"
@@ -479,8 +495,6 @@ ChartJS.register(Tooltip, Legend, CategoryScale, LinearScale, BarElement)
  * a quarter of bookings), and per-capita rates (no barangay population).
  */
 
-const ALL = 'all'
-
 /*
  * Categorical series colours, one fixed order per theme, assigned by position
  * and never cycled — a ninth service folds into "Other" rather than reusing a
@@ -517,8 +531,9 @@ const preset = ref('quarter')
 const volumeView = ref('chart')
 const customFrom = ref('')
 const customTo = ref('')
-const barangayId = ref(ALL)
-const serviceId = ref(ALL)
+// Empty means every barangay / every service.
+const barangayIds = ref([])
+const serviceIds = ref([])
 
 const report = ref(null)
 const loading = ref(true)
@@ -530,28 +545,36 @@ const refreshing = computed(() => loading.value && !!report.value)
 const barangays = ref([])
 const services = ref([])
 
+// Sent as barangay_id[]=walkin: requests filed with no barangay.
+const WALK_IN = 'walkin'
 const barangayOptions = computed(() => [
-  { label: 'All barangays', value: ALL },
+  { label: 'Walk-in (no barangay)', value: WALK_IN },
   ...barangays.value.map(b => ({ label: b.barangay_name, value: b.barangay_id })),
 ])
 
-const serviceOptions = computed(() => [
-  { label: 'All services', value: ALL },
-  ...services.value.map(s => ({ label: s.service_name, value: s.service_id })),
-])
+const serviceOptions = computed(() => services.value.map(s => ({ label: s.service_name, value: s.service_id })))
+
+const selectedNames = (ids, options) => ids.map(id => options.find(o => o.value === id)?.label).filter(Boolean)
+/** The name when one is selected, else a count; walk-ins are appended, never counted. */
+const selectedText = (ids, options, noun) => {
+  const real = ids.filter(id => id !== WALK_IN)
+  const base = real.length === 1 ? (selectedNames(real, options)[0] ?? '') : `${real.length} ${noun}`
+  if (!ids.includes(WALK_IN)) return base
+  return real.length === 0 ? 'Walk-ins' : `${base} + walk-ins`
+}
 
 const awaitingCustomRange = computed(() =>
   preset.value === 'custom' && !(customFrom.value && customTo.value)
 )
 
 const hasFilters = computed(() =>
-  barangayId.value !== ALL || serviceId.value !== ALL || preset.value !== 'quarter'
+  barangayIds.value.length > 0 || serviceIds.value.length > 0 || preset.value !== 'quarter'
 )
 
 const clearFilters = () => {
   preset.value = 'quarter'
-  barangayId.value = ALL
-  serviceId.value = ALL
+  barangayIds.value = []
+  serviceIds.value = []
   customFrom.value = ''
   customTo.value = ''
 }
@@ -572,8 +595,8 @@ const queryString = () => {
     params.set('to', customTo.value)
   }
 
-  if (barangayId.value !== ALL) params.set('barangay_id', barangayId.value)
-  if (serviceId.value !== ALL) params.set('service_id', serviceId.value)
+  for (const id of barangayIds.value) params.append('barangay_id[]', id)
+  for (const id of serviceIds.value) params.append('service_id[]', id)
 
   return params.toString()
 }
@@ -597,8 +620,8 @@ const fetchReport = async () => {
 }
 
 const fetchFilterOptions = async () => {
-  // A filter list that fails to load leaves "All" selected, which is the
-  // correct default anyway — not worth failing the page over.
+  // A filter list that fails to load leaves nothing selected (all), which is
+  // the correct default anyway — not worth failing the page over.
   await Promise.all([
     // /services answers {data: [...]} while /barangays answers a bare
     // array. Three response envelopes are already in use across this API;
@@ -610,7 +633,7 @@ const fetchFilterOptions = async () => {
 
 // A custom range with only one end filled is not yet a range, so it must not
 // fire a fetch that would silently return the quarter.
-watch([preset, barangayId, serviceId, customFrom, customTo], () => {
+watch([preset, barangayIds, serviceIds, customFrom, customTo], () => {
   if (preset.value === 'custom' && !(customFrom.value && customTo.value)) return
   fetchReport()
 })
@@ -1036,6 +1059,30 @@ defineExpose({ fetchReport })
 /* Service names run long; 160px (filter-bar__select) clips most of them. */
 .filter-select {
   width: 200px;
+}
+/* One line: a long name ellipsises inside the 200px control. */
+.filter-select :deep(.v-select__selection) {
+  min-width: 0;
+  max-width: 100%;
+}
+.filter-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 24px;
+}
+/* The empty placeholder and the selected text share one centred 24px line, so the field looks the same either way. */
+.filter-select :deep(.v-field__input) {
+  align-items: center;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.filter-select :deep(.v-field__input input) {
+  height: 24px;
+  min-height: 0;
+  padding: 0;
+  line-height: 24px;
 }
 
 /* The range toggle wraps onto a second line when it outgrows the row; it

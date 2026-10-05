@@ -4,8 +4,8 @@
   Where requests come from, in one place: the map and the ranked
   residents-vs-requests table share one card and one date range. The table's
   counts are the report's own (service requests and equipment loans in separate
-  columns, see BarangayRequestCounts); the map's figures are live, from
-  GET /admin/analytics/barangays.
+  columns, see BarangayRequestCounts), and the map is shaded from the same
+  requests, so it follows the range and filters.
 
   The map is a plain SVG of Echague, projected once with d3-geo: no basemap, no
   tiles, no pan or zoom. Colours are theme CSS variables, so a theme flip needs
@@ -20,7 +20,7 @@
           :viewBox="`0 0 ${W} ${H}`"
           preserveAspectRatio="xMidYMid meet"
           role="group"
-          aria-label="Map of Echague barangays, shaded by pending requests"
+          aria-label="Map of Echague barangays, shaded by requests in the selected range"
         >
           <!-- The outer boundary without merging geometry: every polygon's outline
                is drawn 3px wide, then every polygon is covered with its own fill.
@@ -53,22 +53,19 @@
 
         <div v-if="active" ref="tipEl" class="map-tip" :style="pos ? { left: pos.left + 'px', top: pos.top + 'px' } : { visibility: 'hidden' }" role="tooltip">
           <strong>{{ active.name }}</strong>
-          <div>Residents: {{ statOf(active.code).residents_count }}</div>
-          <div>Pending requests: {{ statOf(active.code).pending_requests_count }}</div>
+          <div>Residents: {{ statOf(active.code).residents ?? '—' }}</div>
+          <div>Requests in range: {{ statOf(active.code).requests }}</div>
         </div>
       </div>
 
       <div class="legend text-caption text-medium-emphasis mt-2">
-        <span>Pending requests</span>
+        <span>Requests in range</span>
         <span class="legend-swatch legend-none"></span><span>0</span>
-        <template v-if="maxPending > 0">
-          <span class="legend-swatch legend-ramp"></span><span>{{ maxPending }}</span>
+        <template v-if="maxRequests > 0">
+          <span class="legend-swatch legend-ramp"></span><span>{{ maxRequests }}</span>
         </template>
       </div>
       <div class="text-caption text-medium-emphasis mt-1">Hover, tap or tab to a barangay for its figures.</div>
-      <v-alert v-if="statsFailed" type="warning" variant="tonal" density="compact" class="mt-2">
-        Could not load the per-barangay figures, so the map shows every barangay at zero.
-      </v-alert>
     </v-col>
     <v-col cols="12" lg="5">
       <div class="table-scroll">
@@ -85,7 +82,7 @@
             <SkeletonRows v-if="loading" :rows="8" :columns="4" />
             <tr v-for="row in ranked" :key="row.name">
               <td>{{ row.name }}</td>
-              <td class="text-right" :class="{ 'text-medium-emphasis': row.residents === 0 }">{{ row.residents }}</td>
+              <td class="text-right" :class="{ 'text-medium-emphasis': !row.residents }">{{ row.residents ?? '—' }}</td>
               <td class="text-right">
                 <span :class="{ 'text-medium-emphasis': row.requests === 0 }">{{ row.requests }}</span>
                 <div class="bar-track"><div class="bar-fill" :style="{ width: row.percent + '%' }"></div></div>
@@ -102,8 +99,11 @@
         </table>
       </div>
       <div class="text-caption text-medium-emphasis mt-3" :style="{ visibility: loading ? 'hidden' : undefined }">
-        {{ totalResidents.toLocaleString() }} registered {{ totalResidents === 1 ? 'resident' : 'residents' }}
-        &bull; {{ totalRequests.toLocaleString() }} {{ totalRequests === 1 ? 'request' : 'requests' }}
+        <template v-if="showResidents">
+          {{ totalResidents.toLocaleString() }} registered {{ totalResidents === 1 ? 'resident' : 'residents' }}
+          &bull;
+        </template>
+        {{ totalRequests.toLocaleString() }} {{ totalRequests === 1 ? 'request' : 'requests' }}
         &bull; {{ totalLoans.toLocaleString() }} {{ totalLoans === 1 ? 'loan' : 'loans' }} in this range
       </div>
     </v-col>
@@ -111,11 +111,9 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, onMounted } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import { buildEchagueMap } from '@/composables/echagueMap'
 import SkeletonRows from '@/components/SkeletonRows.vue'
-import { API_BASE } from '@/config/api'
-import { authHeaders } from '@/composables/adminUi'
 // Every barangay of Echague. Matched to tbl_barangay rows by
 // properties.psgc_code, never by name (names differ between sources).
 import barangayBoundaries from '@/assets/echague-barangays.json'
@@ -143,35 +141,25 @@ const { W, H, shapes } = buildEchagueMap(barangayBoundaries)
 
 // ---- Figures -----------------------------------------------------------------
 
-// { psgc_code: { residents_count, pending_requests_count } }
-const statByCode = ref({})
-const statsFailed = ref(false)
-const maxPending = computed(() => Math.max(0, ...Object.values(statByCode.value).map((s) => s.pending_requests_count)))
-const statOf = (code) => statByCode.value[code] ?? { residents_count: 0, pending_requests_count: 0 }
+// { psgc_code: { residents, requests } }, from the report's own rows.
+// residents is null for a barangay the filter leaves out.
+const statByCode = computed(() => Object.fromEntries(props.barangays.map((b) => [b.psgc_code, b])))
+const maxRequests = max
+const statOf = (code) => statByCode.value[code] ?? { residents: null, requests: 0 }
+// With every resident figure null (walk-in only) there is no resident total to print.
+const showResidents = computed(() => props.barangays.some((b) => b.residents !== null))
 
-const loadStats = async () => {
-  try {
-    const res = await fetch(`${API_BASE}/admin/analytics/barangays`, { headers: authHeaders() })
-    if (!res.ok) throw new Error(String(res.status))
-    const { data } = await res.json()
-    statByCode.value = Object.fromEntries(data.map((s) => [s.psgc_code, s]))
-  } catch {
-    statsFailed.value = true
-  }
-}
-onMounted(loadStats)
-
-// Teal ramp by pending requests against the busiest barangay; none is a light
+// Teal ramp by requests in range against the busiest barangay; none is a light
 // neutral. The legend's gradient uses the same two ends.
 const RAMP_MIN = 0.25
 const RAMP_MAX = 0.85
 const fillFor = (code) => {
-  const pending = statOf(code).pending_requests_count
-  if (pending === 0) return { fill: 'rgb(var(--v-theme-on-surface))', fillOpacity: 0.06 }
-  return { fill: 'rgb(var(--v-theme-primary))', fillOpacity: RAMP_MIN + (RAMP_MAX - RAMP_MIN) * (pending / maxPending.value) }
+  const requests = statOf(code).requests
+  if (requests === 0) return { fill: 'rgb(var(--v-theme-on-surface))', fillOpacity: 0.06 }
+  return { fill: 'rgb(var(--v-theme-primary))', fillOpacity: RAMP_MIN + (RAMP_MAX - RAMP_MIN) * (requests / maxRequests.value) }
 }
 
-const label = (s) => `${s.name}. Residents: ${statOf(s.code).residents_count}. Pending requests: ${statOf(s.code).pending_requests_count}.`
+const label = (s) => `${s.name}. Residents: ${statOf(s.code).residents ?? 'not selected'}. Requests in range: ${statOf(s.code).requests}.`
 
 // ---- Hover, tap and keyboard focus all land here ------------------------------
 
