@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
 use RuntimeException;
 
 #[Table('tbl_services', key: 'service_id')]
-#[Fillable(['service_name', 'description', 'category', 'is_active'])]
+#[Fillable(['service_name', 'service_name_fil', 'description', 'category', 'is_active'])]
 class Service extends Model
 {
     use HasFactory, InvalidatesAnalyticsCache, TracksHistory;
@@ -22,6 +22,14 @@ class Service extends Model
      * approve, no dispatch). Never derived from the name.
      */
     public const CATEGORIES = ['rescue', 'medical', 'relief', 'infrastructure', 'programs'];
+
+    /**
+     * What a service added in Manage Services may be. Not Programs: a program
+     * needs its own form in the app (a date, a request letter instead of an
+     * ID), and a new code would get the general form. The existing programs
+     * keep their category.
+     */
+    public const ADDABLE_CATEGORIES = ['rescue', 'medical', 'relief', 'infrastructure'];
 
     protected $ignoreLogging = ['created_at', 'updated_at'];
 

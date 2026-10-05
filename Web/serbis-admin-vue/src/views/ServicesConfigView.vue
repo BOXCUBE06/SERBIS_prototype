@@ -2,6 +2,11 @@
   <v-container fluid class="fill-height align-start bg-background">
     <PageHeader title="Manage services">
       <template v-slot:subtitle>{{ pluralize(services.length, 'service') }} · {{ services.filter((s) => s.is_active).length }} active</template>
+      <template v-if="can('services')" v-slot:actions>
+        <v-btn color="primary" variant="flat" height="40" class="text-none font-weight-bold" @click="openAdd">
+          <v-icon start size="16">mdi-plus</v-icon> Add service
+        </v-btn>
+      </template>
     </PageHeader>
 
     <v-alert v-if="apiError" type="error" variant="tonal" class="mb-6 w-100" density="compact" rounded="lg">
@@ -9,6 +14,28 @@
       <template v-slot:append>
         <v-btn variant="outlined" color="primary" size="small" class="text-none font-weight-bold" @click="fetchServices">Retry</v-btn>
       </template>
+    </v-alert>
+
+    <!-- After an add: the service is saved switched off, and these are what
+         stands between it and residents. Stays until closed. -->
+    <v-alert
+      v-if="added"
+      type="info"
+      variant="tonal"
+      rounded="lg"
+      closable
+      class="mb-6 w-100"
+      data-test="service-added"
+      @click:close="added = null"
+    >
+      <div class="font-weight-bold mb-1">{{ added.service_name }} was added, switched off.</div>
+      <ol class="added-steps">
+        <li v-for="step in addedSteps" :key="step.key">
+          {{ step.text }}
+          <router-link v-if="step.link" :to="step.link.to" class="font-weight-bold">Open {{ step.link.label }}</router-link>
+          <span v-else-if="step.fallback" class="text-medium-emphasis">{{ step.fallback }}</span>
+        </li>
+      </ol>
     </v-alert>
 
     <div class="w-100">
@@ -95,6 +122,21 @@
       @save="saveService"
     />
 
+    <!-- Add. Name and category are fixed once saved, so the dialog says so. -->
+    <EditDialog
+      ref="addRef"
+      v-model="addModal.show"
+      title="Add service"
+      confirm-label="Add service"
+      :width="520"
+      :fields="addFields"
+      :form="addForm"
+      :field-errors="addErrors"
+      :error="addModal.error"
+      :loading="addModal.loading"
+      @save="saveNew"
+    />
+
     <!-- Disable confirm. Enabling needs none: it only makes a service requestable again. -->
     <v-dialog v-model="disableDialog.show" max-width="420">
       <v-card rounded="xl" class="pa-2">
@@ -127,6 +169,8 @@ import FilterSelect from '@/components/FilterSelect.vue'
 import EditDialog from '@/components/EditDialog.vue'
 import RowActions from '@/components/RowActions.vue'
 import { pluralize } from '@/composables/adminUi'
+import { can } from '@/composables/useCurrentAdmin'
+import { nextSteps } from '@/composables/serviceAdd.js'
 
 const API = `${API_BASE}/services`
 
@@ -169,7 +213,7 @@ const initialLoad = ref(true)
 const apiError = ref('')
 
 const modal = ref({ show: false, loading: false, error: '', targetId: null, addedOn: '' })
-const form = ref({ service_name: '', description: '', category: 'relief' })
+const form = ref({ service_name: '', service_name_fil: '', description: '', category: 'relief' })
 const togglingId = ref(null)
 const disableDialog = ref({ show: false, item: null })
 const snackbar = ref({ show: false, text: '', color: 'success' })
@@ -237,24 +281,28 @@ const fetchServices = async (fresh = false) => {
 // After a write: drop the cached list, then fetch past it.
 const reload = () => { invalidate('/services'); return fetchServices(true) }
 
+// The app reads this from its next release (Mobile/README.md, "Next app release").
+const FIL_HINT = 'Optional. Used from the next app release. Until then the app shows its own Filipino translation if it has one, otherwise the English name.'
+
 // Only the description is editable; the other rows are read-only (see the dialog).
 const editFields = [
   { key: 'service_name', label: 'Service', readonly: true },
   { key: 'category', label: 'Category', readonly: true, display: (v) => categories[v]?.label ?? v },
-  { key: 'fixed-note', text: 'The name and category are fixed; only the description can be changed.' },
+  { key: 'fixed-note', text: 'The name and category are fixed; the Filipino name and the description can be changed.' },
+  { key: 'service_name_fil', label: 'Filipino name', maxlength: 255, placeholder: 'e.g. Pagpapahiram ng Trapal', hint: FIL_HINT },
   { key: 'description', label: 'Description', type: 'textarea', placeholder: 'When this service applies and what the MDRRMO provides', hint: 'Optional, but it helps residents pick the right service.' },
 ]
 
 const openEdit = (item) => {
-  form.value = { service_name: item.service_name || '', description: item.description || '', category: item.category || 'relief' }
+  form.value = { service_name: item.service_name || '', service_name_fil: item.service_name_fil || '', description: item.description || '', category: item.category || 'relief' }
   modal.value = { show: true, loading: false, error: '', targetId: idOf(item), addedOn: formatDate(item.created_at) }
 }
 
 const saveService = async () => {
   modal.value.loading = true
   modal.value.error = ''
-  // Description only: name and category are fixed once a service exists.
-  const payload = { description: form.value.description.trim() || null }
+  // Name and category are fixed once a service exists.
+  const payload = { service_name_fil: form.value.service_name_fil.trim() || null, description: form.value.description.trim() || null }
   try {
     const res = await fetch(`${API}/${modal.value.targetId}`, {
       method: 'PUT',
@@ -273,6 +321,65 @@ const saveService = async () => {
     modal.value.error = error.message
   } finally {
     modal.value.loading = false
+  }
+}
+
+// --- Add (no delete: a service with requests cannot go, and one without is switched off instead) ---
+const addRef = ref(null)
+const addModal = ref({ show: false, loading: false, error: '' })
+const addForm = ref({ service_name: '', service_name_fil: '', category: null, description: '' })
+const addErrors = ref({})
+const added = ref(null)
+const addedSteps = computed(() => (added.value ? nextSteps(added.value, can) : []))
+
+const addFields = [
+  { key: 'service_name', label: 'Service name', required: true, maxlength: 255, placeholder: 'e.g. Tarpaulin Lending', hint: 'Residents see this name in the app. It cannot be changed later.' },
+  { key: 'service_name_fil', label: 'Filipino name', maxlength: 255, placeholder: 'e.g. Pagpapahiram ng Trapal', hint: FIL_HINT },
+  // Not Programs: a program needs its own form in the app, and the API refuses it too.
+  { key: 'category', label: 'Category', required: true, items: Object.values(categories).filter((c) => c.key !== 'programs'), itemTitle: 'label', itemValue: 'key', hint: 'Groups it in the app. It cannot be changed later.' },
+  { key: 'description', label: 'Description', type: 'textarea', placeholder: 'When this service applies and what the MDRRMO provides', hint: 'Optional, but it helps residents pick the right service.' },
+  { key: 'off-note', text: 'It is saved switched off. Residents cannot see it until you set who can request it and switch it on. In the app it uses the general request form: a details box and a photo of a valid ID.' },
+]
+
+const openAdd = () => {
+  addForm.value = { service_name: '', service_name_fil: '', category: null, description: '' }
+  addErrors.value = {}
+  addModal.value = { show: true, loading: false, error: '' }
+}
+
+const saveNew = async () => {
+  const { valid } = await addRef.value.validate()
+  if (!valid) return
+
+  addModal.value.loading = true
+  addModal.value.error = ''
+  addErrors.value = {}
+  try {
+    const res = await fetch(API, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({
+        service_name: addForm.value.service_name.trim(),
+        service_name_fil: addForm.value.service_name_fil.trim() || null,
+        category: addForm.value.category,
+        description: addForm.value.description.trim() || null,
+      }),
+    })
+    const data = await res.json().catch(() => ({}))
+    if (res.status === 422) {
+      addErrors.value = data.errors || {}
+      addModal.value.error = 'Check the highlighted fields.'
+      return
+    }
+    if (!res.ok) throw new Error(data.message || 'Could not add the service.')
+    addModal.value.show = false
+    added.value = data
+    statusFilter.value = 'All'
+    await reload()
+  } catch (error) {
+    addModal.value.error = error.message
+  } finally {
+    addModal.value.loading = false
   }
 }
 
@@ -326,4 +433,6 @@ onMounted(fetchServices)
   text-overflow: ellipsis;
 }
 .service-desc { font-size: 12px !important; line-height: 16px; }
+.added-steps { margin: 0; padding-left: 20px; }
+.added-steps li + li { margin-top: 4px; }
 </style>

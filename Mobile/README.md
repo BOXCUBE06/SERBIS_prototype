@@ -80,3 +80,16 @@ flutter test
 
 Tests do not pass `API_BASE_URL` and do not need it — nothing under `test/`
 performs a real request.
+
+## Next app release
+
+Server changes the installed app does not use yet. Read these before cutting
+the next build.
+
+- **Filipino service names from the API.** `GET /api/services` now returns
+  `service_name_fil` (nullable), set by staff in Manage Services. Services
+  added in the panel have no entry in `translations.dart`, so in Filipino the
+  current app shows their English name. Read it in
+  `ServiceCatalogItem.fromJson` and resolve the Filipino name in this order:
+  `service_name_fil` from the API, then the bundled translation for the code
+  (`serviceNameFor`), then `service_name`.
