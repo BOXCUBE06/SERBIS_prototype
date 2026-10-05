@@ -962,19 +962,28 @@ const busiestTimeOfDayChartData = computed(() => ({
   }],
 }))
 
-const baseOptions = computed(() => ({
-  responsive: true,
-  maintainAspectRatio: false,
-  interaction: { mode: 'index', intersect: false },
-  plugins: {
-    legend: { display: false },
-    tooltip: { boxPadding: 4 },
-  },
-  scales: {
-    x: { grid: { display: false }, ticks: { color: tickColor.value } },
-    y: { beginAtZero: true, ticks: { precision: 0, color: tickColor.value }, grid: { color: gridColor.value } },
-  },
-}))
+/**
+ * The one options base for every bar chart here. A horizontal bar reads its
+ * category along y, so hover follows that axis; the count axis starts at zero
+ * and counts in whole numbers. The tooltip does not animate between bars.
+ */
+const barOptions = (horizontal) => {
+  const count = { beginAtZero: true, ticks: { precision: 0, color: tickColor.value }, grid: { color: gridColor.value } }
+  const category = { grid: { display: false }, ticks: { color: tickColor.value } }
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    indexAxis: horizontal ? 'y' : 'x',
+    interaction: { mode: 'index', intersect: false, axis: horizontal ? 'y' : 'x' },
+    plugins: {
+      legend: { display: false },
+      tooltip: { boxPadding: 4, animation: false },
+    },
+    scales: horizontal ? { x: count, y: category } : { x: category, y: count },
+  }
+}
+
+const baseOptions = computed(() => barOptions(false))
 
 // A legend is mandatory once there are two or more series: identity must not
 // rest on colour alone.
@@ -995,7 +1004,7 @@ const percentStackedOptions = computed(() => ({
   plugins: {
     ...stackedOptions.value.plugins,
     tooltip: {
-      boxPadding: 4,
+      ...baseOptions.value.plugins.tooltip,
       callbacks: {
         // The axis is a percentage but the useful number is the count, so the
         // tooltip gives both rather than making the reader multiply. ctx.raw
@@ -1015,7 +1024,7 @@ const percentStackedOptions = computed(() => ({
       ...baseOptions.value.scales.y,
       stacked: true,
       max: 100,
-      ticks: { color: tickColor.value, callback: (v) => `${v}%` },
+      ticks: { ...baseOptions.value.scales.y.ticks, callback: (v) => `${v}%` },
       grid: { color: gridColor.value },
     },
   },
@@ -1038,14 +1047,7 @@ const outcomeChartDataNormalised = computed(() => {
   }
 })
 
-const horizontalBarOptions = computed(() => ({
-  ...baseOptions.value,
-  indexAxis: 'y',
-  scales: {
-    x: { beginAtZero: true, ticks: { precision: 0, color: tickColor.value }, grid: { color: gridColor.value } },
-    y: { grid: { display: false }, ticks: { color: tickColor.value } },
-  },
-}))
+const horizontalBarOptions = computed(() => barOptions(true))
 
 defineExpose({ fetchReport })
 </script>
