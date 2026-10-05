@@ -285,6 +285,11 @@ Route::middleware(['auth:sanctum', 'is.admin', 'throttle:admin-api'])->group(fun
     // a section that can be handed out (AdminSections::ASSIGNABLE). The refusals
     // in the controller still apply to them.
     Route::middleware('section:staff')->group(function () {
+        // Bulk actions on the selected rows, each account checked as the single
+        // route would. Before the resource and the {id} routes, so `bulk` is never read as an id.
+        Route::post('admins/bulk/close', [AdminController::class, 'bulkClose']);
+        Route::post('admins/bulk/reactivate', [AdminController::class, 'bulkReactivate']);
+        Route::put('admins/bulk/permissions', [AdminController::class, 'bulkPermissions']);
         Route::apiResource('admins', AdminController::class);
         // Registered after the resource so `admins/{id}` never shadows it.
         Route::patch('admins/{id}/reactivate', [AdminController::class, 'reactivate']);
