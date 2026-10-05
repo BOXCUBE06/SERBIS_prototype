@@ -308,7 +308,7 @@
         $patientName    = $val($booking?->patient_name    ?: $trip->patient_name);
         $patientAge     = $val($booking?->patient_age     ?: $trip->patient_age);
         $patientAddress = $val($booking?->patient_address ?: $trip->patient_address);
-        $patientContact = $val($booking?->patient_contact_number ?: $trip->patient_contact_number);
+        $patientContact = \App\Support\PhoneNumber::display((string) $val($booking?->patient_contact_number ?: $trip->patient_contact_number));
         $diagnosis      = $val($booking?->condition_notes ?: $trip->medical_diagnosis);
         $from           = $val($booking?->pickup_location ?: $trip->origin);
         $to             = $val($booking?->destination     ?: $trip->destination);

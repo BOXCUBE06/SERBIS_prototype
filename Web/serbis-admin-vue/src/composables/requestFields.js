@@ -19,6 +19,14 @@ export const manilaDateTime = (v) => (v ? dateTimeFormat.format(new Date(v)) : '
 export const manilaDate = (v) => (v ? dateFormat.format(new Date(/^\d{4}-\d\d-\d\d$/.test(v) ? `${v}T00:00:00+08:00` : v)) : '')
 export const manilaDay = (v) => (v ? dayFormat.format(new Date(v)) : '')
 
+const inputFormat = new Intl.DateTimeFormat('en-CA', { timeZone: TZ, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+// 'YYYY-MM-DDTHH:mm' in Manila: the shape <input type="datetime-local"> holds.
+export const manilaInputValue = (v) => {
+  if (!v) return ''
+  const p = Object.fromEntries(inputFormat.formatToParts(new Date(v)).map((x) => [x.type, x.value]))
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`
+}
+
 // "Full Name (username)", the way staff are named on records.
 const adminName = (a) => {
   if (!a) return ''
@@ -75,7 +83,7 @@ const bookingFields = [
   f('patient_name', 'Patient', (r) => r.patient_name || ''),
   f('patient_age', 'Patient age', (r) => r.patient_age ?? ''),
   f('patient_address', 'Patient address', (r) => r.patient_address || '', 'core', true),
-  f('patient_contact_number', 'Patient contact', (r) => r.patient_contact_number || '', 'core', true),
+  f('patient_contact_number', 'Patient contact', (r) => displayPhone(r.patient_contact_number), 'core', true),
   f('pickup_location', 'Pickup', (r) => r.pickup_location || ''),
   f('destination', 'Destination', (r) => r.destination || ''),
   f('condition_notes', 'Condition notes', (r) => r.condition_notes || ''),
@@ -127,7 +135,7 @@ const tripFields = [
   f('patient_name', 'Patient', (r) => r.patient_name || ''),
   f('patient_age', 'Patient age', (r) => r.patient_age ?? ''),
   f('patient_address', 'Patient address', (r) => r.patient_address || '', 'core', true),
-  f('patient_contact_number', 'Patient contact', (r) => r.patient_contact_number || ''),
+  f('patient_contact_number', 'Patient contact', (r) => displayPhone(r.patient_contact_number)),
   f('medical_diagnosis', 'Diagnosis', (r) => r.medical_diagnosis || ''),
   f('origin', 'From', (r) => r.origin || ''),
   f('destination', 'To', (r) => r.destination || ''),

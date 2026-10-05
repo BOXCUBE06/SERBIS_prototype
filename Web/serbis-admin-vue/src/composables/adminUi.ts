@@ -97,6 +97,7 @@ export function fmtDateTime(value: string | Date | null | undefined): string {
   if (Number.isNaN(d.getTime())) return '—'
 
   return d.toLocaleString('en-PH', {
+    timeZone: 'Asia/Manila',
     year: 'numeric',
     month: 'short',
     day: 'numeric',
