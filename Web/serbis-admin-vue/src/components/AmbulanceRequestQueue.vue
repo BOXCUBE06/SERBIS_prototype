@@ -524,66 +524,7 @@
       </v-card>
     </v-dialog>
 
-    <v-dialog v-model="dayView.open" max-width="820" scrollable>
-      <v-card rounded="lg">
-        <v-card-title class="d-flex justify-space-between align-center pa-6 pb-4 border-b bg-surface">
-          <div class="d-flex align-center gap-2">
-            <v-btn icon="mdi-chevron-left" variant="text" density="comfortable" aria-label="Previous day" @click="shiftDayViewDate(-1)"></v-btn>
-            <div>
-              <div class="text-h6 font-weight-bold text-high-emphasis">Ambulance Day View</div>
-              <div class="text-caption text-medium-emphasis">{{ dayViewDateLabel }}</div>
-            </div>
-            <v-btn icon="mdi-chevron-right" variant="text" density="comfortable" aria-label="Next day" @click="shiftDayViewDate(1)"></v-btn>
-          </div>
-          <div class="d-flex align-center gap-2">
-            <DateTimePickerField
-              v-model="dayView.date"
-              type="date"
-              variant="outlined"
-              density="compact"
-              hide-details
-              style="max-width: 170px;"
-            ></DateTimePickerField>
-            <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close" @click="dayView.open = false"></v-btn>
-          </div>
-        </v-card-title>
-
-        <v-card-text class="pa-6">
-          <div v-if="dayView.loading">
-            <v-skeleton-loader v-for="n in 4" :key="n" type="list-item-two-line" class="mb-3"></v-skeleton-loader>
-          </div>
-
-          <template v-else-if="dayView.units.length > 0">
-            <div class="day-view-scale">
-              <span v-for="mark in dayViewHourMarks" :key="mark.hour" class="day-view-scale-label" :style="{ left: mark.left }">{{ mark.label }}</span>
-            </div>
-
-            <div v-for="unit in dayView.units" :key="unit.vehicle_id" class="day-view-row">
-              <div class="day-view-unit">
-                <div class="font-weight-bold text-body-2 text-truncate">{{ unit.unit_identifier }}</div>
-                <div class="text-caption text-medium-emphasis text-truncate">{{ unit.specification || '&nbsp;' }}</div>
-                <StatusPill v-if="unit.is_maintenance" small status="Disapproved" label="Maintenance" class="mt-1" />
-              </div>
-              <div class="day-view-track" :class="{ 'day-view-track--maintenance': unit.is_maintenance }">
-                <div v-for="mark in dayViewHourMarks" :key="mark.hour" class="day-view-hourline" :style="{ left: mark.left }"></div>
-                <div
-                  v-for="(w, i) in unit.booked_windows"
-                  :key="i"
-                  class="day-view-segment"
-                  :style="dayViewSegmentStyle(w)"
-                  :title="`${formatTime(w.scheduled_at)} – ${formatTime(w.scheduled_end)}`"
-                >{{ dayViewSegmentLabel(w) }}</div>
-              </div>
-            </div>
-          </template>
-
-          <div v-else class="pa-6 text-center text-medium-emphasis">
-            <v-icon size="40" class="mb-2">mdi-ambulance</v-icon>
-            <div class="text-body-2">No Ambulance units to show.</div>
-          </div>
-        </v-card-text>
-      </v-card>
-    </v-dialog>
+    <AmbulanceScheduleDialog v-model="scheduleOpen" />
 
     <v-dialog v-model="createDialog.open" max-width="640" scrollable persistent>
       <v-card rounded="lg">
@@ -790,6 +731,7 @@ import { getToken } from '@/composables/authToken'
 import { outcomeLabel, isBookingOverdue, bookingCountdownLabel, pendingWaitLabel, openWaitDays, waitTone, authHeaders, pluralize } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
+import AmbulanceScheduleDialog from '@/components/AmbulanceScheduleDialog.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import PersonCell from '@/components/PersonCell.vue'
@@ -1342,80 +1284,9 @@ const submitReschedule = async () => {
   }
 }
 
-const todayLocalDate = () => {
-  const d = new Date()
-  const pad = (n) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
-
-const dayView = ref({ open: false, date: todayLocalDate(), loading: false, units: [] })
-
-const fetchDayView = async () => {
-  dayView.value.loading = true
-  try {
-    const res = await fetch(`${API_BASE}/ambulance-availability?date=${dayView.value.date}`, { headers: getHeaders() })
-    dayView.value.units = res.ok ? await res.json() : []
-  } catch {
-    dayView.value.units = []
-  } finally {
-    dayView.value.loading = false
-  }
-}
-
-const openDayView = () => {
-  dayView.value.open = true
-  fetchDayView()
-}
-
-const shiftDayViewDate = (deltaDays) => {
-  const [y, m, d] = dayView.value.date.split('-').map(Number)
-  const next = new Date(y, m - 1, d + deltaDays)
-  const pad = (n) => String(n).padStart(2, '0')
-  dayView.value.date = `${next.getFullYear()}-${pad(next.getMonth() + 1)}-${pad(next.getDate())}`
-}
-
-watch(() => dayView.value.date, () => { if (dayView.value.open) fetchDayView() })
-
-const dayViewDateLabel = computed(() => {
-  const [y, m, d] = dayView.value.date.split('-').map(Number)
-  return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
-})
-
-const dayViewHourMarks = [0, 6, 12, 18, 24].map((hour) => ({
-  hour,
-  left: `${(hour / 24) * 100}%`,
-  label: hour === 0 || hour === 24 ? '12 AM' : hour === 12 ? '12 PM' : hour < 12 ? `${hour} AM` : `${hour - 12} PM`,
-}))
-
-const dayViewSegmentStyle = (window) => {
-  const [y, m, d] = dayView.value.date.split('-').map(Number)
-  const dayStart = new Date(y, m - 1, d)
-  const minutesInDay = 24 * 60
-
-  const startMin = Math.min(minutesInDay, Math.max(0, (new Date(window.scheduled_at) - dayStart) / 60_000))
-  const endMin = Math.min(minutesInDay, Math.max(0, (new Date(window.scheduled_end) - dayStart) / 60_000))
-
-  return {
-    left: `${(startMin / minutesInDay) * 100}%`,
-    width: `${Math.max(0.75, ((endMin - startMin) / minutesInDay) * 100)}%`,
-  }
-}
-
-const dayViewSegmentLabel = (window) => {
-  const start = new Date(window.scheduled_at)
-  const end = new Date(window.scheduled_end)
-
-  const hourLabel = (d) => {
-    const h12 = d.getHours() % 12 === 0 ? 12 : d.getHours() % 12
-    const mins = d.getMinutes()
-    return mins === 0 ? `${h12}` : `${h12}:${String(mins).padStart(2, '0')}`
-  }
-  const period = (d) => (d.getHours() < 12 ? 'AM' : 'PM')
-
-  return period(start) === period(end)
-    ? `${hourLabel(start)}–${hourLabel(end)} ${period(end)}`
-    : `${hourLabel(start)} ${period(start)}–${hourLabel(end)} ${period(end)}`
-}
+// The Ambulance schedule popup (Day view button) loads its own data.
+const scheduleOpen = ref(false)
+const openDayView = () => { scheduleOpen.value = true }
 
 const submitWalkIn = async () => {
   const form = createDialog.value.form
@@ -1663,79 +1534,6 @@ defineExpose({ selectRequestById, rows: filteredAndSortedRequests, selectedIds, 
   flex: 0 0 auto;
   font-variant-numeric: tabular-nums;
   opacity: 0.85;
-}
-
-.day-view-scale {
-  position: relative;
-  height: 20px;
-  margin-left: 152px;
-}
-.day-view-scale-label {
-  position: absolute;
-  transform: translateX(-50%);
-  font-size: 0.6875rem;
-  font-weight: 700;
-  color: rgba(var(--v-theme-on-surface), 0.5);
-}
-.day-view-row {
-  display: flex;
-  align-items: stretch;
-  gap: 16px;
-  padding: 10px 0;
-  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.06);
-}
-.day-view-row:last-child {
-  border-bottom: none;
-}
-.day-view-unit {
-  flex: 0 0 136px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-.day-view-track {
-  position: relative;
-  flex: 1 1 auto;
-  min-height: 40px;
-  border-radius: 8px;
-  background: rgba(var(--v-theme-on-surface), 0.04);
-}
-.day-view-track--maintenance {
-  background: repeating-linear-gradient(
-    135deg,
-    rgba(var(--v-theme-on-surface), 0.04),
-    rgba(var(--v-theme-on-surface), 0.04) 8px,
-    rgba(var(--v-theme-on-surface), 0.07) 8px,
-    rgba(var(--v-theme-on-surface), 0.07) 16px
-  );
-}
-.day-view-hourline {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: rgba(var(--v-theme-on-surface), 0.08);
-}
-.day-view-segment {
-  position: absolute;
-  top: 4px;
-  bottom: 4px;
-  border-radius: 6px;
-  background: rgba(109, 40, 217, 0.14);
-  color: #5B21B6;
-  font-size: 0.6875rem;
-  font-weight: 700;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  padding: 0 4px;
-}
-.v-theme--dark .day-view-segment {
-  background: rgba(167, 139, 250, 0.18);
-  color: #A78BFA;
 }
 
 /* Board type: dates in tabular figures. */

@@ -3,6 +3,7 @@
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AmbulanceAvailabilityController;
 use App\Http\Controllers\AmbulanceDestinationController;
+use App\Http\Controllers\AmbulanceScheduleController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BarangayController;
@@ -359,5 +360,7 @@ Route::middleware(['auth:sanctum', 'is.admin', 'throttle:admin-api'])->group(fun
         Route::patch('conduction-requests/{id}/trip-log', [ConductionRequestController::class, 'tripLog']);
         Route::get('conduction-requests/{id}/print', [ConductionRequestController::class, 'print']);
         Route::get('responder-names', [ResponderController::class, 'names']);
+        // The schedule popup: patients and requesters by name, so not the resident-safe ambulance-availability.
+        Route::get('ambulance-schedule', [AmbulanceScheduleController::class, 'index']);
     });
 });
