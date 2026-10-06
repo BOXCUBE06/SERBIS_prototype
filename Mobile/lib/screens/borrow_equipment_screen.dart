@@ -597,6 +597,7 @@ class _BorrowRequestCard extends StatelessWidget {
             _HandoverPhotos(
               filipino: f,
               hasRelease: r.hasReleasePhoto,
+              releaseLabel: tr(f, r.fulfillmentMethod == 'Delivery' ? 'status.delivered' : 'status.picked_up'),
               hasReturn: r.hasReturnPhoto,
               loadPhoto: loadPhoto,
             ),
@@ -667,6 +668,7 @@ class _PastLoanRow extends StatelessWidget {
                     _HandoverPhotos(
                       filipino: f,
                       hasRelease: r.hasReleasePhoto,
+                      releaseLabel: tr(f, r.fulfillmentMethod == 'Delivery' ? 'status.delivered' : 'status.picked_up'),
                       hasReturn: r.hasReturnPhoto,
                       loadPhoto: loadPhoto,
                     ),
@@ -719,6 +721,9 @@ class _Purpose extends StatelessWidget {
 /// to add or replace one.
 class _HandoverPhotos extends StatelessWidget {
   final bool hasRelease;
+
+  /// The loan's own word for the release step: "Picked up" or "Delivered".
+  final String releaseLabel;
   final bool hasReturn;
   final Future<List<int>?> Function(String stage) loadPhoto;
   final bool filipino;
@@ -726,6 +731,7 @@ class _HandoverPhotos extends StatelessWidget {
   const _HandoverPhotos({
     required this.filipino,
     required this.hasRelease,
+    required this.releaseLabel,
     required this.hasReturn,
     required this.loadPhoto,
   });
@@ -744,14 +750,14 @@ class _HandoverPhotos extends StatelessWidget {
           children: [
             if (hasRelease)
               _HandoverThumbnail(
-                label: trEn(filipino, 'Released'),
+                label: releaseLabel,
                 stage: 'release',
                 loadPhoto: loadPhoto,
               ),
             if (hasRelease && hasReturn) const SizedBox(width: 10),
             if (hasReturn)
               _HandoverThumbnail(
-                label: trEn(filipino, 'Returned'),
+                label: tr(filipino, 'status.returned'),
                 stage: 'return',
                 loadPhoto: loadPhoto,
               ),
@@ -860,11 +866,7 @@ class _HandoverThumbnailState extends State<_HandoverThumbnail> {
   Widget _tile() {
     if (_loading) {
       return const Center(
-        child: SizedBox(
-          width: 18,
-          height: 18,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
+        child: AppSpinner(color: AppColors.green700, size: 18),
       );
     }
 

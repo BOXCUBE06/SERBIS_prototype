@@ -103,7 +103,6 @@ class _AmbulanceScreenState extends State<AmbulanceScreen> {
         if (ambulance == null) {
           final loadFailed = widget.appState.services.isEmpty;
           return UnavailableTabScreen(
-            icon: Icons.medical_services_outlined,
             title: tr(f, 'nav.ambulance'),
             message: tr(f, loadFailed ? 'tab.load_failed' : 'tab.ambulance_unavailable'),
             filipino: f,

@@ -4,6 +4,7 @@ import '../state/account_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
 import 'form_inputs.dart';
+import 'loading.dart' show AppSpinner;
 
 /// Barangay picker, styled to match the app's fields. Used by sign-up, where
 /// it is required, and by Edit my details. A failed fetch gets its own retry
@@ -46,11 +47,7 @@ class BarangayField extends StatelessWidget {
             _shell(
               child: Row(
                 children: [
-                  const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  ),
+                  const AppSpinner(color: AppColors.green700, size: 18),
                   const SizedBox(width: 10),
                   Flexible(
                     child: Text(tr(f, 'barangay.loading'),

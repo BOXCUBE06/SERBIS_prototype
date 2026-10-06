@@ -8,6 +8,7 @@ import '../widgets/hotline_list.dart';
 import '../widgets/request_summary.dart' show SummaryCard;
 import '../widgets/shared_widgets.dart';
 import 'library/article_reader_screen.dart';
+import '../widgets/loading.dart' show AppSpinner;
 
 class LibraryScreen extends StatelessWidget {
   final AppState appState;
@@ -188,11 +189,7 @@ class _PublishedMaterials extends StatelessWidget {
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 18),
             child: Center(
-              child: SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
+              child: AppSpinner(color: AppColors.green700, size: 24),
             ),
           )
         else if (materials.isEmpty)

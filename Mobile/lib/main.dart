@@ -35,6 +35,7 @@ import 'widgets/hotline_list.dart';
 import 'widgets/motion.dart';
 import 'widgets/offline_banner.dart';
 import 'widgets/shared_widgets.dart';
+import 'widgets/loading.dart' show AppSpinner;
 
 void main() {
   // A build with no `--dart-define=API_BASE_URL` has nowhere to send its calls.
@@ -290,7 +291,7 @@ class _AuthGateState extends State<AuthGate> {
       return const Scaffold(
         backgroundColor: AppColors.paper,
         body: Center(
-          child: CircularProgressIndicator(color: AppColors.green700),
+          child: AppSpinner(color: AppColors.green700, size: 32),
         ),
       );
     }
@@ -793,7 +794,6 @@ class _RootShellState extends State<RootShell> with WidgetsBindingObserver {
         if (widget.user.isAwaitingApproval) return awaitingApproval();
         if (!_appState.borrowingAllowed) {
           return UnavailableTabScreen(
-            icon: Icons.inventory_2_outlined,
             title: tr(f, 'nav.borrow'),
             message: tr(f, 'tab.borrow_unavailable'),
             filipino: f,

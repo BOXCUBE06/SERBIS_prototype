@@ -2,10 +2,8 @@
 // every other request says "Responding". Display only:
 // the status the server sent and the app's ReqStatus are untouched.
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:serbis/models/request_models.dart';
-import 'package:serbis/widgets/shared_widgets.dart';
 
 ServiceRequest _request(String status, {String? category = 'programs'}) =>
     ServiceRequest.fromJson({
@@ -95,18 +93,5 @@ void main() {
 
       expect(resolved.statusLabelFor(false), 'Approved');
     });
-  });
-
-  testWidgets('the badge shows the wording it is given', (tester) async {
-    final request = _request('Responding');
-
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: StatusBadge(request.status, label: request.statusLabelFor(false)),
-      ),
-    ));
-
-    expect(find.text('APPROVED'), findsOneWidget);
-    expect(find.text('SCHEDULED'), findsNothing);
   });
 }

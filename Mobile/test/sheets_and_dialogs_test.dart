@@ -9,7 +9,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:serbis/models/advisory.dart';
 import 'package:serbis/models/request_models.dart';
 import 'package:serbis/theme/app_theme.dart';
-import 'package:serbis/widgets/borrow_request_widgets.dart' show StatusBox;
 import 'package:serbis/widgets/request_summary.dart' show SummaryCard;
 import 'package:serbis/widgets/service_widgets.dart' show ConfirmationSheet;
 import 'package:serbis/widgets/shared_widgets.dart';
@@ -54,8 +53,6 @@ void main() {
       await _pumpSheet(tester, requests: [_request('Pending', id: 1), _request('Resolved', id: 2)]);
 
       // Compact rows: no full status boxes, and no "no advisories" box either.
-      expect(find.byType(StatusBox), findsNothing);
-      expect(find.byType(StatusBadge), findsNothing);
       expect(find.text('Under review'), findsOneWidget);
       expect(find.text('Completed'), findsOneWidget);
       expect(find.text('Road clearing'), findsNWidgets(2));

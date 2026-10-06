@@ -585,33 +585,6 @@ class IconBadge extends StatelessWidget {
   }
 }
 
-class StatusBadge extends StatelessWidget {
-  final ReqStatus status;
-  final bool filipino;
-
-  /// Overrides the wording, not the colours: a request that words its own
-  /// status (an approved program says "Approved") passes it in.
-  final String? label;
-
-  /// Colour overrides for a request whose status reads differently from its
-  /// enum (a trip that never arrived is amber, not Completed green).
-  final Color? bg;
-  final Color? fg;
-  const StatusBadge(this.status, {super.key, this.filipino = false, this.label, this.bg, this.fg});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(color: bg ?? status.bg, borderRadius: BorderRadius.circular(AppRadius.pill)),
-      child: Text(
-        (label ?? status.labelFor(filipino)).toUpperCase(),
-        style: AppText.display(size: AppTextSize.caption, weight: FontWeight.w600, color: fg ?? status.fg, letterSpacing: .5),
-      ),
-    );
-  }
-}
-
 /// Shows whether a material is available offline, and offers to download it
 /// when it is not.
 ///
@@ -653,11 +626,7 @@ class OfflinePill extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           loading
-              ? const SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 1.5, color: AppColors.green700),
-                )
+              ? const AppSpinner(color: AppColors.green700, size: 14)
               : Icon(saved ? Icons.check_circle_rounded : Icons.download_rounded, size: 14, color: AppColors.green700),
           const SizedBox(width: 4),
           Flexible(

@@ -13,7 +13,7 @@ import 'package:serbis/state/account_store.dart';
 import 'package:serbis/state/api_service.dart';
 import 'package:serbis/theme/app_theme.dart';
 import 'package:serbis/widgets/auth_layout.dart';
-import 'package:serbis/widgets/borrow_request_widgets.dart' show StatusBox;
+import 'package:serbis/widgets/status_line.dart' show StatusLine;
 import 'package:serbis/widgets/status_line.dart';
 import 'package:serbis/widgets/shared_widgets.dart';
 
@@ -78,7 +78,6 @@ Future<void> _pumpUnavailable(WidgetTester tester, {bool filipino = false, Size 
     theme: buildAppTheme(),
     home: Scaffold(
       body: UnavailableTabScreen(
-        icon: Icons.medical_services_outlined,
         title: filipino ? 'Ambulansya' : 'Ambulance',
         message: filipino ? 'Hindi maikarga ang listahan ng serbisyo.' : 'The service list could not be loaded.',
         filipino: filipino,
@@ -157,12 +156,12 @@ void main() {
   });
 
   group('the unavailable tab', () {
-    testWidgets('says Not available in a status box with the reason, and a 48dp retry', (tester) async {
+    testWidgets('says Not available in a status line with the reason, and a 48dp retry', (tester) async {
       await _pumpUnavailable(tester);
 
       expect(find.byType(TabHeaderBar), findsOneWidget);
       expect(find.text('Ambulance'), findsOneWidget);
-      expect(find.byType(StatusBox), findsOneWidget);
+      expect(find.byType(StatusLine), findsOneWidget);
       expect(find.text('Not available'), findsOneWidget);
       expect(find.text('The service list could not be loaded.'), findsOneWidget);
       expect(tester.getSize(find.widgetWithText(AppButton, 'Try again')).height, greaterThanOrEqualTo(48));

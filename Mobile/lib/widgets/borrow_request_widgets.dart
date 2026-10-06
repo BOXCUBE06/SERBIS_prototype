@@ -126,51 +126,6 @@ StatusInfo serviceStatus(ServiceRequest r, bool f) {
   };
 }
 
-/// Tinted box: icon, title, one line under it. The confirmation sheet and the
-/// full-page notices use it; request statuses use [StatusLine].
-class StatusBox extends StatelessWidget {
-  final IconData icon;
-  final Color bg;
-  final Color fg;
-  final String title;
-  final String next;
-
-  const StatusBox({
-    super.key,
-    required this.icon,
-    required this.bg,
-    required this.fg,
-    required this.title,
-    required this.next,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(AppRadius.md)),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 24, color: fg),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: AppText.display(size: 16, weight: FontWeight.w600, color: fg)),
-                const SizedBox(height: 2),
-                Text(next, style: AppText.body(size: _bodySize, color: AppColors.ink, height: 1.4)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 /// Sent, Under review, Ready to pick up/Out for delivery, Returned — for an
 /// open request. Done = filled check, current = amber ring, future = grey ring.
 class BorrowProgressSteps extends StatelessWidget {

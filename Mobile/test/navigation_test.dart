@@ -297,7 +297,6 @@ void main() {
           theme: buildAppTheme(),
           home: Scaffold(
             body: UnavailableTabScreen(
-              icon: Icons.inventory_2_outlined,
               title: tr(filipino, 'nav.borrow'),
               message: tr(filipino, 'tab.borrow_unavailable'),
               filipino: filipino,

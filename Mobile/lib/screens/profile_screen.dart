@@ -20,6 +20,7 @@ import '../widgets/request_summary.dart' show SummaryCard;
 import '../widgets/shared_widgets.dart';
 import 'change_phone_sheet.dart';
 import 'library/article_reader_screen.dart';
+import '../widgets/loading.dart' show AppSpinner;
 
 class ProfileScreen extends StatefulWidget {
   final AppState appState;
@@ -328,11 +329,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             // surface for everything else in this list.
                             onTap: _smsBusy ? null : () => _setSmsOptIn(!widget.user.smsOptIn),
                             trailing: _smsBusy
-                                ? const SizedBox(
-                                    width: 24,
-                                    height: 24,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
-                                  )
+                                ? const AppSpinner(color: AppColors.green700, size: 24)
                                 : _AlertsSwitch(value: widget.user.smsOptIn, onChanged: _setSmsOptIn),
                           ),
                           if (!widget.user.smsOptIn)
@@ -789,14 +786,7 @@ class _Avatar extends StatelessWidget {
                   ),
                   alignment: Alignment.center,
                   child: busy
-                      ? const SizedBox(
-                          width: 13,
-                          height: 13,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: AppColors.surface,
-                          ),
-                        )
+                      ? const AppSpinner(color: AppColors.surface, size: 13)
                       : const Icon(Icons.edit_rounded,
                           size: 14, color: AppColors.surface),
                 ),

@@ -507,7 +507,9 @@ void main() {
       await openMine(tester, api);
 
       expect(find.text('Handover photos'), findsOneWidget);
-      expect(find.text('Released'), findsOneWidget);
+      // Captioned with the loan's own words, never the server's "Released".
+      expect(find.text('Released'), findsNothing);
+      expect(find.text('Picked up'), findsWidgets);
       expect(find.text('Returned'), findsWidgets);
       expect(api.photoStagesFetched, <String>['release', 'return']);
       expect(find.byType(Image), findsNWidgets(2));
@@ -520,8 +522,22 @@ void main() {
       )..photos = <String, List<int>>{'release': _onePixelPng};
       await openMine(tester, api);
 
-      expect(find.text('Released'), findsOneWidget);
+      expect(find.text('Released'), findsNothing);
       expect(api.photoStagesFetched, <String>['release']);
+    });
+
+    testWidgets('a delivered loan captions its release photo "Delivered"', (tester) async {
+      final api = _FakeApi(
+        equipmentRows: [_equipmentRow(1, 'Megaphone', 2)],
+        borrowRows: [
+          borrowRow(hasRelease: true)..['fulfillment_method'] = 'Delivery',
+        ],
+      )..photos = <String, List<int>>{'release': _onePixelPng};
+      await openMine(tester, api);
+
+      expect(find.text('Delivered'), findsOneWidget);
+      expect(find.text('Picked up'), findsNothing);
+      expect(find.text('Released'), findsNothing);
     });
 
     testWidgets('a photo the server will not serve leaves a placeholder, not a crash',

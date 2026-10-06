@@ -2,15 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
-import '../widgets/borrow_request_widgets.dart' show StatusBox;
 import '../widgets/shared_widgets.dart';
+import '../widgets/status_line.dart';
 
 /// What a dedicated tab shows when the account's audience does not include the
 /// service behind it (an organization has no ambulance booking, say) or the
 /// catalogue could not be loaded to find out. The tab stays where it is so the
 /// bar is the same on every account; the page says why it is empty.
 class UnavailableTabScreen extends StatelessWidget {
-  final IconData icon;
   final String title;
   final String message;
   final bool filipino;
@@ -23,7 +22,6 @@ class UnavailableTabScreen extends StatelessWidget {
 
   const UnavailableTabScreen({
     super.key,
-    required this.icon,
     required this.title,
     required this.message,
     required this.filipino,
@@ -53,12 +51,21 @@ class UnavailableTabScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  StatusBox(
-                    icon: icon,
-                    bg: AppColors.grey50,
-                    fg: AppColors.inkMuted,
-                    title: tr(filipino, 'tab.unavailable_title'),
-                    next: message,
+                  Container(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
+                      border: Border.all(color: AppColors.line),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        StatusLine(label: tr(filipino, 'tab.unavailable_title'), tone: StatusTone.grey, large: true),
+                        const SizedBox(height: AppSpacing.sm),
+                        Text(message, style: AppText.body(color: AppColors.inkMuted, height: 1.5)),
+                      ],
+                    ),
                   ),
                   if (onRetry != null && retryLabel != null) ...[
                     const SizedBox(height: AppSpacing.lg),
