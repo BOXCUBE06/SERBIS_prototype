@@ -80,7 +80,7 @@ class _MisconfiguredApp extends StatelessWidget {
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 20,
-                    fontWeight: FontWeight.w700,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
                 SizedBox(height: 12),

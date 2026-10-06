@@ -104,7 +104,7 @@ void main() {
     expect(find.textContaining('Household'), findsNothing);
 
     await tester.enterText(find.byType(TextField).first, 'Two tarpaulins for a roof leak, Purok 2');
-    await tester.tap(find.text('Submit request'));
+    await tester.tap(find.text('Send request'));
     await tester.pumpAndSettle();
 
     expect(api.sentServiceId, 42);
@@ -112,6 +112,6 @@ void main() {
     expect(api.sentDescription, contains('Two tarpaulins for a roof leak, Purok 2'));
     expect(api.sentId, [1, 2, 3]);
     expect(state.requests, hasLength(1));
-    expect(find.text('Request submitted'), findsOneWidget, reason: 'the confirmation sheet');
+    expect(find.text('Request sent'), findsOneWidget, reason: 'the confirmation sheet');
   });
 }

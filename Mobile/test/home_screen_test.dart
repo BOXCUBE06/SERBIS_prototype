@@ -1,5 +1,5 @@
-// Home (redesigned): "Your requests" shows at most two open requests and
-// counts the rest, all of them listed on Track; Announcements shows the newest two.
+// Home (calm redesign): the header shows the newest open request and counts
+// the rest, all of them listed on Track; Announcements shows the newest two.
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -58,6 +58,7 @@ Future<AppState> _pump(
   List<InfoMaterial> materials = const [],
   VoidCallback? onOpenTrack,
   VoidCallback? onOpenLibrary,
+  VoidCallback? onOpenBorrow,
 }) async {
   tester.view.physicalSize = const Size(1080, 3600);
   tester.view.devicePixelRatio = 3;
@@ -82,7 +83,7 @@ Future<AppState> _pump(
           onOpenNotifications: () {},
           onOpenServices: () {},
           onOpenService: (_) {},
-          onOpenBorrow: () {},
+          onOpenBorrow: onOpenBorrow ?? () {},
         ),
       ),
     ),
@@ -91,59 +92,58 @@ Future<AppState> _pump(
 }
 
 void main() {
-  group('Your requests', () {
-    testWidgets('0 active: the section is hidden', (tester) async {
+  group('Your latest request', () {
+    testWidgets('0 active: the panel is hidden', (tester) async {
       await _pump(tester, requests: [_request(1, 'Resolved')], loans: [_loan('Wheelchair', BorrowStatus.returned)]);
 
-      expect(find.text('Your requests'), findsNothing);
-      expect(find.textContaining('See all ('), findsNothing);
+      expect(find.text('Your latest request'), findsNothing);
     });
 
-    testWidgets('1 active: titled by destination, green status, no more row', (tester) async {
-      await _pump(tester, requests: [_request(1, 'Responding', destination: 'Echague District Hospital')]);
-
-      expect(find.text('Your requests'), findsOneWidget);
-      expect(find.text('Ambulance to Echague District Hospital'), findsOneWidget);
-      expect(find.text('MDRRMO is responding'), findsOneWidget);
-      expect(find.text('See all (1)'), findsOneWidget);
-      expect(find.textContaining('more request'), findsNothing);
-    });
-
-    testWidgets('2 active: a request and a loan, newest first', (tester) async {
+    testWidgets('1 active: titled by destination, its status, nothing more in progress', (tester) async {
+      var tracked = 0;
       await _pump(
         tester,
+        onOpenTrack: () => tracked++,
+        requests: [_request(1, 'Responding', destination: 'Echague District Hospital')],
+      );
+
+      expect(find.text('Your latest request'), findsOneWidget);
+      expect(find.text('Ambulance to Echague District Hospital'), findsOneWidget);
+      expect(find.text('Responding'), findsOneWidget);
+      expect(find.text('Open in Track'), findsOneWidget);
+      expect(find.textContaining('more in progress'), findsNothing);
+
+      await tester.tap(find.text('Ambulance to Echague District Hospital'));
+      expect(tracked, 1);
+    });
+
+    testWidgets('2 active: the newest one, a loan, opens Borrow and counts the other', (tester) async {
+      var borrowed = 0;
+      await _pump(
+        tester,
+        onOpenBorrow: () => borrowed++,
         requests: [_request(1, 'Pending', daysAgo: 2)],
         loans: [_loan('Wheelchair', BorrowStatus.pending)],
       );
 
       expect(find.text('Wheelchair × 1'), findsOneWidget);
-      expect(find.text('Road Clearing 1'), findsOneWidget);
-      expect(find.text('Waiting for review'), findsNWidgets(2));
-      expect(find.text('See all (2)'), findsOneWidget);
-      expect(find.textContaining('more request'), findsNothing);
-      expect(
-        tester.getTopLeft(find.text('Wheelchair × 1')).dy,
-        lessThan(tester.getTopLeft(find.text('Road Clearing 1')).dy),
-      );
+      expect(find.text('Road Clearing 1'), findsNothing);
+      expect(find.text('Under review'), findsOneWidget);
+      expect(find.text('Open in Borrow'), findsOneWidget);
+      expect(find.textContaining('1 more in progress'), findsOneWidget);
+
+      await tester.tap(find.text('Wheelchair × 1'));
+      expect(borrowed, 1);
     });
 
-    testWidgets('5 active: capped at 2 with "+3 more requests" opening Track', (tester) async {
-      var tracked = 0;
-      await _pump(
-        tester,
-        onOpenTrack: () => tracked++,
-        requests: [for (var i = 1; i <= 5; i++) _request(i, 'Pending', daysAgo: i)],
-      );
+    testWidgets('5 active: the newest, with the other 4 counted', (tester) async {
+      await _pump(tester, requests: [for (var i = 1; i <= 5; i++) _request(i, 'Pending', daysAgo: i)]);
 
       expect(find.text('Road Clearing 1'), findsOneWidget);
-      expect(find.text('Road Clearing 2'), findsOneWidget);
-      for (final hidden in ['Road Clearing 3', 'Road Clearing 4', 'Road Clearing 5']) {
+      for (final hidden in ['Road Clearing 2', 'Road Clearing 3', 'Road Clearing 4', 'Road Clearing 5']) {
         expect(find.text(hidden), findsNothing);
       }
-      expect(find.text('See all (5)'), findsOneWidget);
-
-      await tester.tap(find.text('+3 more requests'));
-      expect(tracked, 1);
+      expect(find.textContaining('4 more in progress'), findsOneWidget);
     });
   });
 
@@ -177,13 +177,14 @@ void main() {
           _loan('Stretcher', BorrowStatus.returned),
         ],
       );
-      final homeCount = int.parse(
-        RegExp(r'See all \((\d+)\)').firstMatch(tester.widget<Text>(find.textContaining('See all (')).data!)!.group(1)!,
+      final homeMore = int.parse(
+        RegExp(r'(\d+) more in progress').firstMatch(tester.widget<Text>(find.textContaining('more in progress')).data!)!.group(1)!,
       );
+      final homeCount = homeMore + 1;
 
       await pumpTrack(tester, state, onOpenMyLoans: () => openedLoans++);
 
-      expect(find.text('Borrowed items'), findsOneWidget);
+      expect(find.text('Borrowed items  2'), findsOneWidget);
       expect(find.text('Stretcher × 1'), findsNothing);
       expect(
         tester.getTopLeft(find.text('Crutches × 1')).dy,
@@ -207,7 +208,7 @@ void main() {
       final state = await _pump(tester, requests: [_request(1, 'Pending')], loans: [_loan('Wheelchair', BorrowStatus.returned)]);
       await pumpTrack(tester, state);
 
-      expect(find.text('Borrowed items'), findsNothing);
+      expect(find.textContaining('Borrowed items'), findsNothing);
     });
   });
 
@@ -249,7 +250,7 @@ void main() {
     await tester.pump();
 
     expect(tester.takeException(), isNull);
-    expect(find.text('Iyong mga kahilingan'), findsOneWidget);
+    expect(find.text('Ang iyong pinakabagong kahilingan'), findsOneWidget);
   });
 
   testWidgets('first launch stores now and shows no dot for existing history', (tester) async {

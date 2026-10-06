@@ -254,13 +254,14 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(20),
+                      padding: const EdgeInsets.all(AppSpacing.lg),
                       decoration: BoxDecoration(
                         color: AppColors.surface,
                         border: Border.all(color: AppColors.cardBorder),
-                        borderRadius: BorderRadius.circular(18),
+                        borderRadius: BorderRadius.circular(AppRadius.lg),
                       ),
-                      child: Column(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _Avatar(
                             photo: _photo,
@@ -269,26 +270,33 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             filipino: filipino,
                             onTap: () => _showPhotoActions(context, filipino),
                           ),
-                          const SizedBox(height: AppSpacing.md),
-                          Text(
-                            _name.isEmpty ? tr(filipino, 'profile.value_missing') : _name,
-                            textAlign: TextAlign.center,
-                            style: AppText.display(
-                              size: AppTextSize.cardName,
-                              color: _name.isEmpty ? AppColors.inkMuted : AppColors.ink,
+                          const SizedBox(width: AppSpacing.md),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _name.isEmpty ? tr(filipino, 'profile.value_missing') : _name,
+                                  style: AppText.display(
+                                    size: AppTextSize.cardTitle,
+                                    color: _name.isEmpty ? AppColors.inkMuted : AppColors.ink,
+                                    height: 1.3,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(_contactLine(filipino), style: AppText.detail()),
+                                TextButton(
+                                  onPressed: () => _showAccountDetails(context, filipino),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: AppColors.green700,
+                                    minimumSize: const Size(44, 44),
+                                    padding: EdgeInsets.zero,
+                                    textStyle: AppText.display(size: AppTextSize.body, weight: FontWeight.w600),
+                                  ),
+                                  child: Text(tr(filipino, 'profile.edit_details')),
+                                ),
+                              ],
                             ),
-                          ),
-                          const SizedBox(height: AppSpacing.xs),
-                          Text(
-                            _contactLine(filipino),
-                            textAlign: TextAlign.center,
-                            style: AppText.body(size: AppTextSize.body, color: AppColors.inkMuted),
-                          ),
-                          const SizedBox(height: AppSpacing.lg),
-                          AppButton(
-                            label: tr(filipino, 'profile.edit_details'),
-                            style: AppButtonStyle.outline,
-                            onPressed: () => _showAccountDetails(context, filipino),
                           ),
                         ],
                       ),
@@ -367,20 +375,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     ]),
                     const SizedBox(height: AppSpacing.xl),
                     // Out of the list so it is never tapped on the way to a setting.
-                    SizedBox(
-                      height: 52,
-                      child: OutlinedButton.icon(
-                        onPressed: () => _confirmLogout(context),
-                        icon: const Icon(Icons.logout_rounded, size: 20),
-                        label: Text(
-                          tr(filipino, 'profile.logout'),
-                          style: AppText.display(size: AppTextSize.bodyLg, weight: FontWeight.w600, color: AppColors.red600),
-                        ),
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: AppColors.red600,
-                          backgroundColor: AppColors.surface,
-                          side: const BorderSide(color: AppColors.redBorder, width: 1.5),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.lg)),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: SizedBox(
+                        height: 48,
+                        child: OutlinedButton.icon(
+                          onPressed: () => _confirmLogout(context),
+                          icon: const Icon(Icons.logout_rounded, size: 20),
+                          label: Text(
+                            tr(filipino, 'profile.logout'),
+                            style: AppText.display(size: AppTextSize.body, weight: FontWeight.w600, color: AppColors.red600),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.red600,
+                            backgroundColor: AppColors.surface,
+                            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                            side: const BorderSide(color: AppColors.redBorder),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+                          ),
                         ),
                       ),
                     ),
@@ -412,9 +424,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   /// never saw them. The fake control was deleted rather than left in place,
   /// and the backend work filed; this is that work landing.
   ///
-  /// The barangay stays read-only, and that is not an oversight: it is the
-  /// field every service request is dispatched on, so a resident who could move
-  /// themselves could redirect their own dispatch. The endpoint refuses it too.
+  /// A Head of the Family can change their barangay here (a household that
+  /// moved); each request keeps the barangay it was filed under, so history
+  /// and analytics are unaffected. Organization and barangay-hall accounts are
+  /// tied to their barangay and get a locked row instead; `PATCH /me` refuses
+  /// the change for them too.
   Future<void> _showAccountDetails(BuildContext context, bool filipino) {
     return showModalBottomSheet<void>(
       context: context,
@@ -739,13 +753,13 @@ class _Avatar extends StatelessWidget {
         onTap: busy ? null : onTap,
         customBorder: const CircleBorder(),
         child: SizedBox(
-          width: 92,
-          height: 92,
+          width: 64,
+          height: 64,
           child: Stack(
             children: [
               Container(
-                width: 84,
-                height: 84,
+                width: 58,
+                height: 58,
                 decoration: BoxDecoration(
                   color: AppColors.green50,
                   shape: BoxShape.circle,
@@ -766,8 +780,8 @@ class _Avatar extends StatelessWidget {
                 right: 0,
                 bottom: 0,
                 child: Container(
-                  width: 28,
-                  height: 28,
+                  width: 24,
+                  height: 24,
                   decoration: BoxDecoration(
                     color: AppColors.green700,
                     shape: BoxShape.circle,
@@ -815,12 +829,12 @@ class _Avatar extends StatelessWidget {
     // failed to load shows the neutral icon rather than an invented monogram.
     if (initials.isEmpty) {
       return const Icon(Icons.person_outline_rounded,
-          size: 36, color: AppColors.green700);
+          size: 28, color: AppColors.green700);
     }
 
     return Text(
       initials,
-      style: AppText.display(size: AppTextSize.display, color: AppColors.green700),
+      style: AppText.display(size: AppTextSize.headline, color: AppColors.green700),
     );
   }
 }
@@ -1266,6 +1280,7 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
                 label: _tr('profile.save'),
                 loading: _saving,
                 onPressed: _saving || !dirty ? null : _save,
+                disabledHint: _saving ? null : _tr('profile.save_hint'),
               )),
             ),
           ],

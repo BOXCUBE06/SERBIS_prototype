@@ -4,8 +4,10 @@ import '../models/advisory.dart';
 import '../models/request_models.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
-import 'borrow_request_widgets.dart' show StatusBox, serviceStatusBox;
+import 'borrow_request_widgets.dart' show serviceStatus;
 import 'request_summary.dart' show SummaryCard;
+import 'loading.dart' show AppSpinner;
+import 'status_line.dart';
 
 class AppHeader extends StatelessWidget {
   final VoidCallback? onNotificationsTap;
@@ -35,34 +37,10 @@ class AppHeader extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(AppLayout.gutter, AppLayout.headerTop, 14, 20),
       decoration: const BoxDecoration(
-        gradient: AppColors.headerGradient,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(AppRadius.xxl)),
+        color: AppColors.header,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(AppRadius.header)),
       ),
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned(
-            right: -60,
-            top: -90,
-            child: Container(
-              width: 200,
-              height: 200,
-              decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.white.withValues(alpha: .05)),
-            ),
-          ),
-          Positioned(
-            left: -60,
-            bottom: -110,
-            child: Container(
-              width: 160,
-              height: 160,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withValues(alpha: .08)),
-              ),
-            ),
-          ),
-          Row(
+      child: Row(
             children: [
               if (onBack != null) ...[
                 HeaderButton(
@@ -129,8 +107,6 @@ class AppHeader extends StatelessWidget {
                 ),
             ],
           ),
-        ],
-      ),
     );
   }
 }
@@ -186,7 +162,7 @@ class HeaderButton extends StatelessWidget {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: AppColors.amberDot,
-                          border: Border.all(color: AppColors.green700, width: 1.5),
+                          border: Border.all(color: AppColors.header, width: 1.5),
                         ),
                       ),
                     ),
@@ -202,10 +178,14 @@ class HeaderButton extends StatelessWidget {
 
 /// The green header of the tab screens: a title with a one-line subtitle that
 /// folds away as the list scrolls, plus bell and profile. A page opened from a
-/// tab passes [onBack] for a back arrow ahead of the title.
+/// tab passes [onBack] for a back arrow ahead of the title. [bottom] (a search
+/// box, a segmented control) sits under the title and stays pinned with it.
 class TabHeader extends SliverPersistentHeaderDelegate {
   static const maxHeight = 128.0;
   static const minHeight = 96.0;
+
+  /// What a [bottom] adds: 52 for the control, 14 above it.
+  static const bottomHeight = 66.0;
 
   final String title;
   final String subtitle;
@@ -213,6 +193,7 @@ class TabHeader extends SliverPersistentHeaderDelegate {
   final VoidCallback? onNotifications;
   final VoidCallback? onProfile;
   final VoidCallback? onBack;
+  final Widget? bottom;
 
   const TabHeader({
     required this.title,
@@ -221,16 +202,20 @@ class TabHeader extends SliverPersistentHeaderDelegate {
     this.onNotifications,
     this.onProfile,
     this.onBack,
+    this.bottom,
   });
 
-  @override
-  double get maxExtent => maxHeight;
+  double get _extra => bottom == null ? 0 : bottomHeight;
 
   @override
-  double get minExtent => minHeight;
+  double get maxExtent => maxHeight + _extra;
 
   @override
-  bool shouldRebuild(TabHeader old) => old.title != title || old.subtitle != subtitle || old.filipino != filipino;
+  double get minExtent => minHeight + _extra;
+
+  @override
+  bool shouldRebuild(TabHeader old) =>
+      old.title != title || old.subtitle != subtitle || old.filipino != filipino || old.bottom != bottom;
 
   @override
   Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
@@ -241,6 +226,7 @@ class TabHeader extends SliverPersistentHeaderDelegate {
       onNotifications: onNotifications,
       onProfile: onProfile,
       onBack: onBack,
+      bottom: bottom,
       // 0 fully open, 1 fully collapsed.
       collapse: (shrinkOffset / (maxHeight - minHeight)).clamp(0.0, 1.0),
     );
@@ -259,6 +245,9 @@ class TabHeaderBar extends StatelessWidget {
   final VoidCallback? onBack;
   final double collapse;
 
+  /// Only inside a [TabHeader], which gives the bar a fixed height.
+  final Widget? bottom;
+
   const TabHeaderBar({
     super.key,
     required this.title,
@@ -268,6 +257,7 @@ class TabHeaderBar extends StatelessWidget {
     this.onProfile,
     this.onBack,
     this.collapse = 0,
+    this.bottom,
   });
 
   @override
@@ -281,10 +271,10 @@ class TabHeaderBar extends StatelessWidget {
       width: double.infinity,
       padding: EdgeInsets.fromLTRB(inset + (onBack == null ? AppLayout.gutter : 8), AppLayout.headerTop, inset + 14, 20 - 12 * t),
       decoration: const BoxDecoration(
-        gradient: AppColors.headerGradient,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(AppRadius.xxl)),
+        color: AppColors.header,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(AppRadius.header)),
       ),
-      child: Row(
+      child: _withBottom(Row(
         children: [
           if (onBack != null) HeaderButton(icon: Icons.arrow_back_rounded, label: tr(f, 'nav.back'), onTap: onBack!),
           Expanded(
@@ -299,7 +289,7 @@ class TabHeaderBar extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppText.display(
-                      size: AppTextSize.headline - (AppTextSize.headline - AppTextSize.title) * t,
+                      size: AppTextSize.pageTitle - (AppTextSize.pageTitle - AppTextSize.title) * t,
                       color: Colors.white,
                     ),
                   ),
@@ -330,7 +320,20 @@ class TabHeaderBar extends StatelessWidget {
           if (onProfile != null)
             HeaderButton(icon: Icons.person_outline_rounded, label: tr(f, 'nav.profile'), onTap: onProfile!),
         ],
-      ),
+      )),
+    );
+  }
+
+  /// The title row over [bottom]; the bottom lines up with the gutter on the
+  /// right, where the row leaves room for the 48dp header buttons.
+  Widget _withBottom(Widget row) {
+    if (bottom == null) return row;
+    return Column(
+      children: [
+        Expanded(child: row),
+        const SizedBox(height: 14),
+        Padding(padding: const EdgeInsets.only(right: AppLayout.gutter - 14), child: SizedBox(height: 52, child: bottom)),
+      ],
     );
   }
 }
@@ -458,7 +461,10 @@ class SectionHeader extends StatelessWidget {
   /// [actionLabel] is set.
   final Widget? trailing;
 
-  const SectionHeader({super.key, required this.title, this.actionLabel, this.onAction, this.trailing});
+  /// How many rows the section holds, in muted figures after the title.
+  final int? count;
+
+  const SectionHeader({super.key, required this.title, this.actionLabel, this.onAction, this.trailing, this.count});
 
   @override
   Widget build(BuildContext context) {
@@ -474,8 +480,16 @@ class SectionHeader extends StatelessWidget {
           Flexible(
             child: Semantics(
               header: true,
-              child: Text(
-                title,
+              child: Text.rich(
+                TextSpan(children: [
+                  TextSpan(text: title),
+                  if (count != null)
+                    TextSpan(
+                      text: '  $count',
+                      style: AppText.body(size: AppTextSize.body, color: AppColors.inkMuted)
+                          .copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+                    ),
+                ]),
                 style: AppText.display(size: AppTextSize.title, weight: FontWeight.w600, color: AppColors.sectionInk),
               ),
             ),
@@ -592,7 +606,7 @@ class StatusBadge extends StatelessWidget {
       decoration: BoxDecoration(color: bg ?? status.bg, borderRadius: BorderRadius.circular(AppRadius.pill)),
       child: Text(
         (label ?? status.labelFor(filipino)).toUpperCase(),
-        style: AppText.display(size: AppTextSize.caption, weight: FontWeight.w700, color: fg ?? status.fg, letterSpacing: .5),
+        style: AppText.display(size: AppTextSize.caption, weight: FontWeight.w600, color: fg ?? status.fg, letterSpacing: .5),
       ),
     );
   }
@@ -651,7 +665,7 @@ class OfflinePill extends StatelessWidget {
               label,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: AppText.display(size: AppTextSize.caption, weight: FontWeight.w700, color: AppColors.green700),
+              style: AppText.display(size: AppTextSize.caption, weight: FontWeight.w600, color: AppColors.green700),
             ),
           ),
         ],
@@ -671,12 +685,20 @@ class OfflinePill extends StatelessWidget {
   }
 }
 
+/// The app's full-width 52dp button.
+///
+/// While [loading] it keeps its colours and its words ([label], or
+/// [loadingLabel] such as "Sending request…") beside a spinner, and taps are
+/// blocked. A button disabled for any other reason says why in [disabledHint],
+/// printed above it: a grey button with no reason reads as broken.
 class AppButton extends StatelessWidget {
   final String label;
   final VoidCallback? onPressed;
   final AppButtonStyle style;
   final IconData? icon;
   final bool loading;
+  final String? loadingLabel;
+  final String? disabledHint;
 
   const AppButton({
     super.key,
@@ -685,95 +707,104 @@ class AppButton extends StatelessWidget {
     this.style = AppButtonStyle.primary,
     this.icon,
     this.loading = false,
+    this.loadingLabel,
+    this.disabledHint,
   });
 
   @override
   Widget build(BuildContext context) {
-    final Color fg = switch (style) {
-      AppButtonStyle.primary => Colors.white,
-      AppButtonStyle.outline => AppColors.ink,
-      AppButtonStyle.ghostRed => AppColors.red600,
+    final (Color bg, Color fg, BorderSide? side) = switch (style) {
+      AppButtonStyle.primary => (AppColors.green700, Colors.white, null),
+      AppButtonStyle.destructive => (AppColors.red600, Colors.white, null),
+      AppButtonStyle.outline => (AppColors.surface, AppColors.ink, const BorderSide(color: AppColors.fieldBorder)),
+      AppButtonStyle.cancel => (AppColors.surface, AppColors.red600, const BorderSide(color: AppColors.redBorder)),
     };
+    final filled = side == null;
+    // Sending keeps full colour; only a real "can't" fades.
+    final offBg = loading || !filled ? bg : bg.withValues(alpha: .45);
+    final offFg = loading || filled ? fg : fg.withValues(alpha: .45);
 
-    final child = loading
-        ? SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(strokeWidth: 2, color: fg),
+    final content = Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (loading)
+          Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: AppSpinner(color: fg, size: 18),
           )
-        : Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (icon != null) Padding(padding: const EdgeInsets.only(right: 7), child: Icon(icon, size: 16, color: fg)),
-              // Flexible so a label wider than the button wraps rather than
-              // overflowing: two side-by-side buttons at 360 gave "Tingnan ang
-              // Detalye" less width than it wanted. Centred so a wrapped second
-              // line stays under the first rather than ragged left.
-              Flexible(
-                child: Text(
-                  label,
-                  textAlign: TextAlign.center,
-                  style: AppText.display(size: AppTextSize.body, weight: FontWeight.w600, color: fg),
-                ),
-              ),
-            ],
-          );
+        else if (icon != null)
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: Icon(icon, size: 18, color: onPressed == null ? offFg : fg),
+          ),
+        // Flexible so a long Filipino label wraps instead of overflowing;
+        // centred so a wrapped second line sits under the first.
+        Flexible(
+          child: Text(loading ? (loadingLabel ?? label) : label, textAlign: TextAlign.center),
+        ),
+      ],
+    );
 
+    final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md));
+    final textStyle = AppText.display(size: AppTextSize.bodyLg, weight: FontWeight.w600);
     final effectiveOnPressed = loading ? null : onPressed;
 
-    switch (style) {
-      case AppButtonStyle.primary:
-        return SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
+    final Widget button = filled
+        ? ElevatedButton(
             onPressed: effectiveOnPressed,
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.green700,
-              foregroundColor: Colors.white,
-              minimumSize: const Size.fromHeight(48),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+              backgroundColor: bg,
+              foregroundColor: fg,
+              disabledBackgroundColor: offBg,
+              disabledForegroundColor: offFg,
+              minimumSize: const Size.fromHeight(52),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              shape: shape,
               elevation: 0,
+              textStyle: textStyle,
             ),
-            child: child,
-          ),
-        );
-      case AppButtonStyle.outline:
-        return SizedBox(
-          width: double.infinity,
-          child: OutlinedButton(
+            child: content,
+          )
+        : OutlinedButton(
             onPressed: effectiveOnPressed,
             style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.ink,
-              side: const BorderSide(color: AppColors.line),
-              minimumSize: const Size.fromHeight(48),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+              backgroundColor: bg,
+              foregroundColor: fg,
+              disabledForegroundColor: offFg,
+              side: side,
+              minimumSize: const Size.fromHeight(52),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              shape: shape,
+              textStyle: textStyle,
             ),
-            child: child,
+            child: content,
+          );
+
+    final sized = SizedBox(width: double.infinity, child: button);
+    if (loading || onPressed != null || disabledHint == null) return sized;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+          child: Text(
+            disabledHint!,
+            textAlign: TextAlign.center,
+            style: AppText.body(size: AppTextSize.detail, color: AppColors.inkMuted, height: 1.4),
           ),
-        );
-      case AppButtonStyle.ghostRed:
-        return SizedBox(
-          width: double.infinity,
-          child: TextButton(
-            onPressed: effectiveOnPressed,
-            style: TextButton.styleFrom(
-              backgroundColor: AppColors.red50,
-              foregroundColor: AppColors.red600,
-              minimumSize: const Size.fromHeight(48),
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
-            ),
-            child: child,
-          ),
-        );
-    }
+        ),
+        sized,
+      ],
+    );
   }
 }
 
-enum AppButtonStyle { primary, outline, ghostRed }
+/// [primary] green fill; [outline] the secondary choice; [cancel] a red
+/// outline (Cancel request, Log out); [destructive] a red fill, dialogs only.
+enum AppButtonStyle { primary, outline, cancel, destructive }
+
 class AuthTextField extends StatefulWidget {
   final String label;
   final String hint;
@@ -875,9 +906,10 @@ class _AuthTextFieldState extends State<AuthTextField> {
 /// has to read naturally without one rather than printing a bare `#`.
 String _refSuffix(String refNo) => refNo.isEmpty ? '' : ' #$refNo';
 
-/// The app's confirm-or-keep dialog: a question, one line on what happens, and
-/// two 48dp actions. While [busy] the confirm button keeps its label and gains
-/// a spinner, so the resident still reads what they tapped.
+/// The app's confirm-or-keep dialog: an icon, a question, one line on what
+/// happens, then the main action on top and the safe choice under it, both
+/// full width. While [busy] the confirm button keeps its label and gains a
+/// spinner, so the resident still reads what they tapped.
 class ConfirmDialog extends StatelessWidget {
   final String title;
   final String body;
@@ -887,9 +919,13 @@ class ConfirmDialog extends StatelessWidget {
   final VoidCallback? onKeep;
   final VoidCallback? onConfirm;
 
-  /// Red confirm for something that cannot be taken back (cancel, log out);
+  /// Red confirm for something that cannot be taken back (cancel, discard);
   /// green for a change that is just worth a second look.
   final bool destructive;
+
+  /// Drawn in a tinted circle above the title. Defaults to a warning sign for
+  /// [destructive], an info mark otherwise.
+  final IconData? icon;
 
   const ConfirmDialog({
     super.key,
@@ -901,64 +937,50 @@ class ConfirmDialog extends StatelessWidget {
     this.onKeep,
     this.onConfirm,
     this.destructive = true,
+    this.icon,
   });
 
   @override
   Widget build(BuildContext context) {
-    final bg = destructive ? AppColors.red50 : AppColors.green50;
+    final tint = destructive ? AppColors.red50 : AppColors.green50;
     final fg = destructive ? AppColors.red600 : AppColors.green700;
     return AlertDialog(
       backgroundColor: AppColors.surface,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.xl)),
-      title: Semantics(
-        header: true,
-        child: Text(title, style: AppText.display(size: AppTextSize.title, color: AppColors.sectionInk)),
-      ),
-      content: Text(body, style: AppText.body(size: AppTextSize.body, color: AppColors.inkMuted, height: 1.5)),
-      actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-      // Two long Filipino labels stack rather than overflow on a narrow phone.
-      actionsOverflowDirection: VerticalDirection.down,
-      actions: [
-        TextButton(
-          onPressed: onKeep,
-          style: TextButton.styleFrom(minimumSize: const Size(88, 48)),
-          child: Text(
-            keepLabel,
-            style: AppText.display(
-              size: AppTextSize.body,
-              weight: FontWeight.w600,
-              color: onKeep == null ? AppColors.inkFaint : AppColors.inkMuted,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+      contentPadding: const EdgeInsets.fromLTRB(20, 22, 20, 18),
+      scrollable: true,
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(color: tint, shape: BoxShape.circle),
+            alignment: Alignment.center,
+            child: Icon(
+              icon ?? (destructive ? Icons.warning_amber_rounded : Icons.info_outline_rounded),
+              size: 22,
+              color: fg,
             ),
           ),
-        ),
-        TextButton(
-          onPressed: onConfirm,
-          style: TextButton.styleFrom(
-            minimumSize: const Size(88, 48),
-            backgroundColor: bg,
-            foregroundColor: fg,
+          const SizedBox(height: 12),
+          Semantics(header: true, child: Text(title, style: AppText.cardTitle())),
+          const SizedBox(height: 8),
+          Text(body, style: AppText.body(color: AppColors.inkMuted, height: 1.5)),
+          const SizedBox(height: 18),
+          AppButton(
+            label: confirmLabel,
+            style: destructive ? AppButtonStyle.destructive : AppButtonStyle.primary,
+            loading: busy,
+            onPressed: onConfirm,
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (busy) ...[
-                SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: fg),
-                ),
-                const SizedBox(width: 8),
-              ],
-              Flexible(
-                child: Text(
-                  confirmLabel,
-                  style: AppText.display(size: AppTextSize.body, weight: FontWeight.w600, color: fg),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
+          const SizedBox(height: AppSpacing.sm),
+          AppButton(label: keepLabel, style: AppButtonStyle.outline, onPressed: onKeep),
+        ],
+      ),
     );
   }
 }
@@ -971,6 +993,7 @@ Future<bool> showConfirmDialog(
   required String keepLabel,
   required String confirmLabel,
   bool destructive = true,
+  IconData? icon,
 }) async {
   final confirmed = await showDialog<bool>(
     context: context,
@@ -980,6 +1003,7 @@ Future<bool> showConfirmDialog(
       keepLabel: keepLabel,
       confirmLabel: confirmLabel,
       destructive: destructive,
+      icon: icon,
       onKeep: () => Navigator.pop(ctx, false),
       onConfirm: () => Navigator.pop(ctx, true),
     ),
@@ -1080,23 +1104,52 @@ class _CancelDialogState extends State<_CancelDialog> {
   }
 }
 
-void showAppSnackBar(BuildContext context, String message, {bool isError = false}) {
-  showAppSnackBarOn(ScaffoldMessenger.of(context), message, isError: isError);
+/// The app's toast: dark, at the bottom, four seconds, with an optional action
+/// ("View", "Try again").
+void showAppSnackBar(
+  BuildContext context,
+  String message, {
+  bool isError = false,
+  String? actionLabel,
+  VoidCallback? onAction,
+}) {
+  showAppSnackBarOn(ScaffoldMessenger.of(context), message,
+      isError: isError, actionLabel: actionLabel, onAction: onAction);
 }
 
-/// Same snackbar, addressed to a messenger captured before an await. A caller
+/// Same toast, addressed to a messenger captured before an await. A caller
 /// that pops its own route first has no usable BuildContext left.
-void showAppSnackBarOn(ScaffoldMessengerState messenger, String message, {bool isError = false}) {
+void showAppSnackBarOn(
+  ScaffoldMessengerState messenger,
+  String message, {
+  bool isError = false,
+  String? actionLabel,
+  VoidCallback? onAction,
+}) {
   messenger.clearSnackBars();
   messenger.showSnackBar(
     SnackBar(
-      content: Text(message, style: AppText.display(size: AppTextSize.small, weight: FontWeight.w600, color: Colors.white)),
-      backgroundColor: isError ? AppColors.red600 : AppColors.green900,
+      content: Row(
+        children: [
+          Icon(
+            isError ? Icons.warning_amber_rounded : Icons.check_rounded,
+            size: 20,
+            color: isError ? AppColors.toastWarn : AppColors.toastAction,
+          ),
+          const SizedBox(width: 12),
+          Expanded(child: Text(message, style: AppText.body(color: Colors.white, height: 1.4))),
+        ],
+      ),
+      action: actionLabel == null
+          ? null
+          : SnackBarAction(label: actionLabel, textColor: AppColors.toastAction, onPressed: onAction ?? () {}),
+      // With an action Flutter would otherwise keep it up until tapped.
+      persist: false,
+      backgroundColor: AppColors.toast,
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
       margin: const EdgeInsets.fromLTRB(AppLayout.gutter, 0, AppLayout.gutter, AppLayout.snackBarClearance),
-      // Failures need longer on screen than confirmations.
-      duration: Duration(seconds: isError ? 4 : 2),
+      duration: const Duration(seconds: 4),
     ),
   );
 }
@@ -1364,13 +1417,23 @@ class NotificationsSheet extends StatelessWidget {
                       _SectionLabel(text: tr(f, 'notif.advisories')),
                       if (advisoriesError != null)
                         // Never "no advisories" on a failed fetch. The wording says
-                        // outright that silence here is not an all-clear.
-                        StatusBox(
-                          icon: Icons.wifi_off_rounded,
-                          bg: AppColors.red50,
-                          fg: AppColors.red600,
-                          title: tr(f, 'notif.adv_failed_title'),
-                          next: tr(f, 'notif.adv_failed'),
+                        // outright that silence here is not an all-clear. No
+                        // Try again: the sheet has no fetch of its own to rerun.
+                        Container(
+                          padding: const EdgeInsets.all(AppSpacing.lg),
+                          decoration: BoxDecoration(
+                            color: AppColors.surface,
+                            borderRadius: BorderRadius.circular(AppRadius.lg),
+                            border: Border.all(color: AppColors.line),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              StatusLine(label: tr(f, 'notif.adv_failed_title'), tone: StatusTone.red),
+                              const SizedBox(height: 6),
+                              Text(tr(f, 'notif.adv_failed'), style: AppText.body(color: AppColors.inkMuted, height: 1.5)),
+                            ],
+                          ),
                         )
                       else if (advisories.isEmpty)
                         _MutedLine(text: tr(f, 'notif.adv_none'))
@@ -1423,7 +1486,7 @@ class _SectionLabel extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Semantics(
         header: true,
-        child: Text(text, style: AppText.display(size: AppTextSize.title, weight: FontWeight.w600, color: AppColors.sectionInk)),
+        child: Text(text, style: AppText.display(size: AppTextSize.section, weight: FontWeight.w600, color: AppColors.sectionInk)),
       ),
     );
   }
@@ -1464,7 +1527,7 @@ class _AdvisoryTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppColors.surface,
         border: Border.all(color: AppColors.cardBorder),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1490,7 +1553,7 @@ class _AdvisoryTile extends StatelessWidget {
 }
 
 /// One of the resident's own requests, compact: title, reference and when it
-/// last moved, and its status as a one-line pill in Track's wording.
+/// last moved, and its status in Track's wording.
 class _RequestUpdateRow extends StatelessWidget {
   final ServiceRequest request;
   final bool filipino;
@@ -1503,8 +1566,8 @@ class _RequestUpdateRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final f = filipino;
     final at = request.updatedAt ?? request.createdAt;
-    // Same title and colours as the box on the Track card this row opens.
-    final status = serviceStatusBox(request, f);
+    // Same words and colours as the Track card this row opens.
+    final status = serviceStatus(request, f);
 
     return InkWell(
       onTap: onTap,
@@ -1543,7 +1606,7 @@ class _RequestUpdateRow extends StatelessWidget {
                       style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
                     ),
                     const SizedBox(height: 6),
-                    _StatusPill(label: status.title, bg: status.bg, fg: status.fg),
+                    StatusLine(label: status.label, tone: status.tone),
                   ],
                 ),
               ),
@@ -1557,37 +1620,6 @@ class _RequestUpdateRow extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-class _StatusPill extends StatelessWidget {
-  final String label;
-  final Color bg;
-  final Color fg;
-
-  const _StatusPill({required this.label, required this.bg, required this.fg});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(AppRadius.pill)),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(width: 8, height: 8, decoration: BoxDecoration(color: fg, shape: BoxShape.circle)),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppText.display(size: AppTextSize.small, weight: FontWeight.w600, color: fg),
-            ),
-          ),
-        ],
       ),
     );
   }

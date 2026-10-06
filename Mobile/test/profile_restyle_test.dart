@@ -95,11 +95,11 @@ void main() {
       }
     });
 
-    testWidgets('log out is its own 52dp button below the list, not a row in it', (tester) async {
+    testWidgets('log out is its own 48dp button below the list, not a row in it', (tester) async {
       await _pump(tester);
 
       final button = find.ancestor(of: find.text('Log out'), matching: find.byType(OutlinedButton));
-      expect(tester.getSize(button).height, 52);
+      expect(tester.getSize(button).height, 48);
       expect(find.descendant(of: find.byType(SummaryCard), matching: find.text('Log out')), findsNothing);
       expect(tester.getTopLeft(button).dy, greaterThan(tester.getBottomLeft(find.byType(SummaryCard)).dy));
     });
@@ -114,13 +114,15 @@ void main() {
     });
 
     for (final width in [320.0, 390.0]) {
-      testWidgets('fits ${width.toInt()}px in Filipino without overflow', (tester) async {
-        await _pump(tester, filipino: true, size: Size(width, 2400));
+      for (final filipino in [false, true]) {
+        testWidgets('fits ${width.toInt()}px in ${filipino ? 'Filipino' : 'English'} without overflow', (tester) async {
+          await _pump(tester, filipino: filipino, size: Size(width, 2400));
 
-        expect(tester.takeException(), isNull);
-        expect(find.text('Aking profile'), findsOneWidget);
-        expect(find.text('Mag-log out'), findsOneWidget);
-      });
+          expect(tester.takeException(), isNull);
+          expect(find.text(filipino ? 'Aking profile' : 'My profile'), findsOneWidget);
+          expect(find.text(filipino ? 'Mag-log out' : 'Log out'), findsOneWidget);
+        });
+      }
     }
   });
 
@@ -233,12 +235,14 @@ void main() {
     });
 
     for (final width in [320.0, 390.0]) {
-      testWidgets('fits ${width.toInt()}px in Filipino without overflow', (tester) async {
-        await openChangePhone(tester, filipino: true, size: Size(width, 1600));
+      for (final filipino in [false, true]) {
+        testWidgets('fits ${width.toInt()}px in ${filipino ? 'Filipino' : 'English'} without overflow', (tester) async {
+          await openChangePhone(tester, filipino: filipino, size: Size(width, 1600));
 
-        expect(tester.takeException(), isNull);
-        expect(find.text('Hakbang 1 sa 2'), findsOneWidget);
-      });
+          expect(tester.takeException(), isNull);
+          expect(find.text(filipino ? 'Hakbang 1 sa 2' : 'Step 1 of 2'), findsOneWidget);
+        });
+      }
     }
   });
 }

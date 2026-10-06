@@ -1,5 +1,5 @@
 // An approved program (training, drill, certification) says "Approved" where
-// every other request says "Responding" / "MDRRMO is responding". Display only:
+// every other request says "Responding". Display only:
 // the status the server sent and the app's ReqStatus are untouched.
 
 import 'package:flutter/material.dart';
@@ -33,11 +33,11 @@ void main() {
       expect(request.statusLabelFor(true), 'Aprubado');
     });
 
-    test('names the timeline step "Approved by MDRRMO" instead of "responding"', () {
+    test('names the timeline step "Approved" instead of "Responding"', () {
       final titles = _request('Responding').timelineFor(false).map((s) => s.title).toList();
 
-      expect(titles, contains('Approved by MDRRMO'));
-      expect(titles, isNot(contains('MDRRMO is responding')));
+      expect(titles, contains('Approved'));
+      expect(titles, isNot(contains('Responding')));
     });
 
     test('a program that is still waiting keeps its ordinary wording', () {
@@ -48,14 +48,14 @@ void main() {
   });
 
   group('every other request', () {
-    test('keeps "Responding" and "MDRRMO is responding"', () {
+    test('keeps "Responding" on the status and the step', () {
       final request = _request('Responding', category: 'infrastructure');
 
       expect(request.isProgram, isFalse);
       expect(request.statusLabelFor(false), 'Responding');
       expect(
         request.timelineFor(false).map((s) => s.title),
-        contains('MDRRMO is responding'),
+        contains('Responding'),
       );
     });
 

@@ -2,12 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../theme/app_theme.dart';
 
-/// Groups fields that answer the same question ("who", "where", "when") under
-/// one small label, so a form reads as sections instead of one flat list of
-/// identically-spaced fields. Deliberately not a bordered card — a label plus
-/// [AppSpacing.xl] of separation from the next section is enough to read as a
-/// group; a drawn box around every group would be a card wrapping a card
-/// wrapping a field.
+/// Groups fields that answer the same question ("who", "where", "when"): a
+/// small heading over one white card holding the fields (C_Road on the design
+/// canvas), so a form reads as sections instead of one flat list.
 class FormSection extends StatelessWidget {
   final String label;
   final List<Widget> children;
@@ -21,15 +18,28 @@ class FormSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Semantics(
-            header: true,
-            child: Text(
-              label,
-              style: AppText.display(size: AppTextSize.title, weight: FontWeight.w600, color: AppColors.sectionInk),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+            child: Semantics(
+              header: true,
+              child: Text(
+                label,
+                style: AppText.display(size: AppTextSize.section, weight: FontWeight.w600, color: AppColors.sectionInk),
+              ),
             ),
           ),
-          const SizedBox(height: AppSpacing.sm),
-          ...children,
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            // Fields carry 8 below themselves; the card evens that out.
+            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(AppRadius.lg),
+              border: Border.all(color: AppColors.line),
+            ),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
+          ),
         ],
       ),
     );
@@ -93,67 +103,6 @@ class ModeToggle extends StatelessWidget {
             color: selected ? AppColors.surface : AppColors.inkMuted,
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// A numbered form card: "1  Patient" over its fields.
-class NumberedCard extends StatelessWidget {
-  final int number;
-  final String title;
-
-  /// Drawn after the title, e.g. a required mark.
-  final Widget? trailing;
-  final List<Widget> children;
-
-  const NumberedCard({
-    super.key,
-    required this.number,
-    required this.title,
-    required this.children,
-    this.trailing,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: AppSpacing.lg),
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(AppRadius.xl),
-        border: Border.all(color: AppColors.line),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 24,
-                height: 24,
-                alignment: Alignment.center,
-                decoration: const BoxDecoration(color: AppColors.green50, shape: BoxShape.circle),
-                child: Text(
-                  '$number',
-                  style: AppText.display(size: AppTextSize.small, weight: FontWeight.w700, color: AppColors.green700),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Flexible(
-                child: Text(
-                  title,
-                  style: AppText.display(size: AppTextSize.bodyLg, weight: FontWeight.w600, color: AppColors.green900),
-                ),
-              ),
-              if (trailing != null) trailing!,
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          ...children,
-        ],
       ),
     );
   }

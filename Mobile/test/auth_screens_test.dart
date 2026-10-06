@@ -759,10 +759,10 @@ void main() {
       await _pumpRegister(tester);
       await _fillValidRegistration(tester, street: 'Purok 3');
 
+      // One row per answer: the address reads "Purok 3, San Fabian".
       expect(find.text('Juan Delacruz'), findsOneWidget);
       expect(find.text('09171234567'), findsOneWidget);
-      expect(find.text('San Fabian'), findsOneWidget);
-      expect(find.text('Purok 3'), findsOneWidget);
+      expect(find.text('Purok 3, San Fabian'), findsOneWidget);
       expect(find.text('Head of the Family'), findsOneWidget);
 
       await tester.tap(find.text('Edit').last);
@@ -796,6 +796,19 @@ void main() {
         expect(tester.takeException(), isNull);
       });
     }
+
+    // C_Register3: the answers in one list, an Edit per row.
+    testWidgets('step 3 reviews the answers in one list with an Edit per row', (tester) async {
+      await _pumpRegister(tester);
+      await _fillWhoYouAre(tester);
+      await _next(tester);
+      await _pickBarangay(tester);
+      await _next(tester);
+
+      expect(find.byType(ReviewList), findsOneWidget);
+      expect(find.text('Edit'), findsNWidgets(3));
+      expect(find.text('Mobile number'), findsWidgets);
+    });
   });
 
   group('the barangay picker', () {

@@ -22,7 +22,7 @@ void main() {
             children: [
               AppButton(label: 'Primary', onPressed: () {}),
               AppButton(label: 'Outline', style: AppButtonStyle.outline, onPressed: () {}),
-              AppButton(label: 'Danger', style: AppButtonStyle.ghostRed, onPressed: () {}),
+              AppButton(label: 'Danger', style: AppButtonStyle.cancel, onPressed: () {}),
               AuthLink(label: 'Link', onPressed: () {}),
               SectionHeader(title: 'Heading', actionLabel: 'See all', onAction: () {}),
             ],

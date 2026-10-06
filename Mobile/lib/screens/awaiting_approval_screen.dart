@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../state/account_store.dart' show AppUser;
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
-import '../widgets/borrow_request_widgets.dart' show StatusBox;
+import '../widgets/status_line.dart';
 import '../widgets/shared_widgets.dart';
 
 /// Shown in place of the service list to an organization that registered
@@ -83,25 +83,35 @@ class _AwaitingApprovalScreenState extends State<AwaitingApprovalScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  StatusBox(
-                    icon: Icons.hourglass_top_rounded,
-                    bg: AppColors.amber50,
-                    fg: AppColors.amberInk,
-                    title: tr(f, 'awaiting.title'),
-                    next: tr(f, 'awaiting.body'),
-                  ),
-                  if (_result != null) ...[
-                    const SizedBox(height: AppSpacing.md),
-                    Text(
-                      _result!,
-                      style: AppText.body(size: AppTextSize.body, color: AppColors.amberInk, height: 1.5),
+                  // C_Awaiting: one card with the account's state, what it
+                  // means, and Check again.
+                  Container(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    decoration: BoxDecoration(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(AppRadius.lg),
+                      border: Border.all(color: AppColors.line),
                     ),
-                  ],
-                  const SizedBox(height: AppSpacing.lg),
-                  AppButton(
-                    label: tr(f, 'awaiting.check'),
-                    onPressed: _checking ? null : _check,
-                    loading: _checking,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        StatusLine(label: tr(f, 'awaiting.title'), tone: StatusTone.amber, large: true),
+                        const SizedBox(height: AppSpacing.sm),
+                        Text(tr(f, 'awaiting.body'), style: AppText.body(color: AppColors.inkMuted, height: 1.5)),
+                        if (_result != null) ...[
+                          const SizedBox(height: AppSpacing.md),
+                          Text(_result!, style: AppText.body(color: AppColors.amberInk, height: 1.5)),
+                        ],
+                        const SizedBox(height: AppSpacing.lg),
+                        AppButton(
+                          label: tr(f, 'awaiting.check'),
+                          icon: Icons.refresh_rounded,
+                          style: AppButtonStyle.outline,
+                          onPressed: _checking ? null : _check,
+                          loading: _checking,
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),

@@ -1,3 +1,5 @@
+import 'dart:math' show pi;
+
 import 'package:flutter/material.dart';
 import '../data/hotlines.dart';
 import '../models/request_models.dart';
@@ -6,16 +8,19 @@ import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
 import '../widgets/borrow_request_widgets.dart' show mdrrmoNumber;
+import '../widgets/feedback.dart';
+import '../widgets/loading.dart';
 import '../widgets/motion.dart';
 import '../widgets/request_summary.dart';
 import '../widgets/shared_widgets.dart';
+import '../widgets/status_line.dart';
 import 'borrow_equipment_screen.dart';
 
-/// Home's side margin, from the redesign (Home2 on the design canvas).
+/// Home's side margin, from the redesign (C_Home on the design canvas).
 const double _gutter = 16;
 
-/// The red-tinted border of the emergency bar; no theme token is this light.
-const Color _emergencyBorder = Color(0xFFF0C9C3);
+/// "Open in Track" on the green header; no theme token is this light.
+const Color _headerLink = Color(0xFFBFE3CD);
 
 class HomeScreen extends StatelessWidget {
   final AppState appState;
@@ -34,8 +39,8 @@ class HomeScreen extends StatelessWidget {
   /// instead, which is what a host with no Borrow tab wants.
   final VoidCallback? onOpenBorrow;
 
-  /// Opens Borrow → My requests, for a loan's row. Left out, it opens Borrow
-  /// the way [onOpenBorrow] does.
+  /// Opens Borrow → My requests, for a loan in the header panel. Left out, it
+  /// opens Borrow the way [onOpenBorrow] does.
   final VoidCallback? onOpenMyLoans;
 
   const HomeScreen({
@@ -65,6 +70,7 @@ class HomeScreen extends StatelessWidget {
     final f = appState.language == AppLanguage.filipino;
     final hotline = mdrrmoNumber(appState.hotlines);
     final active = openSummaries(appState, f);
+    final latest = active.isEmpty ? null : active.first;
 
     final list = ListView(
       padding: EdgeInsets.zero,
@@ -78,6 +84,15 @@ class HomeScreen extends StatelessWidget {
           unread: appState.hasUnreadNotifications,
           onNotificationsTap: onOpenNotifications,
           onProfileTap: onOpenProfile,
+          // Hidden when nothing is open: the tiles below are the way in then.
+          latest: latest == null
+              ? null
+              : _LatestPanel(
+                  request: latest,
+                  more: active.length - 1,
+                  filipino: f,
+                  onTap: latest.isBorrow ? (onOpenMyLoans ?? () => _openBorrow(context)) : onOpenTrack,
+                ),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(_gutter, 16, _gutter, 0),
@@ -95,11 +110,7 @@ class HomeScreen extends StatelessWidget {
                   child: Text(tr(f, 'awaiting.title'), style: AppText.body(size: 15, color: AppColors.amberInk, height: 1.4)),
                 ),
               ],
-              if (active.isNotEmpty) ...[
-                const SizedBox(height: 20),
-                _RequestsSection(requests: active, filipino: f, onSeeAll: onOpenTrack, onOpenBorrow: onOpenMyLoans ?? () => _openBorrow(context)),
-              ],
-              const SizedBox(height: 20),
+              const SizedBox(height: 24),
               SectionHeader(title: tr(f, 'home.services')),
               _TileGrid(tiles: [
                 if (!user.isAwaitingApproval)
@@ -155,12 +166,23 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  /// The two most recent published materials, or one muted line about why
-  /// there are none. The Library shows all of them.
+  /// The two most recent published materials; their shape while loading; a
+  /// retry when they could not load; one muted line when there are none. The
+  /// Library shows all of them.
   List<Widget> _announcements(bool f) {
     if (appState.materials.isEmpty) {
-      if (appState.materialsLoading) return const [];
-      return [_MutedLine(appState.materialsError == null ? tr(f, 'home.ann.empty') : tr(f, 'home.ann.failed'))];
+      if (appState.materialsLoading) return [SkeletonRows(count: 2, filipino: f)];
+      if (appState.materialsError != null) {
+        return [
+          LoadErrorBox(
+            title: tr(f, 'home.ann.failed'),
+            body: tr(f, 'tab.load_failed'),
+            onRetry: appState.loadMaterials,
+            filipino: f,
+          ),
+        ];
+      }
+      return [_MutedLine(tr(f, 'home.ann.empty'))];
     }
 
     // The server sends them newest-first, but the offline index is ordered by
@@ -179,12 +201,11 @@ class HomeScreen extends StatelessWidget {
       SummaryCard(children: [
         for (final material in latest.take(2))
           _AnnouncementRow(
-            date: material.publishedAt == null
-                ? tr(f, 'home.ann.no_date')
-                : formatTimelineTime(material.publishedAt!, f),
+            date: material.publishedAt,
             title: material.title,
             // Materials carry no body text; what they are is the next best line.
             body: [material.typeLabel, material.sizeLabel].where((part) => part.isNotEmpty).join(' · '),
+            noDateLabel: tr(f, 'home.ann.no_date'),
             onTap: onOpenLibrary,
           ),
       ]),
@@ -209,23 +230,27 @@ class _HomeHeader extends StatelessWidget {
   final VoidCallback onNotificationsTap;
   final VoidCallback onProfileTap;
 
+  /// The latest open request, or null when nothing is open.
+  final Widget? latest;
+
   const _HomeHeader({
     required this.user,
     required this.filipino,
     required this.unread,
     required this.onNotificationsTap,
     required this.onProfileTap,
+    required this.latest,
   });
 
   @override
   Widget build(BuildContext context) {
     final f = filipino;
-    final white = Colors.white.withValues(alpha: .88);
+    final white = Colors.white.withValues(alpha: .85);
 
     return Container(
       padding: const EdgeInsets.fromLTRB(_gutter, AppLayout.headerTop, 8, 22),
       decoration: const BoxDecoration(
-        gradient: AppColors.headerGradient,
+        color: AppColors.header,
         borderRadius: BorderRadius.vertical(bottom: Radius.circular(24)),
       ),
       child: Column(
@@ -233,23 +258,14 @@ class _HomeHeader extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: .14),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.white.withValues(alpha: .22)),
-                ),
-                child: const Icon(Icons.shield_outlined, color: Colors.white, size: 18),
-              ),
+              _SealSlot(label: tr(f, 'home.seal')),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
                   tr(f, 'home.brand'),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: AppText.display(size: AppTextSize.caption, weight: FontWeight.w600, color: Colors.white.withValues(alpha: .92), letterSpacing: 1.5),
+                  style: AppText.display(size: AppTextSize.detail, weight: FontWeight.w600, color: Colors.white.withValues(alpha: .9)),
                 ),
               ),
               HeaderButton(
@@ -263,10 +279,10 @@ class _HomeHeader extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           Text(tr(f, _greetingKey(DateTime.now())), style: AppText.body(size: 15, color: white)),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Padding(
             padding: const EdgeInsets.only(right: _gutter - 8),
-            child: Text(user.accountName, style: AppText.display(size: 24, weight: FontWeight.w600, color: Colors.white)),
+            child: Text(user.accountName, style: AppText.display(size: 26, weight: FontWeight.w600, color: Colors.white)),
           ),
           // A barangay hall or an organization also sees which kind of account
           // this phone is on, and who the contact person is.
@@ -278,8 +294,157 @@ class _HomeHeader extends StatelessWidget {
                 style: AppText.body(size: 15, color: white),
               ),
             ),
+          if (latest != null) ...[
+            const SizedBox(height: 18),
+            Padding(padding: const EdgeInsets.only(right: _gutter - 8), child: latest!),
+          ],
         ],
       ),
+    );
+  }
+}
+
+/// Where the official MDRRMO seal goes. Until the office sends the artwork it
+/// is a dashed ring with the shield in it; swap the child for an `Image.asset`.
+class _SealSlot extends StatelessWidget {
+  final String label;
+  const _SealSlot({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: label,
+      image: true,
+      child: const CustomPaint(
+        painter: _DashedRing(),
+        child: SizedBox(
+          width: 40,
+          height: 40,
+          child: Icon(Icons.shield_outlined, color: Colors.white, size: 18),
+        ),
+      ),
+    );
+  }
+}
+
+class _DashedRing extends CustomPainter {
+  const _DashedRing();
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.white.withValues(alpha: .35)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2;
+    final rect = (Offset.zero & size).deflate(1);
+    const dashes = 16;
+    const sweep = 2 * pi / dashes;
+    for (var i = 0; i < dashes; i++) {
+      canvas.drawArc(rect, i * sweep, sweep * .6, false, paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_DashedRing old) => false;
+}
+
+/// The resident's newest open request, on the green header: what it is, where
+/// it stands, how far along, and when it last changed.
+class _LatestPanel extends StatelessWidget {
+  final RequestSummary request;
+
+  /// Open requests besides this one.
+  final int more;
+  final bool filipino;
+  final VoidCallback onTap;
+
+  const _LatestPanel({required this.request, required this.more, required this.filipino, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final f = filipino;
+    final r = request;
+    final white = Colors.white.withValues(alpha: .85);
+    final radius = BorderRadius.circular(16);
+    final tab = tr(f, r.isBorrow ? 'nav.borrow' : 'nav.track');
+    final meta = [
+      if (r.updatedAt != null) StatusLine.updatedText(r.updatedAt!, f),
+      if (more == 1) tr(f, 'home.more_one'),
+      if (more > 1) tr(f, 'home.more_many').replaceAll('{n}', '$more'),
+    ].join(' · ');
+
+    return Material(
+      color: Colors.white.withValues(alpha: .08),
+      shape: RoundedRectangleBorder(borderRadius: radius, side: BorderSide(color: Colors.white.withValues(alpha: .16))),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: radius,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(child: Text(tr(f, 'home.latest'), style: AppText.body(size: AppTextSize.detail, color: white))),
+                  const SizedBox(width: 10),
+                  // Flexible: the Filipino pair outgrows a 320dp phone on one line.
+                  Flexible(
+                    child: Text(
+                      tr(f, 'home.open_in').replaceAll('{tab}', tab),
+                      textAlign: TextAlign.end,
+                      style: AppText.display(size: AppTextSize.detail, weight: FontWeight.w600, color: _headerLink),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(r.title, style: AppText.display(size: 17, weight: FontWeight.w600, color: Colors.white, height: 1.3)),
+              const SizedBox(height: 12),
+              StatusLine(label: r.status, tone: r.tone, large: true, onDark: true),
+              if (r.steps > 0) ...[
+                const SizedBox(height: 12),
+                ExcludeSemantics(child: _ProgressBar(step: r.step, steps: r.steps, tone: r.tone)),
+              ],
+              if (meta.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(meta, style: AppText.detail(color: white)),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One segment per step: white for done, the status colour for the step in
+/// progress, faint for what is still ahead.
+class _ProgressBar extends StatelessWidget {
+  final int step;
+  final int steps;
+  final StatusTone tone;
+
+  const _ProgressBar({required this.step, required this.steps, required this.tone});
+
+  @override
+  Widget build(BuildContext context) {
+    final (dot, _) = StatusLine.colorsOf(tone);
+    return Row(
+      children: [
+        for (var i = 0; i < steps; i++) ...[
+          if (i > 0) const SizedBox(width: 4),
+          Expanded(
+            child: Container(
+              height: 6,
+              decoration: BoxDecoration(
+                color: i < step ? Colors.white : (i == step ? dot : Colors.white.withValues(alpha: .22)),
+                borderRadius: BorderRadius.circular(3),
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
@@ -294,28 +459,24 @@ class _EmergencyBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final f = filipino;
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      side: const BorderSide(color: AppColors.line),
+    );
     return Material(
       color: AppColors.surface,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
-        side: const BorderSide(color: _emergencyBorder),
-      ),
+      shape: shape,
       child: InkWell(
         onTap: onTap,
-        customBorder: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        customBorder: shape,
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 52),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
             child: Row(
               children: [
-                Container(
-                  width: 36,
-                  height: 36,
-                  decoration: const BoxDecoration(color: AppColors.red50, shape: BoxShape.circle),
-                  child: const Icon(Icons.phone_outlined, size: 18, color: AppColors.red600),
-                ),
-                const SizedBox(width: 12),
+                const Icon(Icons.phone_outlined, size: 20, color: AppColors.red600),
+                const SizedBox(width: 10),
                 Expanded(
                   child: Text.rich(
                     TextSpan(children: [
@@ -328,56 +489,12 @@ class _EmergencyBar extends StatelessWidget {
                     style: AppText.body(size: 15, height: 1.35),
                   ),
                 ),
-                const Icon(Icons.chevron_right_rounded, color: AppColors.ink),
+                const Icon(Icons.chevron_right_rounded, size: 20, color: AppColors.inkFaint),
               ],
             ),
           ),
         ),
       ),
-    );
-  }
-}
-
-class _RequestsSection extends StatelessWidget {
-  final List<RequestSummary> requests;
-  final bool filipino;
-  final VoidCallback onSeeAll;
-
-  /// A loan row opens Borrow → My requests.
-  final VoidCallback onOpenBorrow;
-
-  const _RequestsSection({required this.requests, required this.filipino, required this.onSeeAll, required this.onOpenBorrow});
-
-  @override
-  Widget build(BuildContext context) {
-    final f = filipino;
-    final more = requests.length - 2;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        SectionHeader(
-          title: tr(f, 'home.your_requests'),
-          actionLabel: '${tr(f, 'home.see_all')} (${requests.length})',
-          onAction: onSeeAll,
-        ),
-        SummaryCard(children: [
-          for (final r in requests.take(2)) RequestSummaryRow(request: r, onTap: r.isBorrow ? onOpenBorrow : onSeeAll),
-          if (more > 0)
-            InkWell(
-              onTap: onSeeAll,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 48),
-                child: Center(
-                  child: Text(
-                    more == 1 ? tr(f, 'home.more_one') : tr(f, 'home.more_many').replaceAll('{n}', '$more'),
-                    style: AppText.display(size: 15, weight: FontWeight.w500, color: AppColors.green700),
-                  ),
-                ),
-              ),
-            ),
-        ]),
-      ],
     );
   }
 }
@@ -394,13 +511,13 @@ class _TileGrid extends StatelessWidget {
       children: [
         for (var i = 0; i < tiles.length; i += 2)
           Padding(
-            padding: EdgeInsets.only(top: i == 0 ? 0 : 12),
+            padding: EdgeInsets.only(top: i == 0 ? 0 : 10),
             child: IntrinsicHeight(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Expanded(child: tiles[i]),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 10),
                   Expanded(child: i + 1 < tiles.length ? tiles[i + 1] : const SizedBox.shrink()),
                 ],
               ),
@@ -421,7 +538,7 @@ class _Tile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final radius = BorderRadius.circular(18);
+    final radius = BorderRadius.circular(AppRadius.lg);
     return PressableScale(
       child: Material(
         color: AppColors.surface,
@@ -437,15 +554,15 @@ class _Tile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    width: 44,
-                    height: 44,
+                    width: 48,
+                    height: 48,
                     decoration: BoxDecoration(color: AppColors.greenTonal, borderRadius: BorderRadius.circular(12)),
-                    child: Icon(icon, size: 22, color: AppColors.green700),
+                    child: Icon(icon, size: 26, color: AppColors.green700),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 12),
                   Text(title, style: AppText.display(size: 16, weight: FontWeight.w600, height: 1.3)),
-                  const SizedBox(height: 4),
-                  Text(subtitle, style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.35)),
+                  const SizedBox(height: 3),
+                  Text(subtitle, style: AppText.detail()),
                 ],
               ),
             ),
@@ -456,35 +573,75 @@ class _Tile extends StatelessWidget {
   }
 }
 
+/// A date block (day over month), then the title and two lines of detail.
 class _AnnouncementRow extends StatelessWidget {
-  final String date;
+  final DateTime? date;
   final String title;
   final String body;
+  final String noDateLabel;
   final VoidCallback onTap;
 
-  const _AnnouncementRow({required this.date, required this.title, required this.body, required this.onTap});
+  const _AnnouncementRow({
+    required this.date,
+    required this.title,
+    required this.body,
+    required this.noDateLabel,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final at = date?.toLocal();
+    final month = at == null ? null : formatMonthShort(at);
+
     return InkWell(
       onTap: onTap,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Column(
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(date, style: AppText.body(size: AppTextSize.caption, color: AppColors.inkMuted)),
-            const SizedBox(height: 4),
-            Text(title, style: AppText.display(size: 16, weight: FontWeight.w600, height: 1.35)),
-            if (body.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(
-                body,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: AppText.body(size: 15, color: AppColors.inkMuted, height: 1.45),
+            Semantics(
+              label: at == null ? noDateLabel : '$month ${at.day}',
+              child: ExcludeSemantics(
+                child: Container(
+                  width: 52,
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.fieldFill,
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: AppColors.line),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        at == null ? '—' : at.day.toString().padLeft(2, '0'),
+                        style: AppText.display(size: 20, weight: FontWeight.w600, color: AppColors.sectionInk, height: 1.1)
+                            .copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+                      ),
+                      if (month != null)
+                        Text(
+                          month.toUpperCase(),
+                          style: AppText.display(size: 12, weight: FontWeight.w600, color: AppColors.inkFaint, letterSpacing: .5),
+                        ),
+                    ],
+                  ),
+                ),
               ),
-            ],
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: AppText.display(size: 16, weight: FontWeight.w600, height: 1.3)),
+                  if (body.isNotEmpty) ...[
+                    const SizedBox(height: 4),
+                    Text(body, maxLines: 2, overflow: TextOverflow.ellipsis, style: AppText.detail()),
+                  ],
+                ],
+              ),
+            ),
           ],
         ),
       ),

@@ -279,14 +279,15 @@ void main() {
       expect(find.text('My requests'), findsOneWidget);
     });
 
-    testWidgets('pushed from elsewhere it keeps its app bar', (tester) async {
+    testWidgets('pushed from elsewhere it has a back arrow instead of the tab buttons', (tester) async {
       await tester.pumpWidget(MaterialApp(
         theme: buildAppTheme(),
         home: BorrowEquipmentScreen(appState: AppState(_Api()), user: _resident),
       ));
       await tester.pumpAndSettle();
 
-      expect(find.byType(AppBar), findsOneWidget);
+      expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget);
+      expect(find.byIcon(Icons.notifications_outlined), findsNothing);
       expect(find.byType(AppHeader), findsNothing);
     });
 

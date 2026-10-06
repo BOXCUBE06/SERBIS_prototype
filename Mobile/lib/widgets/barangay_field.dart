@@ -75,7 +75,7 @@ class BarangayField extends StatelessWidget {
                     onPressed: onRetry,
                     style: TextButton.styleFrom(minimumSize: const Size(64, 48)),
                     child: Text(tr(f, 'barangay.retry'),
-                        style: AppText.display(size: AppTextSize.body, weight: FontWeight.w700, color: AppColors.green700)),
+                        style: AppText.display(size: AppTextSize.body, weight: FontWeight.w600, color: AppColors.green700)),
                   ),
                 ],
               ),

@@ -15,8 +15,8 @@ import 'package:serbis/state/account_store.dart';
 import 'package:serbis/state/api_service.dart';
 import 'package:serbis/state/request_store.dart';
 import 'package:serbis/theme/app_theme.dart';
-import 'package:serbis/widgets/ambulance_steps.dart';
 import 'package:serbis/widgets/form_inputs.dart';
+import 'package:serbis/widgets/form_steps.dart';
 import 'package:serbis/widgets/service_widgets.dart';
 import 'package:serbis/widgets/shared_widgets.dart';
 
@@ -141,10 +141,11 @@ Future<void> _tapButton(WidgetTester tester, String label) async {
 
 void main() {
   group('relief goods, step by step', () {
-    testWidgets('opens on Household under the shared header, with Next and no Back', (tester) async {
+    testWidgets('opens on Household under the stepped header, with Next and no Back', (tester) async {
       await _pump(tester, _relief);
 
-      expect(find.byType(TabHeaderBar), findsOneWidget);
+      expect(find.byType(FormStepHeader), findsOneWidget);
+      expect(find.text('Who is this for?'), findsOneWidget);
       expect(find.text('Relief goods distribution'), findsOneWidget);
       expect(find.text('Step 1 of 3 · Household'), findsOneWidget);
       expect(find.widgetWithText(AppButton, 'Next: Assistance and delivery'), findsOneWidget);
@@ -176,12 +177,14 @@ void main() {
       await _tapButton(tester, 'Next: ID and review');
 
       expect(find.text('Step 3 of 3 · ID and review'), findsOneWidget);
-      expect(find.widgetWithText(AppButton, 'Submit request'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Send request'), findsOneWidget);
       expect(find.widgetWithText(AppButton, 'Back'), findsOneWidget);
       expect(find.text('Valid ID (required)'), findsOneWidget);
-      expect(find.byType(AmbulanceReviewCard), findsNWidgets(2));
+      // One list, a row per earlier step, each with its Edit.
+      expect(find.byType(ReviewList), findsOneWidget);
+      expect(find.text('Edit'), findsNWidgets(2));
       // The household head is prefilled from the account.
-      expect(find.text('Maria Dela Cruz'), findsOneWidget);
+      expect(find.textContaining('Maria Dela Cruz'), findsOneWidget);
 
       await tester.tap(find.text('Edit').first);
       await tester.pumpAndSettle();
@@ -193,7 +196,7 @@ void main() {
       final api = await _pump(tester, _relief);
       await _tapButton(tester, 'Next: Assistance and delivery');
       await _tapButton(tester, 'Next: ID and review');
-      await _tapButton(tester, 'Submit request');
+      await _tapButton(tester, 'Send request');
 
       expect(find.text('Attach a photo of a valid ID.'), findsOneWidget);
       expect(find.byType(SnackBar), findsNothing);
@@ -220,7 +223,7 @@ void main() {
       );
       await tester.tap(upload.first);
       await tester.pumpAndSettle();
-      await _tapButton(tester, 'Submit request');
+      await _tapButton(tester, 'Send request');
 
       expect(api.submits, 1);
       expect(api.fulfillmentMethod, 'Delivery');
@@ -253,19 +256,22 @@ void main() {
     });
 
     for (final (width, name) in [(320.0, '320px'), (390.0, '390px')]) {
-      testWidgets('every step fits $name in Filipino without overflow', (tester) async {
-        await _pump(tester, _relief, filipino: true, size: Size(width, 2400), ratio: 1);
+      for (final filipino in [false, true]) {
+        testWidgets('every step fits $name in ${filipino ? 'Filipino' : 'English'} without overflow', (tester) async {
+          await _pump(tester, _relief, filipino: filipino, size: Size(width, 2400), ratio: 1);
 
-        expect(tester.takeException(), isNull);
-        await _tapButton(tester, 'Susunod: Tulong at paghahatid');
-        expect(tester.takeException(), isNull);
-        await tester.ensureVisible(find.text('Ihahatid'));
-        await tester.tap(find.text('Ihahatid'));
-        await tester.pumpAndSettle();
-        expect(tester.takeException(), isNull);
-        await _tapButton(tester, 'Susunod: ID at pagsusuri');
-        expect(tester.takeException(), isNull);
-      });
+          expect(tester.takeException(), isNull);
+          await _tapButton(tester, filipino ? 'Susunod: Tulong at paghahatid' : 'Next: Assistance and delivery');
+          expect(tester.takeException(), isNull);
+          final delivery = filipino ? 'Ihahatid' : 'Delivery';
+          await tester.ensureVisible(find.text(delivery));
+          await tester.tap(find.text(delivery));
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull);
+          await _tapButton(tester, filipino ? 'Susunod: ID at pagsusuri' : 'Next: ID and review');
+          expect(tester.takeException(), isNull);
+        });
+      }
     }
   });
 
@@ -275,7 +281,7 @@ void main() {
 
       expect(find.byType(TabHeaderBar), findsOneWidget);
       expect(find.text('Road clearing'), findsOneWidget);
-      expect(find.widgetWithText(AppButton, 'Submit request'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Send request'), findsOneWidget);
       expect(find.widgetWithText(AppButton, 'Back'), findsNothing);
     });
 
@@ -289,7 +295,7 @@ void main() {
 
     testWidgets('submitting without an ID marks the upload and sends nothing', (tester) async {
       final api = await _pump(tester, _road);
-      await _tapButton(tester, 'Submit request');
+      await _tapButton(tester, 'Send request');
 
       expect(find.text('Attach a photo of a valid ID.'), findsOneWidget);
       expect(find.byType(SnackBar), findsNothing);
@@ -303,10 +309,36 @@ void main() {
       expect(width, lessThanOrEqualTo(600));
     });
 
-    testWidgets('fits 320px in Filipino without overflow', (tester) async {
-      await _pump(tester, _road, filipino: true, size: const Size(320, 2400), ratio: 1);
+    testWidgets('a refused send names the field to check above the form, not a count', (tester) async {
+      await _pump(tester, _road);
+      await _tapButton(tester, 'Send request');
 
-      expect(tester.takeException(), isNull);
+      // The form stops at the first problem, so it cannot know a count.
+      expect(find.textContaining('Please check: Valid ID'), findsOneWidget);
+      expect(find.textContaining('field needs attention'), findsNothing);
     });
+  });
+
+  // Every single-page form at 320px, in both languages, before and after a
+  // refused send (which adds the summary and the red line under the upload).
+  group('single-page forms at 320px', () {
+    const forms = [
+      _road,
+      ServiceCatalogItem(id: 11, name: 'DRRM trainings and seminars', code: 'drrm-trainings-and-seminars'),
+      ServiceCatalogItem(id: 12, name: 'Simulation drills / NSED', code: 'simulation-drills-nsed'),
+      ServiceCatalogItem(id: 13, name: 'MDRRMO certification', code: 'mdrrmo-certification'),
+      ServiceCatalogItem.others(),
+    ];
+    for (final service in forms) {
+      for (final filipino in [false, true]) {
+        testWidgets('${service.code} fits in ${filipino ? 'Filipino' : 'English'} without overflow', (tester) async {
+          await _pump(tester, service, filipino: filipino, size: const Size(320, 3200), ratio: 1);
+          expect(tester.takeException(), isNull);
+
+          await _tapButton(tester, filipino ? 'Ipadala ang kahilingan' : 'Send request');
+          expect(tester.takeException(), isNull);
+        });
+      }
+    }
   });
 }

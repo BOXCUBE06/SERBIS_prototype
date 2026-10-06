@@ -223,7 +223,7 @@ void main() {
       expect(find.text('Edit my details'), findsOneWidget);
       expect(find.text('Account details'), findsNothing);
       final name = tester.widget<Text>(find.text('Maria Santos'));
-      expect(name.style!.fontSize, AppTextSize.cardName);
+      expect(name.style!.fontSize, AppTextSize.cardTitle);
     });
   });
 }

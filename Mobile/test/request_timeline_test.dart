@@ -60,7 +60,7 @@ void main() {
     final request = ServiceRequest.fromJson(_row('Pending'));
     final steps = request.timelineFor(false);
 
-    expect(steps.first.title, 'Request submitted');
+    expect(steps.first.title, 'Sent');
     expect(steps.first.state, RequestStepState.done);
     // Formatted from created_at, so it is neither blank nor the old literal
     // 'Pending' placeholder.
@@ -83,7 +83,7 @@ void main() {
     final steps = ServiceRequest.fromJson(_row('Pending')).timelineFor(false);
 
     expect(steps.length, 3);
-    expect(steps[1].title, 'Under review by MDRRMO');
+    expect(steps[1].title, 'Under review');
     expect(steps[1].state, RequestStepState.current);
     expect(steps[2].state, RequestStepState.pending);
   });
@@ -91,7 +91,7 @@ void main() {
   test('a responding row moves the current step and stamps updated_at', () {
     final steps = ServiceRequest.fromJson(_row('Responding')).timelineFor(false);
 
-    expect(steps[1].title, 'MDRRMO is responding');
+    expect(steps[1].title, 'Responding');
     expect(steps[1].state, RequestStepState.current);
     expect(steps[1].time, isNot('Waiting'));
   });
@@ -109,7 +109,7 @@ void main() {
     final steps = ServiceRequest.fromJson(_row('Cancelled')).timelineFor(false);
 
     expect(steps.length, 2);
-    expect(steps.last.title, 'Cancelled');
+    expect(steps.last.title, 'Cancelled by you');
     expect(steps.last.state, RequestStepState.done);
     // The old hand-built list appended a cancellation step to whatever was
     // already there, so a cancelled request could still show "Completed" ahead
@@ -140,11 +140,11 @@ void main() {
   test('the steps are translated', () {
     final steps = ServiceRequest.fromJson(_row('Pending')).timelineFor(true);
 
-    expect(steps.first.title, 'Naisumite ang kahilingan');
-    expect(steps[1].title, 'Sinusuri ng MDRRMO');
+    expect(steps.first.title, 'Naipadala');
+    expect(steps[1].title, 'Sinusuri');
     // The old timeline was built from English literals at submit time, so a
     // Filipino-speaking resident read English steps.
-    expect(steps.first.title, isNot('Request submitted'));
+    expect(steps.first.title, isNot('Sent'));
   });
 
   test('a local cancellation stamps the time the timeline then shows', () async {
@@ -158,7 +158,7 @@ void main() {
     expect(api.cancelled, 1);
 
     final steps = state.requests.single.timelineFor(false);
-    expect(steps.last.title, 'Cancelled');
+    expect(steps.last.title, 'Cancelled by you');
     // Stamped by cancelRequest, not carried over from the server's updated_at.
     expect(state.requests.single.updatedAt!.isAfter(DateTime(2026, 8, 1, 12)), isTrue);
     expect(steps.last.time, isNot('Time not recorded'));
@@ -184,8 +184,9 @@ void main() {
       ),
     ));
 
-    expect(find.text('Request submitted'), findsOneWidget);
-    expect(find.text('Under review by MDRRMO'), findsOneWidget);
+    expect(find.text('Sent'), findsOneWidget);
+    // The status line and the current step say the same word.
+    expect(find.text('Under review'), findsNWidgets(2));
     // The steps carry real times, not the old literal 'Pending' placeholder.
     expect(find.text('Pending'), findsNothing);
   });

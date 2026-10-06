@@ -12,7 +12,7 @@ import 'package:serbis/screens/library_screen.dart';
 import 'package:serbis/state/api_service.dart';
 import 'package:serbis/state/request_store.dart';
 import 'package:serbis/theme/app_theme.dart';
-import 'package:serbis/widgets/borrow_request_widgets.dart' show StatusBox;
+import 'package:serbis/widgets/status_line.dart';
 import 'package:serbis/widgets/hotline_list.dart';
 import 'package:serbis/widgets/request_summary.dart' show SummaryCard;
 import 'package:serbis/widgets/shared_widgets.dart';
@@ -106,9 +106,9 @@ void main() {
 
       for (final hotline in kHotlines) {
         for (final n in hotline.numbers) {
-          final text = n.label == null ? n.number : '${n.label} · ${n.number}';
-          final row = find.ancestor(of: find.text(text), matching: find.byType(InkWell)).first;
-          expect(tester.getSize(row).height, greaterThanOrEqualTo(48), reason: text);
+          // The number is its own text now, under the line's kind.
+          final row = find.ancestor(of: find.text(n.number), matching: find.byType(InkWell)).first;
+          expect(tester.getSize(row).height, greaterThanOrEqualTo(48), reason: n.number);
         }
       }
     });
@@ -128,12 +128,14 @@ void main() {
     });
 
     for (final width in [320.0, 390.0]) {
-      testWidgets('fits ${width.toInt()}px in Filipino without overflow', (tester) async {
-        await _pumpLibrary(tester, filipino: true, size: Size(width, 3200));
+      for (final filipino in [false, true]) {
+        testWidgets('fits ${width.toInt()}px in ${filipino ? 'Filipino' : 'English'} without overflow', (tester) async {
+          await _pumpLibrary(tester, filipino: filipino, size: Size(width, 3200));
 
-        expect(tester.takeException(), isNull);
-        expect(find.text('Aklatan ng kaligtasan'), findsOneWidget);
-      });
+          expect(tester.takeException(), isNull);
+          expect(find.text(filipino ? 'Aklatan ng kaligtasan' : 'Safety library'), findsOneWidget);
+        });
+      }
     }
   });
 
@@ -167,32 +169,34 @@ void main() {
       expect(tester.widget<Text>(find.text('Bullet a')).style!.fontSize, greaterThanOrEqualTo(16));
     });
 
-    testWidgets('says it is available offline in a status box', (tester) async {
+    testWidgets('says it is available offline in a status line', (tester) async {
       await _pumpArticle(tester);
 
-      expect(find.byType(StatusBox), findsOneWidget);
+      expect(find.byType(StatusLine), findsOneWidget);
       expect(find.text('Available offline'), findsOneWidget);
     });
 
     testWidgets('keeps its text to 600dp on a wide screen', (tester) async {
       await _pumpArticle(tester, size: const Size(1400, 1200));
 
-      expect(tester.getSize(find.byType(StatusBox)).width, lessThanOrEqualTo(600));
+      expect(tester.getRect(find.byType(StatusLine)).right, lessThanOrEqualTo((1400 + 600) / 2));
     });
 
-    testWidgets('every catalogue article fits 320px in Filipino without overflow', (tester) async {
-      for (final entry in libraryArticles.entries) {
-        tester.view.physicalSize = const Size(320, 2400);
-        tester.view.devicePixelRatio = 1;
-        await tester.pumpWidget(MaterialApp(
-          theme: buildAppTheme(),
-          home: ArticleReaderScreen(article: entry.value, filipino: true),
-        ));
-        await tester.pumpAndSettle();
-        expect(tester.takeException(), isNull, reason: entry.key);
-      }
-      addTearDown(tester.view.reset);
-    });
+    for (final filipino in [false, true]) {
+      testWidgets('every catalogue article fits 320px in ${filipino ? 'Filipino' : 'English'} without overflow', (tester) async {
+        for (final entry in libraryArticles.entries) {
+          tester.view.physicalSize = const Size(320, 2400);
+          tester.view.devicePixelRatio = 1;
+          await tester.pumpWidget(MaterialApp(
+            theme: buildAppTheme(),
+            home: ArticleReaderScreen(article: entry.value, filipino: filipino),
+          ));
+          await tester.pumpAndSettle();
+          expect(tester.takeException(), isNull, reason: entry.key);
+        }
+        addTearDown(tester.view.reset);
+      });
+    }
   });
 
   group('the hotlines page before login', () {
@@ -210,8 +214,7 @@ void main() {
       expect(find.text('Emergency hotlines'), findsOneWidget);
       expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget);
       final first = kHotlines.first.numbers.first;
-      final text = first.label == null ? first.number : '${first.label} · ${first.number}';
-      final row = find.ancestor(of: find.text(text), matching: find.byType(InkWell)).first;
+      final row = find.ancestor(of: find.text(first.number), matching: find.byType(InkWell)).first;
       expect(tester.getSize(row).height, greaterThanOrEqualTo(48));
     });
   });

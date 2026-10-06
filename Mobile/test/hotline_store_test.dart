@@ -123,7 +123,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('MDRRMO Duty'), findsOneWidget);
-    expect(find.text('Globe · 0917-111-2222'), findsOneWidget);
+    expect(find.text('Globe'), findsOneWidget);
+    expect(find.text('0917-111-2222'), findsOneWidget);
     expect(find.text('Echague Rescue Hotline'), findsNothing);
   });
 
@@ -154,6 +155,18 @@ void main() {
 
     expect(find.text('Emergency hotlines'), findsOneWidget);
     expect(find.text('BFP'), findsOneWidget);
-    expect(find.text('Globe · (02) 426-3812'), findsOneWidget);
+    expect(find.text('Globe'), findsOneWidget);
+    expect(find.text('(02) 426-3812'), findsOneWidget);
+  });
+
+  // The page before login is English-only (there is no language until an
+  // account exists), so 320px in English is its whole range.
+  testWidgets('HotlinesPage fits 320px without overflow', (tester) async {
+    tester.view.physicalSize = const Size(320, 2400);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(MaterialApp(theme: buildAppTheme(), home: const HotlinesPage(hotlines: kHotlines)));
+
+    expect(tester.takeException(), isNull);
   });
 }

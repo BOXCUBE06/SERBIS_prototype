@@ -33,7 +33,7 @@ extension ReqStatusX on ReqStatus {
     if (this == ReqStatus.disapproved) {
       return 'Not approved';
     }
-    return 'Cancelled';
+    return 'Cancelled by you';
   }
 
   String labelFor(bool filipino) {
@@ -476,6 +476,9 @@ String formatBookingConfirmationTime(DateTime at, bool filipino) {
   return '${_monthAbbrev[local.month - 1]} ${local.day}, ${local.year}, '
       '$hour12:$minute $period';
 }
+
+/// "Sep": the month on Home's announcement date blocks.
+String formatMonthShort(DateTime at) => _monthAbbrev[at.toLocal().month - 1];
 
 const _weekdayAbbrev = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 

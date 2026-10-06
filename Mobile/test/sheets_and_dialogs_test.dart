@@ -50,13 +50,13 @@ Future<void> _pumpSheet(
 
 void main() {
   group('the notifications sheet', () {
-    testWidgets('draws each request with a one-line status pill in Track\'s words', (tester) async {
+    testWidgets('draws each request with a one-line status in Track\'s words', (tester) async {
       await _pumpSheet(tester, requests: [_request('Pending', id: 1), _request('Resolved', id: 2)]);
 
       // Compact rows: no full status boxes, and no "no advisories" box either.
       expect(find.byType(StatusBox), findsNothing);
       expect(find.byType(StatusBadge), findsNothing);
-      expect(find.text('Waiting for MDRRMO'), findsOneWidget);
+      expect(find.text('Under review'), findsOneWidget);
       expect(find.text('Completed'), findsOneWidget);
       expect(find.text('Road clearing'), findsNWidgets(2));
     });
@@ -98,10 +98,11 @@ void main() {
     });
 
     for (final width in [320.0, 390.0]) {
-      testWidgets('fits ${width.toInt()}px in Filipino without overflow', (tester) async {
+      for (final filipino in [false, true]) {
+      testWidgets('fits ${width.toInt()}px in ${filipino ? 'Filipino' : 'English'} without overflow', (tester) async {
         await _pumpSheet(
           tester,
-          filipino: true,
+          filipino: filipino,
           size: Size(width, 1400),
           advisories: [const Advisory(id: 1, message: 'Lumikas bago mag-alas sais ng gabi.', barangay: 'San Fabian')],
           requests: [_request('Booked', id: 1), _request('Disapproved', id: 2, remarks: 'Labas sa saklaw ng serbisyo.')],
@@ -109,6 +110,7 @@ void main() {
 
         expect(tester.takeException(), isNull);
       });
+      }
     }
   });
 
@@ -156,7 +158,22 @@ void main() {
     });
 
     testWidgets('the confirmation sheet is as tall as its content, not the screen', (tester) async {
-      await openModal(tester, () => ConfirmationSheet(refNo: 'TXN-1', filipino: false, onViewTrack: () {}));
+      await openModal(
+        tester,
+        () => ConfirmationSheet(
+          request: const ServiceRequest(
+            serviceId: 1,
+            description: '',
+            type: ServiceType.road,
+            refNo: 'TXN-1',
+            status: ReqStatus.review,
+            metaLines: [],
+          ),
+          title: 'Road clearing',
+          filipino: false,
+          onViewTrack: () {},
+        ),
+      );
 
       expect(tester.getSize(find.byType(ConfirmationSheet)).height, lessThan(844 * .6));
     });
@@ -184,12 +201,12 @@ void main() {
       return gate;
     }
 
-    testWidgets('both actions are 48dp tall', (tester) async {
+    testWidgets('both actions are 52dp tall', (tester) async {
       await open(tester);
 
       for (final label in ['Keep request', 'Cancel request']) {
-        final button = find.ancestor(of: find.text(label), matching: find.byType(TextButton));
-        expect(tester.getSize(button.last).height, greaterThanOrEqualTo(48), reason: label);
+        final button = find.ancestor(of: find.text(label), matching: find.byType(AppButton));
+        expect(tester.getSize(button.last).height, greaterThanOrEqualTo(52), reason: label);
       }
     });
 

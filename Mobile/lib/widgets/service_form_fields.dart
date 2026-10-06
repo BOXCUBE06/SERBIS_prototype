@@ -38,6 +38,10 @@ class ServiceFormFields extends StatelessWidget {
   /// has a numbered title leaves them off.
   final bool labels;
 
+  /// Drawn at the end of the first section's card (the landmark field, which
+  /// belongs with the location it describes).
+  final Widget? firstSectionExtra;
+
   const ServiceFormFields({
     super.key,
     required this.data,
@@ -48,6 +52,7 @@ class ServiceFormFields extends StatelessWidget {
     this.errors = const {},
     this.dateKey,
     this.labels = true,
+    this.firstSectionExtra,
   });
 
   @override
@@ -113,6 +118,7 @@ class ServiceFormFields extends StatelessWidget {
                     helpText: field.helpText == null ? null : trEn(f, field.helpText!),
                   ),
               ],
+              if (index == 0 && firstSectionExtra != null) firstSectionExtra!,
             ],
           ),
         // Pickup/delivery beyond equipment borrowing (MDRRMO feedback,
@@ -122,16 +128,30 @@ class ServiceFormFields extends StatelessWidget {
           _Group(
             label: labels ? trEn(f, 'Pickup or delivery') : null,
             children: [
-              AppChoiceList(
-                label: trEn(f, 'How should this reach you?'),
-                items: const ['Pickup', 'Delivery'],
-                itemLabel: (option) => trEn(f, option),
-                value: form.fulfillmentMethod,
-                onChanged: (v) {
-                  form.fulfillmentMethod = v;
-                  onChanged();
-                },
+              Text(trEn(f, 'How should this reach you?'), style: AppText.fieldLabel()),
+              const SizedBox(height: AppSpacing.sm),
+              // The same two values the list sent; only drawn as cards now.
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (final (i, method) in const ['Pickup', 'Delivery'].indexed) ...[
+                    if (i > 0) const SizedBox(width: 10),
+                    Expanded(
+                      child: OptionCard(
+                        icon: i == 0 ? Icons.storefront_outlined : Icons.local_shipping_outlined,
+                        title: trEn(f, method),
+                        hint: trEn(f, i == 0 ? 'At MDRRMO office' : 'To an address'),
+                        selected: form.fulfillmentMethod == method,
+                        onTap: () {
+                          form.fulfillmentMethod = method;
+                          onChanged();
+                        },
+                      ),
+                    ),
+                  ],
+                ],
               ),
+              const SizedBox(height: AppSpacing.md),
               if (form.fulfillmentMethod == 'Delivery')
                 AppTextField(
                   label: trEn(f, 'Delivery address'),

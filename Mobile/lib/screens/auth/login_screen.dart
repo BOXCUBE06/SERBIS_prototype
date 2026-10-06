@@ -250,7 +250,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   icon: const Icon(Icons.call_rounded, size: 20, color: AppColors.red600),
                   label: Text(
                     'Emergency hotlines',
-                    style: AppText.display(size: AppTextSize.body, weight: FontWeight.w700, color: AppColors.red600),
+                    style: AppText.display(size: AppTextSize.body, weight: FontWeight.w600, color: AppColors.red600),
                   ),
                 ),
               ),

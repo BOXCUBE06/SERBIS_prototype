@@ -4,6 +4,8 @@ import '../models/request_models.dart';
 import '../state/account_store.dart';
 import '../state/request_store.dart';
 import '../state/translations.dart';
+import '../theme/app_theme.dart';
+import '../widgets/loading.dart' show SkeletonCard;
 import '../widgets/shared_widgets.dart';
 import 'service_drafts.dart';
 import 'service_request_form.dart';
@@ -87,9 +89,10 @@ class _AmbulanceScreenState extends State<AmbulanceScreen> {
                 onProfileTap: widget.onOpenProfile,
                 filipino: f,
               ),
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 60),
-                child: Center(child: CircularProgressIndicator()),
+              // The shape of the first step while the catalogue loads.
+              Padding(
+                padding: const EdgeInsets.fromLTRB(AppLayout.gutter, AppSpacing.lg, AppLayout.gutter, 0),
+                child: SkeletonCard(filipino: f),
               ),
             ],
           );

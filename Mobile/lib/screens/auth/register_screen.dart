@@ -8,7 +8,6 @@ import '../../state/account_store.dart';
 import '../../state/api_service.dart' show VerificationDelivery;
 import '../../state/app_log.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/ambulance_steps.dart' show AmbulanceReviewCard;
 import '../../widgets/auth_layout.dart';
 import '../../widgets/barangay_field.dart';
 import '../../widgets/form_section.dart' show SegmentedChoice;
@@ -396,26 +395,30 @@ class _RegisterScreenState extends State<RegisterScreen> {
         },
       ),
       const SizedBox(height: AppSpacing.md),
-      AmbulanceReviewCard(
-        title: _steps[0],
+      // C_Register3: one list, a row per answer, Edit back to its step.
+      ReviewList(
         filipino: false,
-        onEdit: () => _goTo(0),
         rows: [
-          ('Registering as', _organization ? 'Organization' : 'Head of the Family'),
-          if (_organization) ('Organization name', or(_orgNameCtrl.text)),
-          (_organization ? 'Contact name' : 'Name', or('${_firstNameCtrl.text.trim()} ${_lastNameCtrl.text.trim()}')),
-          ('Mobile number', or(_phoneCtrl.text)),
+          (
+            label: _organization ? 'Organization' : 'Head of the Family',
+            value: [
+              if (_organization) or(_orgNameCtrl.text),
+              or('${_firstNameCtrl.text.trim()} ${_lastNameCtrl.text.trim()}'),
+            ].join(' · '),
+            onEdit: () => _goTo(0),
+          ),
+          (label: 'Mobile number', value: or(_phoneCtrl.text), onEdit: () => _goTo(0)),
+          (
+            label: 'Address',
+            value: [
+              if (_streetCtrl.text.trim().isNotEmpty) _streetCtrl.text.trim(),
+              or(barangayName ?? ''),
+            ].join(', '),
+            onEdit: () => _goTo(1),
+          ),
         ],
       ),
-      AmbulanceReviewCard(
-        title: _steps[1],
-        filipino: false,
-        onEdit: () => _goTo(1),
-        rows: [
-          ('Barangay', or(barangayName ?? '')),
-          ('Street / Purok', or(_streetCtrl.text)),
-        ],
-      ),
+      const SizedBox(height: AppSpacing.md),
       InkWell(
         onTap: () => setState(() {
           _agreed = !_agreed;
