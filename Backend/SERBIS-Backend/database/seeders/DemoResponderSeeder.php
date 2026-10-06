@@ -22,14 +22,15 @@ class DemoResponderSeeder extends Seeder
 {
     // [name, position, contact, status]
     private const RESPONDERS = [
-        ['Rodel Cabantog', 'Ambulance Driver', '09171234501', 'available'],
-        ['Jimmy Alvarez', 'Emergency Medical Technician', '09171234502', 'available'],
-        ['Leonardo Tagorda', 'Rescuer', '09171234503', 'available'],
-        ['Mario Gaoat', 'Rescuer', '09171234504', 'available'],
-        ['Analyn Pagaduan', 'Nurse', '09171234505', 'available'],
-        ['Ernesto Dumlao', 'Boat Operator', '09171234506', 'available'],
-        ['Marites Cabacungan', 'Emergency Medical Technician', '09171234507', 'available'],
-        ['Benjamin Bumanglag', 'Rescuer', '09171234508', 'off_duty'],
+        // Positions are Responder::POSITIONS only.
+        ['Rodel Cabantog', 'Driver', '09171234501', 'available'],
+        ['Jimmy Alvarez', 'Team Leader', '09171234502', 'available'],
+        ['Leonardo Tagorda', 'Assistant Leader', '09171234503', 'available'],
+        ['Mario Gaoat', 'Logistics', '09171234504', 'available'],
+        ['Analyn Pagaduan', 'Logistics', '09171234505', 'available'],
+        ['Ernesto Dumlao', 'Driver', '09171234506', 'available'],
+        ['Marites Cabacungan', 'Assistant Leader', '09171234507', 'available'],
+        ['Benjamin Bumanglag', 'Logistics', '09171234508', 'off_duty'],
     ];
 
     public function run(): void

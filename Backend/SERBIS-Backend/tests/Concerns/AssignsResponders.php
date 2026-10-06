@@ -18,7 +18,7 @@ trait AssignsResponders
         $responder = Responder::create([
             'name' => 'Test Responder',
             'contact_no' => '09170000000',
-            'position' => 'EMT',
+            'position' => 'Logistics',
             'status' => 'available',
         ]);
 

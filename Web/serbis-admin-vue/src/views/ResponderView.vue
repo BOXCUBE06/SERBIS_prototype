@@ -138,6 +138,8 @@ import EditDialog from '@/components/EditDialog.vue'
 
 const API = `${API_BASE}/responders`
 const STATUSES = ['available', 'deployed', 'off_duty']
+// The four roles on a response team; matches Responder::POSITIONS, which refuses anything else.
+const POSITIONS = ['Team Leader', 'Assistant Leader', 'Logistics', 'Driver']
 const STATUS_LABELS = { available: 'Available', deployed: 'Deployed', off_duty: 'Off Duty' }
 const statusLabel = (s) => STATUS_LABELS[s] || s
 // The colour key each status has in statusPill.ts.
@@ -166,7 +168,7 @@ const formRef = ref(null)
 
 const formFields = [
   { key: 'name', label: 'Name', required: true, placeholder: 'e.g. Juan Dela Cruz' },
-  { key: 'position', label: 'Position', required: true, placeholder: 'e.g. EMT' },
+  { key: 'position', label: 'Position', required: true, items: POSITIONS },
   { key: 'contact_no', label: 'Contact number', required: true, placeholder: 'e.g. 09171234567' },
   { key: 'status', label: 'Status', required: true, items: STATUSES, itemTitle: statusLabel },
 ]

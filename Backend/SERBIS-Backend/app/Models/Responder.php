@@ -13,6 +13,9 @@ class Responder extends Model
 
     public const STATUSES = ['available', 'deployed', 'off_duty'];
 
+    /** The four roles on an MDRRMO response team; nothing else is accepted. */
+    public const POSITIONS = ['Team Leader', 'Assistant Leader', 'Logistics', 'Driver'];
+
     protected $table = 'tbl_responders';
 
     protected $primaryKey = 'responder_id';

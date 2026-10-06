@@ -1256,16 +1256,16 @@ const fetchResponders = async () => {
 }
 
 // Driver is a strict pick from Responders (MDRRMO feedback: a trip's driver
-// must be a real responder, not whatever was typed) — Ambulance Driver first,
-// then the rest, each labelled with its position.
-const AMBULANCE_DRIVER_POSITION = 'ambulance driver' // compared lowercased; positions are typed free-form
+// must be a real responder, not whatever was typed) — Drivers first, then the
+// rest, each labelled with its position.
+const DRIVER_POSITION = 'driver' // one of Responder::POSITIONS; compared lowercased in case of stray spacing
 // title = value = the name, so the field shows just the name once picked;
 // position rides along only for the dropdown's #item subtitle (see the
 // template above and ResponderCombobox.vue).
 const driverBaseOptions = computed(() => [...responders.value]
   .sort((a, b) => {
-    const aFirst = (a.position || '').trim().toLowerCase() === AMBULANCE_DRIVER_POSITION
-    const bFirst = (b.position || '').trim().toLowerCase() === AMBULANCE_DRIVER_POSITION
+    const aFirst = (a.position || '').trim().toLowerCase() === DRIVER_POSITION
+    const bFirst = (b.position || '').trim().toLowerCase() === DRIVER_POSITION
     if (aFirst !== bFirst) return aFirst ? -1 : 1
     return a.name.localeCompare(b.name)
   })

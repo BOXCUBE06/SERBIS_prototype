@@ -44,7 +44,7 @@ class DevVolumeSeedTest extends TestCase
             'password' => Hash::make('Password123'), 'role' => 'Admin', 'status' => 'Active']);
         // Six, because DemoAccountsSeeder wants that many.
         foreach (range(0, 5) as $i) {
-            Responder::create(['name' => "Responder {$i}", 'contact_no' => '0917555000'.$i, 'position' => $i % 2 ? 'EMT' : 'Driver', 'status' => 'available']);
+            Responder::create(['name' => "Responder {$i}", 'contact_no' => '0917555000'.$i, 'position' => $i % 2 ? 'Logistics' : 'Driver', 'status' => 'available']);
         }
 
         // The three DemoAccountsSeeder looks up by name, plus enough for a long tail.
