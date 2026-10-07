@@ -10,21 +10,20 @@ use Tests\TestCase;
 /**
  * AmbulanceDestinationSeeder — seeded from a real audit of
  * tbl_ambulance_bookings.destination (docs/ambulance-destinations-audit.md),
- * not invented. Only the one value that survived the audit is asserted here;
- * this test is the guard against someone "helpfully" adding an unverified
- * hospital name later.
+ * plus the two hospitals the office named (2026-10-07). This test guards the
+ * exact list against someone "helpfully" adding an unverified hospital name.
  */
 class AmbulanceDestinationSeederTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_seeds_exactly_the_one_real_destination_the_audit_found(): void
+    public function test_seeds_exactly_the_listed_destinations(): void
     {
         (new AmbulanceDestinationSeeder)->run();
 
         $this->assertSame(
-            ['Echague District Hospital'],
-            AmbulanceDestination::pluck('name')->all(),
+            ['Echague District Hospital', 'Isabela Southern Specialist Hospital Inc.', 'Southern Isabela Medical Center'],
+            AmbulanceDestination::orderBy('id')->pluck('name')->all(),
         );
     }
 
@@ -35,7 +34,7 @@ class AmbulanceDestinationSeederTest extends TestCase
 
         (new AmbulanceDestinationSeeder)->run();
 
-        $this->assertSame(2, AmbulanceDestination::count());
+        $this->assertSame(4, AmbulanceDestination::count());
         $this->assertTrue(AmbulanceDestination::where('name', 'A Destination Staff Added')->exists());
     }
 }

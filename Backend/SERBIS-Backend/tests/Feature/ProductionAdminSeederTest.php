@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use Database\Seeders\ProductionAdminSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -47,5 +48,27 @@ class ProductionAdminSeederTest extends TestCase
 
         $this->assertSame(1, DB::table('tbl_user')->count());
         $this->assertSame('jilmar.ferrer', DB::table('tbl_user')->value('username'));
+    }
+
+    public function test_the_password_is_required_only_while_no_admin_exists(): void
+    {
+        unset($_SERVER['ADMIN_SEED_PASSWORD']);
+
+        try {
+            $this->seed(ProductionAdminSeeder::class);
+            $this->fail('Expected a RuntimeException with no admin and no password.');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('ADMIN_SEED_PASSWORD', $e->getMessage());
+        }
+        $this->assertSame(0, DB::table('tbl_user')->count());
+
+        DB::table('tbl_user')->insert([
+            'first_name' => 'Other', 'last_name' => 'Admin', 'role' => 'Admin', 'status' => 'Active',
+            'username' => 'otheradmin', 'email_address' => 'other@example.com', 'password' => 'x',
+        ]);
+
+        $this->seed(ProductionAdminSeeder::class);
+
+        $this->assertSame(1, DB::table('tbl_user')->count());
     }
 }

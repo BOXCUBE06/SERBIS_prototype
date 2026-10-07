@@ -77,6 +77,13 @@ class ReseedRequestDataTest extends TestCase
         $this->artisan('serbis:reseed-requests', ['--force' => true])->assertFailed();
     }
 
+    public function test_it_refuses_in_staging(): void
+    {
+        $this->app['env'] = 'staging';
+
+        $this->artisan('serbis:reseed-requests', ['--force' => true])->assertFailed();
+    }
+
     public function test_it_refuses_any_other_database(): void
     {
         $default = config('database.default');
