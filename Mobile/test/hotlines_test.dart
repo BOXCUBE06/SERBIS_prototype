@@ -90,9 +90,8 @@ void main() {
     for (final hotline in kHotlines) {
       expect(find.text(hotline.label), findsOneWidget);
       for (final n in hotline.numbers) {
-        final text = n.label == null ? n.number : '${n.label} · ${n.number}';
-        expect(find.text(text), findsOneWidget,
-            reason: '${hotline.label}: $text');
+        // The line's kind sits over its number, each its own text.
+        expect(find.text(n.number), findsOneWidget, reason: '${hotline.label}: ${n.number}');
       }
     }
   });

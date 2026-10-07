@@ -5,8 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use App\Support\AdminSections;
 use App\Support\PhoneNumber;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 
@@ -41,13 +41,15 @@ use Illuminate\Validation\Rules\Password;
  * its owner to replace it. When no admin can sign in at all, the
  * `staff:reset-password` command does the same from the server.
  *
- * **Closing an account is deactivation, not deletion.** `tbl_system_logs`
- * carries a foreign key to this table, so an admin who has ever done anything
- * cannot be deleted at all — the first draft of this controller answered 500
- * on exactly the case the feature exists for, a departing employee. Deleting
- * is kept only for an account with no history, which is what a typo looks
- * like; everything else is deactivated, which ends access and leaves every log
- * row still naming who did it.
+ * **Closing an account is deactivation, never deletion.** It ends access, leaves
+ * every log row still naming who did it, and can always be undone with
+ * Reactivate. Accounts with no history used to be deleted outright, which made
+ * the same red button reversible for some accounts and not others; since
+ * 2026-10-05 every account is deactivated, a typo included.
+ *
+ * The bulk routes (bulkClose, bulkReactivate, bulkPermissions) run the very same
+ * per-account checks as the single ones, one account at a time, and report
+ * which accounts were refused and why instead of failing the whole request.
  */
 class AdminController extends Controller
 {
@@ -58,7 +60,6 @@ class AdminController extends Controller
      * address actually changes: accounts made before this rule keep their
      * existing address and must still be savable.
      */
-
     public function index()
     {
         // Ordered so the list does not reshuffle between edits. `password` is
@@ -177,12 +178,8 @@ class AdminController extends Controller
     }
 
     /**
-     * Ends an account's access.
-     *
-     * Deactivates by default and deletes only an account with nothing recorded
-     * against it. A row with log history cannot be deleted at all — the foreign
-     * key refuses — and forcing it would take the name off every action that
-     * admin ever took.
+     * Ends an account's access by deactivating it. Never deletes: see the class
+     * comment. Reactivate undoes it.
      */
     public function destroy(Request $request, $id)
     {
@@ -192,55 +189,13 @@ class AdminController extends Controller
             return response()->json(['message' => 'Admin not found'], 404);
         }
 
-        if ($refusal = $this->refuseSuperAdminTarget($request, $admin)) {
+        if ($refusal = $this->closeOne($request, $admin)) {
             return $refusal;
         }
 
-        // Three refusals, and all exist because the panel has no other way back
-        // in. Closing your own account ends your session mid-click; closing the
-        // last active one leaves an office with a running system and no way to
-        // sign into it, recoverable only by the hand-written INSERT this whole
-        // feature replaced; and closing the last active super admin leaves
-        // nobody who can change anyone's access.
-        if ((int) $admin->getKey() === (int) $request->user()->getKey()) {
-            return response()->json([
-                'message' => 'You cannot close your own account. Ask another admin to do it.',
-            ], 422);
-        }
-
-        if ($this->activeCount() <= 1 && $this->isActive($admin)) {
-            return response()->json([
-                'message' => 'This is the only active admin account. Create another one before closing it.',
-            ], 422);
-        }
-
-        if ($this->isLastActiveSuperAdmin($admin)) {
-            return response()->json([
-                'message' => 'This is the only active super admin. Make another account a super admin before closing it.',
-            ], 422);
-        }
-
-        // Tokens go either way. Sanctum resolves a token to its owner on every
-        // request, so an already-issued one would otherwise keep working for
-        // the rest of its 8-hour life against an account that has just been
-        // closed.
-        $admin->tokens()->delete();
-
-        if ($this->hasHistory($admin)) {
-            $admin->status = 'Inactive';
-            $admin->save();
-
-            return response()->json([
-                'message' => 'Admin account deactivated. Their name stays on the actions they took.',
-                'deactivated' => true,
-            ]);
-        }
-
-        $admin->delete();
-
         return response()->json([
-            'message' => 'Admin account removed',
-            'deactivated' => false,
+            'message' => 'Admin account deactivated. It can be reactivated later.',
+            'deactivated' => true,
         ]);
     }
 
@@ -257,14 +212,39 @@ class AdminController extends Controller
             return response()->json(['message' => 'Admin not found'], 404);
         }
 
-        if ($refusal = $this->refuseSuperAdminTarget($request, $admin)) {
+        if ($refusal = $this->reactivateOne($request, $admin)) {
             return $refusal;
         }
 
-        $admin->status = 'Active';
-        $admin->save();
-
         return response()->json($admin);
+    }
+
+    /** Closes each listed account in turn, with destroy()'s checks for each. */
+    public function bulkClose(Request $request)
+    {
+        return $this->eachAdmin($request, fn (User $admin) => $this->closeOne($request, $admin));
+    }
+
+    /** Reactivates each listed account in turn, with reactivate()'s checks for each. */
+    public function bulkReactivate(Request $request)
+    {
+        return $this->eachAdmin($request, fn (User $admin) => $this->reactivateOne($request, $admin));
+    }
+
+    /** Gives every listed account the same access, with updatePermissions()'s checks for each. */
+    public function bulkPermissions(Request $request)
+    {
+        if ($refusal = $this->refuseNonSuperCaller($request)) {
+            return $refusal;
+        }
+
+        $validated = $this->validatePermissions($request);
+
+        if ($validated instanceof JsonResponse) {
+            return $validated;
+        }
+
+        return $this->eachAdmin($request, fn (User $admin) => $this->permissionsOne($admin, $validated));
     }
 
     /**
@@ -282,6 +262,31 @@ class AdminController extends Controller
      */
     public function updatePermissions(Request $request, $id)
     {
+        if ($refusal = $this->refuseNonSuperCaller($request)) {
+            return $refusal;
+        }
+
+        $admin = User::find($id);
+
+        if (! $admin) {
+            return response()->json(['message' => 'Admin not found'], 404);
+        }
+
+        $validated = $this->validatePermissions($request);
+
+        if ($validated instanceof JsonResponse) {
+            return $validated;
+        }
+
+        if ($refusal = $this->permissionsOne($admin, $validated)) {
+            return $refusal;
+        }
+
+        return response()->json($admin->fresh());
+    }
+
+    private function refuseNonSuperCaller(Request $request)
+    {
         $caller = $request->user();
 
         if (! $caller instanceof User || ! $caller->isSuperAdmin()) {
@@ -291,12 +296,12 @@ class AdminController extends Controller
             ], 403);
         }
 
-        $admin = User::find($id);
+        return null;
+    }
 
-        if (! $admin) {
-            return response()->json(['message' => 'Admin not found'], 404);
-        }
-
+    /** The access fields, validated; a 422 response when neither was sent. */
+    private function validatePermissions(Request $request)
+    {
         $validated = $request->validate([
             'is_super_admin' => ['sometimes', 'boolean'],
             'permissions' => ['sometimes', 'array'],
@@ -312,6 +317,12 @@ class AdminController extends Controller
             ], 422);
         }
 
+        return $validated;
+    }
+
+    /** Applies validated access to one account; a refusal response, or null once saved. */
+    private function permissionsOne(User $admin, array $validated)
+    {
         if (array_key_exists('is_super_admin', $validated)
             && ! $validated['is_super_admin']
             && $this->isLastActiveSuperAdmin($admin)) {
@@ -332,7 +343,103 @@ class AdminController extends Controller
 
         $admin->save();
 
-        return response()->json($admin->fresh());
+        return null;
+    }
+
+    /**
+     * Deactivates one account; a refusal response, or null once closed.
+     *
+     * Three refusals, and all exist because the panel has no other way back in.
+     * Closing your own account ends your session mid-click; closing the last
+     * active one leaves an office with a running system and no way to sign into
+     * it; and closing the last active super admin leaves nobody who can change
+     * anyone's access. Checked per account, so a bulk close that would empty the
+     * office stops at the account that would have done it.
+     */
+    private function closeOne(Request $request, User $admin)
+    {
+        if ($refusal = $this->refuseSuperAdminTarget($request, $admin)) {
+            return $refusal;
+        }
+
+        if ((int) $admin->getKey() === (int) $request->user()->getKey()) {
+            return response()->json([
+                'message' => 'You cannot close your own account. Ask another admin to do it.',
+            ], 422);
+        }
+
+        if ($this->activeCount() <= 1 && $this->isActive($admin)) {
+            return response()->json([
+                'message' => 'This is the only active admin account. Create another one before closing it.',
+            ], 422);
+        }
+
+        if ($this->isLastActiveSuperAdmin($admin)) {
+            return response()->json([
+                'message' => 'This is the only active super admin. Make another account a super admin before closing it.',
+            ], 422);
+        }
+
+        // Sanctum resolves a token to its owner on every request, so an
+        // already-issued one would otherwise keep working for the rest of its
+        // 8-hour life against an account that has just been closed.
+        $admin->tokens()->delete();
+        $admin->status = 'Inactive';
+        $admin->save();
+
+        return null;
+    }
+
+    private function reactivateOne(Request $request, User $admin)
+    {
+        if ($refusal = $this->refuseSuperAdminTarget($request, $admin)) {
+            return $refusal;
+        }
+
+        $admin->status = 'Active';
+        $admin->save();
+
+        return null;
+    }
+
+    /**
+     * Runs $action on every account in `ids`, in the order sent. `done` lists the
+     * ids it succeeded on; `failed` names each account it did not, with the same
+     * message the single route would have answered.
+     */
+    private function eachAdmin(Request $request, callable $action)
+    {
+        $ids = $request->validate([
+            'ids' => ['required', 'array', 'min:1', 'max:200'],
+            'ids.*' => ['integer', 'distinct'],
+        ])['ids'];
+
+        $done = [];
+        $failed = [];
+
+        foreach ($ids as $id) {
+            $admin = User::find($id);
+
+            if (! $admin) {
+                $failed[] = ['id' => (int) $id, 'name' => null, 'message' => 'Admin not found'];
+
+                continue;
+            }
+
+            $refusal = $action($admin);
+
+            if ($refusal === null) {
+                $done[] = (int) $id;
+            } else {
+                $failed[] = [
+                    'id' => (int) $id,
+                    'name' => trim($admin->first_name.' '.$admin->last_name),
+                    'message' => $refusal->getData(true)['message'] ?? 'Refused',
+                ];
+            }
+        }
+
+        return response()->json(['done' => $done, 'failed' => $failed]);
     }
 
     /**
@@ -437,18 +544,6 @@ class AdminController extends Controller
         }
 
         return null;
-    }
-
-    /**
-     * True when anything in the audit trail points at this account. That
-     * foreign key is what makes deletion impossible, so it is also what decides
-     * between deleting and deactivating. SMS blasts count too: they write no
-     * audit row but hold their own RESTRICT key on the sender.
-     */
-    private function hasHistory(User $admin): bool
-    {
-        return DB::table('tbl_system_logs')->where('admin_id', $admin->getKey())->exists()
-            || DB::table('tbl_sms_logs')->where('sender_id', $admin->getKey())->exists();
     }
 
     /**

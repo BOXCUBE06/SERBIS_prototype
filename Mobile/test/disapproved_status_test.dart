@@ -67,7 +67,7 @@ void main() {
 
     test('Filipino says hindi inaprubahan, not kinansela', () {
       expect(ReqStatus.disapproved.labelFor(true), 'Hindi inaprubahan');
-      expect(ReqStatus.cancelled.labelFor(true), 'Kinansela');
+      expect(ReqStatus.cancelled.labelFor(true), 'Kinansela mo');
     });
 
     test('every status has a label in both languages', () {
@@ -90,21 +90,21 @@ void main() {
       final steps = _requestWithStatus('Disapproved').timelineFor(false);
 
       expect(steps, hasLength(2));
-      expect(steps.last.title, 'Not approved by MDRRMO');
+      expect(steps.last.title, 'Not approved');
       expect(steps.last.state, RequestStepState.done);
       expect(steps.last.time, isNot('Time not recorded'));
     });
 
-    test('the Filipino timeline names the agency too', () {
+    test('the Filipino timeline says the same word as the status', () {
       final steps = _requestWithStatus('Disapproved').timelineFor(true);
 
-      expect(steps.last.title, 'Hindi inaprubahan ng MDRRMO');
+      expect(steps.last.title, 'Hindi inaprubahan');
     });
 
     test('a cancelled request still closes with its own step', () {
       final steps = _requestWithStatus('Cancelled').timelineFor(false);
 
-      expect(steps.last.title, 'Cancelled');
+      expect(steps.last.title, 'Cancelled by you');
     });
 
     test('every status produces a timeline', () {

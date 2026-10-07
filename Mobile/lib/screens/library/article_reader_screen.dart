@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import '../../data/safety_files.dart';
 import '../../state/translations.dart';
 import '../../theme/app_theme.dart';
-import '../../widgets/borrow_request_widgets.dart' show StatusBox;
 import '../../widgets/shared_widgets.dart' show HeaderButton;
+import '../../widgets/status_line.dart';
 
 class ArticleReaderScreen extends StatefulWidget {
   final LibraryArticle article;
@@ -35,8 +35,8 @@ class _ArticleReaderScreenState extends State<ArticleReaderScreen> {
             width: double.infinity,
             padding: const EdgeInsets.fromLTRB(8, AppLayout.headerTop, 14, 20),
             decoration: const BoxDecoration(
-              gradient: AppColors.headerGradient,
-              borderRadius: BorderRadius.vertical(bottom: Radius.circular(AppRadius.xxl)),
+              color: AppColors.header,
+              borderRadius: BorderRadius.vertical(bottom: Radius.circular(AppRadius.header)),
             ),
             child: Center(
               child: ConstrainedBox(
@@ -95,14 +95,15 @@ class _ArticleReaderScreenState extends State<ArticleReaderScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    StatusBox(
-                      icon: Icons.wifi_off_rounded,
-                      bg: AppColors.green50,
-                      fg: AppColors.green700,
-                      title: tr(f, 'article.offline_title'),
-                      next: f
+                    // A quiet line, not a box: being readable offline is good
+                    // news, not something to act on.
+                    StatusLine(label: tr(f, 'article.offline_title'), tone: StatusTone.green),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      f
                           ? 'Naka-save ang materyal na ito para mabasa kahit walang internet.'
                           : 'This material is saved for offline reading — you can open it anytime, even without an internet connection.',
+                      style: AppText.detail(),
                     ),
                     const SizedBox(height: AppSpacing.xl),
                     for (final section in sections) _SectionBlock(section: section),
@@ -162,7 +163,7 @@ class _LanguageToggle extends StatelessWidget {
                 label,
                 style: AppText.display(
                   size: AppTextSize.small,
-                  weight: FontWeight.w700,
+                  weight: FontWeight.w600,
                   color: active ? AppColors.green700 : Colors.white,
                   letterSpacing: .5,
                 ),

@@ -8,6 +8,13 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
+        // A plain `db:seed` on production gets the production set and nothing else.
+        if (app()->environment('production')) {
+            $this->call(ProductionSeeder::class);
+
+            return;
+        }
+
         $this->call([
             // 1. Independent Tables
             BarangaySeeder::class,

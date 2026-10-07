@@ -5,16 +5,23 @@ import '../models/request_models.dart';
 import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
+import 'borrow_request_widgets.dart' show borrowStatus, serviceStatus;
+import 'status_line.dart';
 
-/// One open request as Home's "Your requests" and Track's "Borrowed items"
-/// draw it: a short title and a plain-language status.
+/// One open request as Home's latest-request panel and Track's "Borrowed
+/// items" draw it: a short title and its status in the shared wording.
 class RequestSummary {
   final String title;
   final String status;
-
-  /// Amber "waiting on MDRRMO" rather than green "under way".
-  final bool waiting;
+  final StatusTone tone;
   final DateTime? createdAt;
+
+  /// When the row last changed, for "Updated <time>".
+  final DateTime? updatedAt;
+
+  /// Steps done so far out of [steps], for Home's progress bar.
+  final int step;
+  final int steps;
 
   /// A loan opens Borrow → My requests; a service request opens Track.
   final bool isBorrow;
@@ -22,9 +29,12 @@ class RequestSummary {
   const RequestSummary({
     required this.title,
     required this.status,
-    required this.waiting,
+    required this.tone,
     required this.createdAt,
     required this.isBorrow,
+    this.updatedAt,
+    this.step = 0,
+    this.steps = 0,
   });
 }
 
@@ -47,30 +57,44 @@ String requestTitle(ServiceRequest r, bool f) =>
 /// Open service requests (Pending, Booked, Responding), newest first.
 List<RequestSummary> openServiceSummaries(AppState state, bool f) => _newestFirst([
       for (final r in state.requests)
-        if (isOpenRequest(r))
-          RequestSummary(
-            title: requestTitle(r, f),
-            status: switch (r.status) {
-              ReqStatus.review => tr(f, 'home.req.waiting'),
-              ReqStatus.scheduled when !r.isProgram => tr(f, 'timeline.responding'),
-              _ => r.statusLabelFor(f),
-            },
-            waiting: r.status == ReqStatus.review,
-            createdAt: r.createdAt,
-            isBorrow: false,
-          ),
+        if (isOpenRequest(r)) _serviceSummary(r, f),
     ]);
 
+RequestSummary _serviceSummary(ServiceRequest r, bool f) {
+  final status = serviceStatus(r, f);
+  final timeline = r.timelineFor(f);
+  final current = timeline.indexWhere((s) => s.state == RequestStepState.current);
+  return RequestSummary(
+    title: requestTitle(r, f),
+    status: status.label,
+    tone: status.tone,
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt ?? r.createdAt,
+    step: current < 0 ? timeline.length : current,
+    steps: timeline.length,
+    isBorrow: false,
+  );
+}
+
 /// Open loans (pending, approved, released), newest first. Home and Track both
-/// read this, so "See all (N)" counts exactly what Track lists.
+/// read this, so what Home counts is exactly what Track lists.
 List<RequestSummary> openLoanSummaries(AppState state, bool f) => _newestFirst([
       for (final b in state.borrowRequests)
         if (!b.status.isTerminal)
           RequestSummary(
             title: '${b.itemLabel} × ${b.quantity}',
-            status: b.status == BorrowStatus.pending ? tr(f, 'home.req.waiting') : b.status.labelFor(f),
-            waiting: b.status == BorrowStatus.pending,
+            status: borrowStatus(b, f).label,
+            tone: borrowStatus(b, f).tone,
             createdAt: b.createdAt,
+            updatedAt: b.updatedAt ?? b.createdAt,
+            // Sent, Under review, Ready/Out for delivery, Returned: the step in
+            // progress, as BorrowProgressSteps draws it.
+            step: switch (b.status) {
+              BorrowStatus.pending => 1,
+              BorrowStatus.approved => 2,
+              _ => 3,
+            },
+            steps: 4,
             isBorrow: true,
           ),
     ]);
@@ -79,6 +103,7 @@ List<RequestSummary> openLoanSummaries(AppState state, bool f) => _newestFirst([
 List<RequestSummary> openSummaries(AppState state, bool f) =>
     _newestFirst([...openServiceSummaries(state, f), ...openLoanSummaries(state, f)]);
 
+/// Title over a small status line, with a chevron.
 class RequestSummaryRow extends StatelessWidget {
   final RequestSummary request;
   final VoidCallback onTap;
@@ -87,16 +112,12 @@ class RequestSummaryRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final (Color bg, Color fg, Color dot) = request.waiting
-        ? (AppColors.amber50, AppColors.amberInk, AppColors.amberDot)
-        : (AppColors.greenTonal, AppColors.green900, AppColors.green600);
-
     return InkWell(
       onTap: onTap,
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 72),
+        constraints: const BoxConstraints(minHeight: 68),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
             children: [
               Expanded(
@@ -107,23 +128,10 @@ class RequestSummaryRow extends StatelessWidget {
                       request.title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: AppText.display(size: 16, weight: FontWeight.w600),
+                      style: AppText.display(size: AppTextSize.bodyLg, weight: FontWeight.w600, height: 1.3),
                     ),
-                    const SizedBox(height: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(AppRadius.pill)),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Container(width: 8, height: 8, decoration: BoxDecoration(color: dot, shape: BoxShape.circle)),
-                          const SizedBox(width: 6),
-                          Flexible(
-                            child: Text(request.status, style: AppText.display(size: AppTextSize.small, weight: FontWeight.w500, color: fg)),
-                          ),
-                        ],
-                      ),
-                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    StatusLine(label: request.status, tone: request.tone),
                   ],
                 ),
               ),
@@ -149,7 +157,7 @@ class SummaryCard extends StatelessWidget {
       color: AppColors.surface,
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadius.lg),
         side: const BorderSide(color: AppColors.cardBorder),
       ),
       child: Column(

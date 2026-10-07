@@ -43,18 +43,28 @@ class HotlineList extends StatelessWidget {
     );
   }
 
+  /// The line's kind ("Globe", "Landline") over the number, as C_Hotlines
+  /// draws it; the whole row dials.
   Widget _numberRow(HotlineNumber n) {
     return InkWell(
       borderRadius: BorderRadius.circular(AppRadius.sm),
       onTap: () => callHotlineNumber(n.number),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 48),
+        constraints: const BoxConstraints(minHeight: 56),
         child: Row(
           children: [
             Expanded(
-              child: Text(
-                n.label == null ? n.number : '${n.label} · ${n.number}',
-                style: AppText.display(size: AppTextSize.bodyLg, weight: FontWeight.w700, color: AppColors.green700),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (n.label != null) Text(n.label!, style: AppText.detail()),
+                  Text(
+                    n.number,
+                    style: AppText.display(size: 17, weight: FontWeight.w600, color: AppColors.ink)
+                        .copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+                  ),
+                ],
               ),
             ),
             const SizedBox(width: 8),

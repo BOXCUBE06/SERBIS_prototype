@@ -3,11 +3,15 @@ import 'package:flutter/material.dart';
 import '../models/request_models.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
-import 'borrow_request_widgets.dart' show StatusBox;
+import 'borrow_request_widgets.dart' show serviceStatus;
+import 'feedback.dart' show FieldError;
+import 'form_inputs.dart' show RequiredMark;
 import 'shared_widgets.dart';
+import 'status_line.dart';
 
-/// An upload slot on the request form. The file itself is picked by the screen
-/// — this only reports what is attached.
+/// An upload slot on the request form: label, what it takes, a Choose file
+/// button and, once attached, the file. The file itself is picked by the
+/// screen — this only reports what is attached.
 ///
 /// Was `ValidIdUploadField`, with the label and the hint written into it. A
 /// second, optional upload (the site photo) needs the same control with
@@ -30,6 +34,13 @@ class AttachmentUploadField extends StatelessWidget {
   /// Shown under the slot, which then draws a red border.
   final String? errorText;
 
+  /// The camera path, where the caller has one (the ambulance's ID): a Take
+  /// photo button beside Choose file, which [onTap] keeps.
+  final VoidCallback? onTakePhoto;
+
+  /// A red * after [label]. Display only; the caller validates.
+  final bool isRequired;
+
   const AttachmentUploadField({
     super.key,
     required this.label,
@@ -39,77 +50,104 @@ class AttachmentUploadField extends StatelessWidget {
     this.onClear,
     this.filipino = false,
     this.errorText,
+    this.onTakePhoto,
+    this.isRequired = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final f = filipino;
     final hasFile = fileName != null;
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(label, style: AppText.fieldLabel()),
-          const SizedBox(height: 6),
-          InkWell(
-            onTap: onTap,
-            borderRadius: BorderRadius.circular(AppRadius.sm),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 14),
-              decoration: BoxDecoration(
-                color: hasFile ? AppColors.green50 : AppColors.surface,
-                border: Border.all(
-                  color: errorText != null ? AppColors.red600 : (hasFile ? AppColors.green700 : AppColors.line),
-                  width: 1.5,
+          Row(
+            children: [
+              Flexible(child: Text(label, style: AppText.fieldLabel())),
+              if (isRequired) const RequiredMark(),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(hint, style: AppText.detail()),
+          const SizedBox(height: 10),
+          // The pickers come first: a test (and a resident) tapping the slot
+          // reaches them before the attached file's own remove button.
+          Row(
+            children: [
+              if (onTakePhoto != null) ...[
+                Expanded(child: _button(Icons.photo_camera_outlined, trEn(f, 'Take photo'), onTakePhoto!)),
+                const SizedBox(width: AppSpacing.sm),
+              ],
+              Expanded(
+                child: _button(
+                  Icons.folder_open_rounded,
+                  // Beside Take photo there is no room for "another".
+                  trEn(f, hasFile && onTakePhoto == null ? 'Choose another file' : 'Choose file'),
+                  onTap,
                 ),
-                borderRadius: BorderRadius.circular(AppRadius.sm),
+              ),
+            ],
+          ),
+          if (hasFile)
+            Container(
+              margin: const EdgeInsets.only(top: AppSpacing.sm),
+              padding: EdgeInsets.fromLTRB(12, onClear == null ? 12 : 2, onClear == null ? 12 : 2, onClear == null ? 12 : 2),
+              decoration: BoxDecoration(
+                color: AppColors.green50,
+                borderRadius: BorderRadius.circular(AppRadius.md),
+                border: Border.all(color: AppColors.greenNoticeBorder),
               ),
               child: Row(
                 children: [
-                  Icon(
-                    hasFile ? Icons.check_circle_rounded : Icons.cloud_upload_outlined,
-                    color: hasFile ? AppColors.green700 : AppColors.inkFaint,
-                    size: 20,
-                  ),
+                  const Icon(Icons.check_circle_rounded, color: AppColors.green700, size: 20),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      hasFile ? fileName! : hint,
-                      style: AppText.body(
-                          size: AppTextSize.body, color: hasFile ? AppColors.green900 : AppColors.inkMuted, height: 1.35),
-                      // A file name is cut short; the instruction is not, or
-                      // the resident cannot read which file is being asked for.
-                      maxLines: hasFile ? 1 : 3,
+                      fileName!,
+                      maxLines: 1,
                       overflow: TextOverflow.ellipsis,
+                      style: AppText.body(color: AppColors.green900, weight: FontWeight.w500),
                     ),
                   ),
-                  if (hasFile && onClear != null)
-                    // Its own tap target, outside the InkWell that reopens the
-                    // picker — nested inside it, clearing would also relaunch
-                    // the file browser.
+                  if (onClear != null)
                     IconButton(
                       onPressed: onClear,
                       icon: const Icon(Icons.close_rounded, size: 20),
                       color: AppColors.inkMuted,
-                      visualDensity: VisualDensity.compact,
-                      padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-                      tooltip: trEn(filipino, 'Remove {label}').replaceAll('{label}', label),
+                      tooltip: trEn(f, 'Remove {label}').replaceAll('{label}', label),
                     ),
                 ],
               ),
             ),
-          ),
           if (errorText != null)
             Padding(
-              padding: const EdgeInsets.only(top: AppSpacing.xs, left: 2),
-              child: Text(errorText!, style: AppText.body(size: AppTextSize.small, color: AppColors.red600)),
+              padding: const EdgeInsets.only(top: 6),
+              child: FieldError(errorText!),
             ),
         ],
       ),
     );
   }
+
+  Widget _button(IconData icon, String text, VoidCallback onPressed) => SizedBox(
+        height: 48,
+        child: OutlinedButton.icon(
+          onPressed: onPressed,
+          icon: Icon(icon, size: 18),
+          label: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppColors.ink,
+            backgroundColor: AppColors.surface,
+            textStyle: AppText.display(size: AppTextSize.body, weight: FontWeight.w600),
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+            side: BorderSide(color: errorText != null ? AppColors.red600 : AppColors.fieldBorder, width: errorText != null ? 2 : 1),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.md)),
+          ),
+        ),
+      );
 }
 
 /// "Non-life-threatening use only", above the ambulance form. The hotlines
@@ -146,7 +184,7 @@ class SafetyNotice extends StatelessWidget {
                   children: [
                     Text(
                       tr(f, 'services.notice_title'),
-                      style: AppText.display(size: AppTextSize.bodyLg, weight: FontWeight.w700, color: AppColors.amber600),
+                      style: AppText.display(size: AppTextSize.bodyLg, weight: FontWeight.w600, color: AppColors.amber600),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -305,39 +343,39 @@ class SubmitErrorCard extends StatelessWidget {
   }
 }
 
-/// Shown only after the server confirms the request, and it carries the
-/// server's reference number — M3 and M4 both live in that sentence.
+/// Shown only after the server confirms the request (C_Sent): what was sent,
+/// its reference and time, where it stands in the same words Track uses, and
+/// the way to follow it.
 class ConfirmationSheet extends StatelessWidget {
-  final String refNo;
+  /// The request as the server returned it: its reference, times and status.
+  final ServiceRequest request;
+
+  /// The service's name, as the form was titled.
+  final String title;
   final bool filipino;
   final VoidCallback onViewTrack;
 
-  /// Set only for an ambulance booking. Shown with
-  /// [formatBookingConfirmationTime], not [formatTimelineTime] — a booking
-  /// confirmation is exactly the case that formatter's own doc comment says
-  /// needs the year, since a resident can reopen this weeks after filing.
-  final DateTime? scheduledAt;
-
   const ConfirmationSheet({
     super.key,
-    required this.refNo,
+    required this.request,
+    required this.title,
     required this.filipino,
     required this.onViewTrack,
-    this.scheduledAt,
   });
 
   @override
   Widget build(BuildContext context) {
     final f = filipino;
-    final body = tr(f, 'services.confirm.body').replaceAll('{ref}', refNo);
-    final scheduled = scheduledAt;
+    final r = request;
+    final status = serviceStatus(r, f);
+    final scheduled = r.scheduledAt;
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(AppRadius.xxl)),
       ),
-      padding: EdgeInsets.fromLTRB(AppLayout.gutter, 24, AppLayout.gutter, 24 + MediaQuery.paddingOf(context).bottom),
+      padding: EdgeInsets.fromLTRB(AppLayout.gutter, 12, 12, 24 + MediaQuery.paddingOf(context).bottom),
       child: Align(
         alignment: Alignment.topCenter,
         heightFactor: 1,
@@ -347,25 +385,90 @@ class ConfirmationSheet extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              StatusBox(
-                icon: Icons.check_circle_rounded,
-                bg: AppColors.green50,
-                fg: AppColors.green700,
-                title: tr(f, 'services.confirm.title'),
-                next: body,
+              Row(
+                children: [
+                  Expanded(
+                    child: Semantics(
+                      header: true,
+                      child: Text(tr(f, 'services.confirm.title'), style: AppText.display(size: AppTextSize.pageTitle)),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    tooltip: tr(f, 'common.close'),
+                    icon: const Icon(Icons.close_rounded, size: 20),
+                    style: IconButton.styleFrom(
+                      backgroundColor: AppColors.grey50,
+                      foregroundColor: AppColors.ink,
+                      fixedSize: const Size(44, 44),
+                    ),
+                  ),
+                ],
               ),
-              if (scheduled != null) ...[
-                const SizedBox(height: AppSpacing.sm),
-                StatusBox(
-                  icon: Icons.event_available_rounded,
-                  bg: AppColors.green50,
-                  fg: AppColors.green700,
-                  title: tr(f, 'services.confirm.scheduled_for'),
-                  next: formatBookingConfirmationTime(scheduled, f),
+              Padding(
+                padding: const EdgeInsets.only(right: AppLayout.gutter - 12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const SizedBox(height: AppSpacing.md),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          width: 44,
+                          height: 44,
+                          decoration: const BoxDecoration(color: AppColors.green50, shape: BoxShape.circle),
+                          child: const Icon(Icons.check_rounded, color: AppColors.green700),
+                        ),
+                        const SizedBox(width: AppSpacing.md),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(title, style: AppText.display(size: AppTextSize.bodyLg, weight: FontWeight.w600, height: 1.3)),
+                              const SizedBox(height: 2),
+                              Text(
+                                [
+                                  r.refNo.isEmpty ? tr(f, 'track.ref_pending') : r.refNo,
+                                  if (r.createdAt != null) formatTimelineTime(r.createdAt!, f),
+                                ].join(' · '),
+                                style: AppText.detail(),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    StatusLine(
+                      label: status.label,
+                      tone: status.tone,
+                      large: true,
+                      updatedAt: r.updatedAt ?? r.createdAt,
+                      filipino: f,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(status.next, style: AppText.body(color: AppColors.inkMuted, height: 1.5)),
+                    // A Booked status already names the time in its own line.
+                    if (scheduled != null && r.status != ReqStatus.booked) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        '${tr(f, 'services.confirm.scheduled_for')} ${formatBookingConfirmationTime(scheduled, f)}',
+                        style: AppText.body(color: AppColors.ink, weight: FontWeight.w500, height: 1.5),
+                      ),
+                    ],
+                    const SizedBox(height: AppSpacing.xl),
+                    AppButton(label: tr(f, 'services.confirm.view_track'), onPressed: onViewTrack),
+                    const SizedBox(height: AppSpacing.sm),
+                    // Only closes the sheet, as a swipe down does.
+                    AppButton(
+                      label: trEn(f, 'Done'),
+                      style: AppButtonStyle.outline,
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
                 ),
-              ],
-              const SizedBox(height: AppSpacing.lg),
-              AppButton(label: tr(f, 'services.confirm.view_track'), onPressed: onViewTrack),
+              ),
             ],
           ),
         ),
@@ -410,81 +513,4 @@ class ServiceGrid extends StatelessWidget {
 
     return Column(children: rows);
   }
-}
-
-/// The valid-ID upload: a dashed-look drop zone with Take photo / Choose file.
-class IdUploadCard extends StatelessWidget {
-  final bool filipino;
-
-  /// Name of the attached file, or null when nothing is attached yet.
-  final String? fileName;
-  final VoidCallback onTakePhoto;
-  final VoidCallback onChooseFile;
-
-  const IdUploadCard({
-    super.key,
-    required this.filipino,
-    required this.fileName,
-    required this.onTakePhoto,
-    required this.onChooseFile,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final f = filipino;
-    final attached = fileName != null;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: attached ? AppColors.green50 : AppColors.paper,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        border: Border.all(color: attached ? AppColors.green600 : AppColors.line, width: 1.5),
-      ),
-      child: Column(
-        children: [
-          Icon(
-            attached ? Icons.check_circle_rounded : Icons.badge_outlined,
-            size: 28,
-            color: AppColors.green700,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            attached ? fileName! : trEn(f, 'Upload a photo of a valid ID'),
-            textAlign: TextAlign.center,
-            style: AppText.body(size: AppTextSize.bodyLg, weight: FontWeight.w500),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            trEn(f, 'JPG or PNG, up to 2 MB'),
-            style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              Expanded(child: _button(Icons.photo_camera_outlined, trEn(f, 'Take photo'), onTakePhoto)),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(child: _button(Icons.folder_open_rounded, trEn(f, 'Choose file'), onChooseFile)),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _button(IconData icon, String label, VoidCallback onTap) => SizedBox(
-        height: 44,
-        child: OutlinedButton.icon(
-          onPressed: onTap,
-          icon: Icon(icon, size: 18),
-          label: Text(label, style: AppText.body(size: AppTextSize.body, weight: FontWeight.w500)),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: AppColors.ink,
-            backgroundColor: AppColors.surface,
-            side: const BorderSide(color: AppColors.line),
-            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
-          ),
-        ),
-      );
 }

@@ -43,7 +43,9 @@ import 'package:serbis/state/account_store.dart';
 import 'package:serbis/state/api_service.dart';
 import 'package:serbis/state/request_store.dart';
 import 'package:serbis/theme/app_theme.dart';
+import 'package:serbis/widgets/feedback.dart';
 import 'package:serbis/widgets/form_inputs.dart';
+import 'package:serbis/widgets/loading.dart';
 import 'package:serbis/widgets/service_widgets.dart';
 import 'package:serbis/widgets/shared_widgets.dart';
 
@@ -310,9 +312,9 @@ Future<void> _pumpGrid(WidgetTester tester, AppState state) async {
 /// underneath. Getting this wrong produces tests that pass their own setup and
 /// then fail three assertions later for no visible reason.
 Future<void> _tapUpload(WidgetTester tester, String label) async {
-  // The Ambulance tab's ID upload is an IdUploadCard: "Choose file" is the
+  // The Ambulance tab's ID upload has Take photo beside it: "Choose file" is the
   // file-picker path.
-  if (label == 'Valid ID (required)' && find.byType(IdUploadCard).evaluate().isNotEmpty) {
+  if (label == 'Valid ID (required)' && find.text('Take photo').evaluate().isNotEmpty) {
     final choose = find.text('Choose file');
     await tester.ensureVisible(choose);
     await tester.tap(choose);
@@ -330,11 +332,11 @@ Future<void> _tapUpload(WidgetTester tester, String label) async {
   await tester.pumpAndSettle();
 }
 
-/// The `TextField` inside the ambulance form's "Patient name" [AppTextField].
+/// The `TextField` inside the ambulance form's "Full name" [AppTextField].
 /// Not found by its value the way the old prefilled-name tests did — the
 /// field starts empty now, so there is no text to search for.
 Finder _patientNameField() {
-  final field = find.byWidgetPredicate((w) => w is AppTextField && w.label == 'Patient name');
+  final field = find.byWidgetPredicate((w) => w is AppTextField && w.label == 'Full name');
   return find.descendant(of: field, matching: find.byType(TextField));
 }
 
@@ -358,18 +360,18 @@ Future<void> _next(WidgetTester tester) async {
 }
 
 /// Fills the three fields the ambulance flow requires, and nothing else, one
-/// step at a time, stopping on step 4 (Schedule & ID). [onPatientStep] runs
+/// step at a time, stopping on step 4 (Schedule and ID). [onPatientStep] runs
 /// while step 1 is showing.
 ///
 /// Mirrors the server's own required set for this service
 /// (ServiceRequestController::store): patient_name, destination, a relative.
 Future<void> _fillRequiredAmbulanceFields(WidgetTester tester, {Future<void> Function()? onPatientStep}) async {
-  await _type(tester, 'Patient name', 'Maria Santos');
+  await _type(tester, 'Full name', 'Maria Santos');
   await onPatientStep?.call();
   await _next(tester);
   await _type(tester, 'Destination name', 'Echague District Hospital');
   await _next(tester);
-  await _type(tester, 'Relative 1', 'Lalaine Ferrer');
+  await _type(tester, 'Relative to contact', 'Lalaine Ferrer');
   await _next(tester);
 }
 
@@ -402,8 +404,8 @@ Future<void> _goBack(WidgetTester tester) async {
 Future<void> _submit(WidgetTester tester) async {
   // The ambulance flow submits from its Review step.
   if (find.text('Next: Review').evaluate().isNotEmpty) await _next(tester);
-  await tester.ensureVisible(find.widgetWithText(AppButton, 'Submit request'));
-  await tester.tap(find.widgetWithText(AppButton, 'Submit request'));
+  await tester.ensureVisible(find.widgetWithText(AppButton, 'Send request'));
+  await tester.tap(find.widgetWithText(AppButton, 'Send request'));
   await tester.pumpAndSettle();
 }
 
@@ -414,7 +416,7 @@ void main() {
   });
 
   group('loading the catalogue', () {
-    testWidgets('shows a spinner until the services arrive', (tester) async {
+    testWidgets('shows the rows\' shape until the services arrive', (tester) async {
       // Same tall surface `_pump` uses, for the same reason. This test builds
       // the screen inline rather than through the helper, so it was left on
       // the default 800x600 — and the screen is a lazy ListView with the
@@ -442,11 +444,11 @@ void main() {
 
       // Held open by the gate, so this frame is the loading state.
       await tester.pump();
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byType(SkeletonRows), findsOneWidget);
 
       gate.complete();
       await tester.pumpAndSettle();
-      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.byType(SkeletonRows), findsNothing);
     });
 
     testWidgets('groups services under category headings in the office order, Others last',
@@ -485,7 +487,7 @@ void main() {
       expect(find.text('Others'), findsNothing);
     });
 
-    testWidgets('a failed load says so and offers Retry rather than showing an empty office',
+    testWidgets('a failed load says so and offers Try again rather than showing an empty office',
         (tester) async {
       // An empty grid and a failed fetch look identical to a resident, and they
       // mean opposite things: "MDRRMO offers nothing" versus "your phone could
@@ -493,20 +495,20 @@ void main() {
       final api = FakeApi(servicesThrow: true);
       await _pumpGrid(tester, AppState(api));
 
+      expect(find.byType(LoadErrorBox), findsOneWidget);
       expect(find.textContaining("Couldn't load services"), findsOneWidget);
-      expect(find.byIcon(Icons.wifi_off_rounded), findsWidgets);
-      expect(find.text('Retry'), findsOneWidget);
+      expect(find.text('Try again'), findsOneWidget);
     });
 
-    testWidgets('Retry refetches and fills the grid once the network is back',
+    testWidgets('Try again refetches and fills the grid once the network is back',
         (tester) async {
       final api = FakeApi(servicesThrow: true);
       await _pumpGrid(tester, AppState(api));
 
-      expect(find.text('Retry'), findsOneWidget);
+      expect(find.text('Try again'), findsOneWidget);
 
       api.servicesThrow = false;
-      await tester.tap(find.text('Retry'));
+      await tester.tap(find.text('Try again'));
       await tester.pumpAndSettle();
 
       expect(find.textContaining("Couldn't load services"), findsNothing);
@@ -522,7 +524,7 @@ void main() {
       expect(find.text('Road clearing'), findsOneWidget);
       expect(find.text('Flood Evacuation'), findsNothing);
       expect(find.byIcon(Icons.arrow_back_rounded), findsOneWidget);
-      expect(find.widgetWithText(AppButton, 'Submit request'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Send request'), findsOneWidget);
     });
 
     testWidgets('the back arrow returns to the grid', (tester) async {
@@ -532,7 +534,7 @@ void main() {
 
       expect(find.text('Flood Evacuation'), findsOneWidget);
       expect(find.text('Road clearing'), findsOneWidget);
-      expect(find.widgetWithText(AppButton, 'Submit request'), findsNothing);
+      expect(find.widgetWithText(AppButton, 'Send request'), findsNothing);
     });
 
     testWidgets('the back arrow stays pinned while a long form scrolls', (tester) async {
@@ -565,7 +567,7 @@ void main() {
       expect(find.widgetWithText(AppButton, 'Next: Trip'), findsOneWidget);
       // No Back on the first step, and no Submit before the last.
       expect(find.widgetWithText(AppButton, 'Back'), findsNothing);
-      expect(find.widgetWithText(AppButton, 'Submit request'), findsNothing);
+      expect(find.widgetWithText(AppButton, 'Send request'), findsNothing);
       // No list to pick from first.
       expect(find.text('Road clearing'), findsNothing);
     });
@@ -577,10 +579,11 @@ void main() {
       await _attachValidId(tester);
       await _next(tester);
       expect(find.text('Step 5 of 5 · Review'), findsOneWidget);
-      expect(find.text('Maria Santos'), findsOneWidget);
-      expect(find.widgetWithText(AppButton, 'Submit request'), findsOneWidget);
+      // The Patient row's answers share one line: "Maria Santos · …".
+      expect(find.textContaining('Maria Santos'), findsOneWidget);
+      expect(find.widgetWithText(AppButton, 'Send request'), findsOneWidget);
 
-      // The first card's Edit goes back to Patient.
+      // The first row's Edit goes back to Patient.
       await tester.tap(find.text('Edit').first);
       await tester.pumpAndSettle();
       expect(find.text('Step 1 of 5 · Patient'), findsOneWidget);
@@ -595,7 +598,7 @@ void main() {
     testWidgets('closing with answers entered asks first, then clears them', (tester) async {
       var exits = 0;
       await _pump(tester, AppState(FakeApi()), onExit: () => exits++);
-      await _type(tester, 'Patient name', 'Maria Santos');
+      await _type(tester, 'Full name', 'Maria Santos');
 
       await tester.tap(find.byIcon(Icons.close_rounded));
       await tester.pumpAndSettle();
@@ -662,7 +665,7 @@ void main() {
       await _pump(tester, AppState(api));
 
       expect(find.byType(AttachmentUploadField), findsNothing);
-      expect(find.widgetWithText(AppButton, 'Submit request'), findsNothing);
+      expect(find.widgetWithText(AppButton, 'Send request'), findsNothing);
       expect(find.text('Try again'), findsOneWidget);
     });
 
@@ -675,7 +678,7 @@ void main() {
 
       expect(find.textContaining('not offered to this account type'), findsOneWidget);
       expect(find.text('Try again'), findsNothing);
-      expect(find.widgetWithText(AppButton, 'Submit request'), findsNothing);
+      expect(find.widgetWithText(AppButton, 'Send request'), findsNothing);
     });
   });
 
@@ -689,7 +692,7 @@ void main() {
       await _next(tester);
 
       expect(find.text('Attach a photo of a valid ID.'), findsOneWidget);
-      expect(find.text('Step 4 of 5 · Schedule & ID'), findsOneWidget);
+      expect(find.text('Step 4 of 5 · Schedule and ID'), findsOneWidget);
       expect(api.submitCount, 0, reason: 'nothing may reach the server');
     });
 
@@ -751,7 +754,7 @@ void main() {
       final api = FakeApi();
       await _pump(tester, AppState(api));
 
-      await _type(tester, 'Patient name', 'Maria Santos');
+      await _type(tester, 'Full name', 'Maria Santos');
       await _next(tester);
       await _type(tester, 'Destination name', 'Echague District Hospital');
       await _next(tester);
@@ -1067,13 +1070,14 @@ void main() {
       expect(find.text('Flood Evacuation'), findsNothing);
     });
 
-    testWidgets('no match shows one muted line', (tester) async {
+    testWidgets('no match shows the empty state', (tester) async {
       await _pumpGrid(tester, AppState(FakeApi()));
 
       await tester.enterText(find.byType(TextField), 'zzz');
       await tester.pump();
 
-      expect(find.text('No services match "zzz".'), findsOneWidget);
+      expect(find.byType(EmptyState), findsOneWidget);
+      expect(find.text('No services match "zzz"'), findsOneWidget);
       expect(find.text('Road clearing'), findsNothing);
     });
 

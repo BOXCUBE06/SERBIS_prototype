@@ -40,6 +40,34 @@ class RequestDataSeeder extends Seeder
 {
     public int $seed = 1;
 
+    /*
+     * Volume knobs, set by `serbis:reseed-requests --volume`. The defaults are the
+     * six-month set; with $weighted, filing times follow growth, a weekend dip and
+     * the typhoon season, and a few residents file most requests.
+     */
+    public int $spanDays = 180;
+
+    /** Open statuses (Pending, Booked) are only ever this recent. */
+    public int $openDays = 20;
+
+    /** How far back Denied and Cancelled loans may reach. */
+    public int $finalLoanDays = 30;
+
+    public bool $weighted = false;
+
+    /** Share of loans for something not in the catalogue. */
+    public int $otherEquipmentPercent = 0;
+
+    /** @var array<string, int>|null status => count */
+    public ?array $servicePlan = null;
+
+    public ?array $ambulancePlan = null;
+
+    public ?array $loanPlan = null;
+
+    /** @var array<int, float> resident_id => how often they file (0: never) */
+    private array $weights = [];
+
     private const AMBULANCE = 'ambulance-medical-response';
 
     private const OTHERS = 'others';
@@ -61,7 +89,6 @@ class RequestDataSeeder extends Seeder
         'road-clearing' => ['Fallen acacia blocking the road to the school.', 'Landslide debris on the farm-to-market road.'],
         'power-line-repair' => ['Sagging line touching the bamboo fence.', 'Post leaning after the storm.'],
         'debris-removal' => ['Debris from a collapsed shed on the creek.', 'Flood debris piled at the drainage.'],
-        'animal-rescue' => ['Carabao stuck in the swollen creek.', 'Dog trapped on a roof.'],
         'sandbagging' => ['Riverbank eroding near the houses.', 'Need sandbags for the purok entrance.'],
         'drrm-trainings-and-seminars' => ['Basic first aid seminar for barangay tanods.', 'DRRM orientation for the council.'],
         'simulation-drills-nsed' => ['Earthquake drill at the elementary school.', 'Fire drill for the market vendors.'],
@@ -100,6 +127,15 @@ class RequestDataSeeder extends Seeder
 
     public function run(): void
     {
+        if (! app()->environment(['local', 'testing'])) {
+            $this->command?->warn(
+                'RequestDataSeeder skipped: refuses to seed simulated requests outside local/testing (env: '
+                .app()->environment().').'
+            );
+
+            return;
+        }
+
         mt_srand($this->seed);
         $this->now = CarbonImmutable::now();
 
@@ -121,6 +157,18 @@ class RequestDataSeeder extends Seeder
             }
         }
 
+        if ($this->weighted) {
+            // Zipf by a seeded shuffle; the last quarter never files.
+            $order = $this->residents->pluck('resident_id')->all();
+            for ($i = count($order) - 1; $i > 0; $i--) {
+                $j = mt_rand(0, $i);
+                [$order[$i], $order[$j]] = [$order[$j], $order[$i]];
+            }
+            foreach ($order as $rank => $id) {
+                $this->weights[$id] = $rank >= count($order) * 0.75 ? 0.0 : 1 / ($rank + 1) ** 0.8;
+            }
+        }
+
         try {
             $this->serviceRequests();
             $this->ambulanceRequests();
@@ -134,17 +182,17 @@ class RequestDataSeeder extends Seeder
     {
         $codes = $this->services->keys()->reject(fn ($c) => $c === self::AMBULANCE)->values()->all();
         // Responding first, so their units are held before Resolved rows pass through Responding.
-        $plan = ['Responding' => 20, 'Pending' => 30, 'Resolved' => 120, 'Cancelled' => 25, 'Disapproved' => 25];
+        $plan = $this->servicePlan ?? ['Responding' => 20, 'Pending' => 30, 'Resolved' => 120, 'Cancelled' => 25, 'Disapproved' => 25];
 
         foreach ($plan as $status => $count) {
             for ($i = 0; $i < $count; $i++) {
                 $code = $this->chance(6) ? self::OTHERS : $this->pick($codes);
-                $by = $this->filer($code, walkInPercent: in_array($code, self::PROGRAMS, true) ? 0 : 15);
                 $created = match ($status) {
                     'Responding' => $this->past(0, 6),
-                    'Pending' => $this->past(0, 20),
-                    default => $this->past(2, 180),
+                    'Pending' => $this->past(0, $this->openDays),
+                    default => $this->past(2, $this->spanDays),
                 };
+                $by = $this->filer($code, in_array($code, self::PROGRAMS, true) ? 0 : 15, $created);
 
                 $sr = $this->file($by, $created, [
                     'service_id' => $this->services[$code]->service_id ?? null,
@@ -161,18 +209,18 @@ class RequestDataSeeder extends Seeder
 
     private function ambulanceRequests(): void
     {
-        $plan = ['Responding' => 2, 'Booked' => 12, 'Pending' => 8, 'Resolved' => 55, 'Cancelled' => 7, 'Disapproved' => 6];
+        $plan = $this->ambulancePlan ?? ['Responding' => 2, 'Booked' => 12, 'Pending' => 8, 'Resolved' => 55, 'Cancelled' => 7, 'Disapproved' => 6];
         $booked = 0;
 
         foreach ($plan as $status => $count) {
             for ($i = 0; $i < $count; $i++) {
-                $by = $this->filer(self::AMBULANCE, walkInPercent: 12);
                 $created = match ($status) {
                     'Responding' => $this->now->subMinutes(mt_rand(20, 120)),
                     'Pending' => $this->past(0, 3),
                     'Booked' => $this->past(0, 10),
-                    default => $this->past(2, 180),
+                    default => $this->past(2, $this->spanDays),
                 };
+                $by = $this->filer(self::AMBULANCE, 12, $created);
                 $patient = $by && $this->chance(40) ? $by->first_name.' '.$by->last_name : $this->name();
                 $sr = $this->file($by, $created, [
                     'service_id' => $this->services[self::AMBULANCE]->service_id,
@@ -312,16 +360,16 @@ class RequestDataSeeder extends Seeder
     {
         $equipment = Equipment::orderBy('equipment_id')->get();
         $stock = $equipment->pluck('total_quantity', 'equipment_id')->all();
-        $plan = ['Pending' => 10, 'Approved' => 8, 'Released' => 10, 'Overdue' => 6, 'Returned' => 30, 'Denied' => 8, 'Cancelled' => 6, 'Other' => 5];
+        $plan = $this->loanPlan ?? ['Pending' => 10, 'Approved' => 8, 'Released' => 10, 'Overdue' => 6, 'Returned' => 30, 'Denied' => 8, 'Cancelled' => 6, 'Other' => 5];
         $today = $this->now->setTimezone('Asia/Manila')->startOfDay();
 
         foreach ($plan as $kind => $count) {
             for ($i = 0; $i < $count; $i++) {
-                $by = $this->filer('equipment-borrowing', walkInPercent: 0);
                 $holds = in_array($kind, ['Released', 'Overdue'], true);
                 // A loan out holds one unit, and never the last one on the shelf.
                 $qty = $holds ? 1 : mt_rand(1, 2);
-                $item = $kind === 'Other' ? null
+                $elsewhere = $kind === 'Other' || (! $holds && $this->chance($this->otherEquipmentPercent));
+                $item = $elsewhere ? null
                     : $this->pick($equipment->filter(fn ($e) => ! $holds || $stock[$e->equipment_id] > $qty)->values()->all());
                 if ($holds) {
                     $stock[$item->equipment_id] -= $qty;
@@ -330,9 +378,11 @@ class RequestDataSeeder extends Seeder
                 [$created, $released, $due, $returned] = match ($kind) {
                     'Released' => [$c = $this->past(3, 20), $c->addDay(), $today->addDays(mt_rand(1, 14)), null],
                     'Overdue' => [$c = $this->past(20, 40), $c->addDay(), $today->subDays(mt_rand(1, 12)), null],
-                    'Returned' => [$c = $this->past(10, 180), $r = $c->addDay(), $r->addDays(14), $r->addDays(mt_rand(3, 20))],
+                    'Returned' => [$c = $this->past(10, $this->spanDays), $r = $c->addDay(), $r->addDays(14), $r->addDays(mt_rand(3, 20))],
+                    'Denied', 'Cancelled', 'Other' => [$this->past(0, $this->finalLoanDays), null, null, null],
                     default => [$this->past(0, 30), null, null, null],
                 };
+                $by = $this->filer('equipment-borrowing', 0, $created);
                 $institution = ! $by->isHeadOfFamily();
                 $delivery = $this->chance(30);
 
@@ -340,7 +390,7 @@ class RequestDataSeeder extends Seeder
                 $loan = EquipmentBorrowing::create([
                     'resident_id' => $by->resident_id,
                     'equipment_id' => $item?->equipment_id,
-                    'other_equipment_text' => $item ? null : $this->pick(['Generator', 'Folding tent', 'Megaphone']),
+                    'other_equipment_text' => $item ? null : $this->pick(['Generator', 'Folding tent', 'Megaphone', 'Water pump', 'Extension ladder']),
                     'quantity' => $qty,
                     'purpose' => $this->pick(['Recovering after surgery.', 'For my mother, bedridden.', 'Barangay medical mission.', 'Community clean-up drive.']),
                     'fulfillment_method' => $delivery ? 'Delivery' : 'Pickup',
@@ -421,14 +471,29 @@ class RequestDataSeeder extends Seeder
         $resident->timestamps = true;
     }
 
-    private function filer(string $code, int $walkInPercent): ?Resident
+    /** Who files at $at: someone allowed the service, and (when weighted) already registered. */
+    private function filer(string $code, int $walkInPercent, CarbonImmutable $at): ?Resident
     {
         if ($this->chance($walkInPercent)) {
             return null;
         }
-        $allowed = $this->residents->filter(fn ($r) => ServiceAudience::allows($code, $r->account_type))->values();
+        $types = ServiceAudience::typesFor($code);
+        $allowed = $this->residents->filter(fn ($r) => in_array($r->account_type, $types, true))->values();
 
-        return $allowed->isEmpty() ? null : $allowed[mt_rand(0, $allowed->count() - 1)];
+        if (! $this->weighted) {
+            return $allowed->isEmpty() ? null : $allowed[mt_rand(0, $allowed->count() - 1)];
+        }
+
+        $allowed = $allowed->filter(fn ($r) => $r->created_at->lessThanOrEqualTo($at))->values();
+        $point = mt_rand() / mt_getrandmax() * $allowed->sum(fn ($r) => $this->weights[$r->resident_id]);
+
+        foreach ($allowed as $r) {
+            if (($point -= $this->weights[$r->resident_id]) <= 0 && $this->weights[$r->resident_id] > 0) {
+                return $r;
+            }
+        }
+
+        return null;
     }
 
     private function address(ServiceRequest $sr): string
@@ -439,10 +504,32 @@ class RequestDataSeeder extends Seeder
     /** A daytime moment (Manila) between $minDays and $maxDays ago. */
     private function past(int $minDays, int $maxDays): CarbonImmutable
     {
-        $at = $this->now->setTimezone('Asia/Manila')->subDays(mt_rand($minDays, $maxDays))
+        $at = $this->now->setTimezone('Asia/Manila')->subDays($this->weighted ? $this->busyDay($minDays, $maxDays) : mt_rand($minDays, $maxDays))
             ->setTime(mt_rand(6, 20), mt_rand(0, 59))->utc();
 
         return $at->greaterThan($this->now) ? $this->now->subMinutes(mt_rand(5, 60)) : $at;
+    }
+
+    /**
+     * A day offset in [min, max] by rejection sampling: 4% more traffic each month
+     * than the one before, half as many filings at weekends, +40% from July to October.
+     */
+    private function busyDay(int $min, int $max): int
+    {
+        for ($try = 0; $try < 60; $try++) {
+            $days = mt_rand($min, $max);
+            $date = $this->now->setTimezone('Asia/Manila')->subDays($days);
+            $weight = 1.04 ** (-$days / 30)
+                * ($date->isWeekend() ? 0.5 : 1)
+                * ($date->month >= 7 && $date->month <= 10 ? 1.4 : 1);
+
+            // 1.4 x 1.04^(-min/30) is the largest weight a day in range can have.
+            if (mt_rand() / mt_getrandmax() <= $weight / (1.4 * 1.04 ** (-$min / 30))) {
+                return $days;
+            }
+        }
+
+        return $min;
     }
 
     private function at(CarbonImmutable $moment): void

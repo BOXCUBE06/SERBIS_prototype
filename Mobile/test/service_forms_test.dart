@@ -710,14 +710,14 @@ void main() {
       await _pump(tester, form);
 
       for (final label in const [
-        'Patient name',
+        'Full name',
         'Age',
         'Barangay',
         'Contact number',
         'Pick up from',
         'Take patient to',
-        'Medical diagnosis',
-        'Relative 1',
+        'Condition',
+        'Relative to contact',
       ]) {
         expect(find.text(label), findsOneWidget,
             reason: '$label is missing from the ambulance form');
@@ -750,7 +750,7 @@ void main() {
         ),
       ));
 
-      expect(find.text('Relative 1'), findsOneWidget);
+      expect(find.text('Relative to contact'), findsOneWidget);
       expect(find.text('Relative 2'), findsNothing);
 
       await tester.ensureVisible(find.text('Add another relative'));

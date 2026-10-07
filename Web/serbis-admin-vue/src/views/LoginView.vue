@@ -92,6 +92,8 @@
                   autocapitalize="none"
                   spellcheck="false"
                   autofocus
+                  :aria-invalid="!!errorMessage"
+                  @input="errorMessage = ''"
                   autocomplete="username"
                 />
               </div>
@@ -166,6 +168,9 @@
             <v-otp-input
               v-model="mfaCode"
               length="6"
+              autofocus
+              :error="!!mfaError"
+              @update:model-value="mfaError = ''"
               class="mb-4"
               :disabled="mfaLoading"
               @finish="handleMfaSubmit"
@@ -666,8 +671,12 @@ const handleResend = async () => {
 .login-helper { margin: 0; font-size: 14px; line-height: 20px; color: rgba(255, 255, 255, 0.76); text-align: center; }
 .login-link { font-weight: 600; }
 /* The code step's boxes: white, 48px, 12px corners. */
-.form-block :deep(.v-otp-input .v-field) { border-radius: 12px; background: #fff; }
-.form-block :deep(.v-otp-input .v-field__input) { color: rgba(0, 0, 0, 0.87); }
+.form-block :deep(.v-otp-input .v-field) { border-radius: 12px; background: #fff; color: rgba(0, 0, 0, 0.87); caret-color: #0A2620; }
+/* The digits, the placeholder dot and the blinking caret are drawn in currentColor, which
+   would otherwise be the dark theme's light text on these white boxes. */
+.form-block :deep(.v-otp-input .v-otp-input__field) { color: rgba(0, 0, 0, 0.87); }
+.form-block :deep(.v-otp-input .v-field--focused .v-field__outline) { color: #297A67; }
+.form-block :deep(.v-otp-input .v-field--error:not(.v-field--disabled) .v-field__outline) { color: #B3261E; }
 
 .hover-underline:hover {
   text-decoration: underline !important;

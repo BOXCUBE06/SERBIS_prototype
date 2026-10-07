@@ -28,6 +28,9 @@ class ServiceResource extends JsonResource
             // the only field in this payload a client may key behaviour on.
             'code' => $this->code,
             'service_name' => $this->service_name,
+            // Optional, set in Manage Services. Null: the app uses its bundled
+            // translation for the code, then service_name.
+            'service_name_fil' => $this->service_name_fil,
             'description' => $this->description,
             // Set in Manage Services; groups the list and marks the programs.
             'category' => $this->category,

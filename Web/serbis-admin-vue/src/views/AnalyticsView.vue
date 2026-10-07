@@ -256,7 +256,7 @@
               <tbody>
                 <tr v-for="series in volume.series" :key="series.label">
                   <td class="service-cell">
-                    <span class="series-dot" :style="{ backgroundColor: colorForSeries(series.label, volume.series) }"></span>
+                    <span class="series-dot" :style="{ backgroundColor: volumeColors.colorOf(series.label) }"></span>
                     {{ series.label }}
                   </td>
                   <td class="text-right font-weight-bold">{{ series.data.reduce((a, b) => a + b, 0) }}</td>
@@ -481,6 +481,7 @@ import { API_BASE } from '@/config/api'
 import { REFERENCE_TTL_MS, useCachedFetch } from '@/composables/useCachedFetch'
 // Side effect only: sets the chart font default, which this page's own charts need too.
 import '@/composables/useChartTheme'
+import { foldVolume } from '@/composables/volumeColors.js'
 
 ChartJS.register(Tooltip, Legend, CategoryScale, LinearScale, BarElement)
 
@@ -496,9 +497,9 @@ ChartJS.register(Tooltip, Legend, CategoryScale, LinearScale, BarElement)
  */
 
 /*
- * Categorical series colours, one fixed order per theme, assigned by position
- * and never cycled — a ninth service folds into "Other" rather than reusing a
- * hue that already means something else on the same chart.
+ * Categorical series colours, one fixed order per theme, never cycled. Up to
+ * eight services each get one, busiest first; past eight the seven busiest
+ * keep theirs and the rest share one grey segment (composables/volumeColors.js).
  *
  * Validated with the data-viz palette validator against THIS app's surfaces
  * (#FFFFFF light, #131B2E dark), not the validator's defaults: 8 slots, both
@@ -874,11 +875,9 @@ const kpis = computed(() => {
 
 const seriesPalette = computed(() => (isDark.value ? SERIES_DARK : SERIES_LIGHT))
 
-/** Colour by the series' fixed position, so a filter that drops a service does not repaint the survivors. */
-const colorForSeries = (label, series) => {
-  const index = series.findIndex(s => s.label === label)
-  return seriesPalette.value[index % seriesPalette.value.length]
-}
+// The chart's segments and every service's dot. The table keeps a row per
+// service; a folded one shows the grey of the segment it is in.
+const volumeColors = computed(() => foldVolume(volume.value.series, seriesPalette.value, themeColors.value.slate))
 
 /**
  * Status colours, not categorical ones. These are reserved for state across
@@ -915,7 +914,7 @@ const stackedDataset = (series, color) => ({
 
 const volumeChartData = computed(() => ({
   labels: volume.value.labels,
-  datasets: volume.value.series.map(s => stackedDataset(s, colorForSeries(s.label, volume.value.series))),
+  datasets: volumeColors.value.chart.map(s => stackedDataset(s, s.color)),
 }))
 
 const agingChartData = computed(() => ({

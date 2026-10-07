@@ -190,7 +190,7 @@ void main() {
 
     expect(
       find.byWidgetPredicate((w) =>
-          w is Icon && w.icon == Icons.person_outline_rounded && w.size == 36),
+          w is Icon && w.icon == Icons.person_outline_rounded && w.size == 28),
       findsOneWidget,
     );
   });

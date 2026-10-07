@@ -8,6 +8,7 @@ import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
 import 'form_section.dart';
+import 'loading.dart' show AppSpinner;
 
 /// How soon a resident may book, mirrored from the server's own
 /// `ServiceRequestController::MINIMUM_LEAD_TIME_HOURS`. Duplicated rather
@@ -231,11 +232,7 @@ class _AmbulanceScheduleFieldState extends State<AmbulanceScheduleField> {
               padding: const EdgeInsets.only(top: 6, left: 2),
               child: Row(
                 children: [
-                  const SizedBox(
-                    width: 12,
-                    height: 12,
-                    child: CircularProgressIndicator(strokeWidth: 1.5),
-                  ),
+                  const AppSpinner(color: AppColors.green700, size: 12),
                   const SizedBox(width: 8),
                   Text(
                     tr(f, 'ambulance_schedule.checking'),

@@ -91,17 +91,17 @@ class ServiceCategoryTest extends TestCase
     {
         $id = $this->actingAs($this->admin)->postJson('/api/services', [
             'service_name' => 'Flood Drill Kits',
-            'category' => 'programs',
-        ])->assertStatus(201)->assertJsonPath('category', 'programs')->json('service_id');
+            'category' => 'rescue',
+        ])->assertStatus(201)->assertJsonPath('category', 'rescue')->json('service_id');
 
-        $this->actingAs($this->admin)->putJson("/api/services/{$id}", ['category' => 'rescue'])
+        $this->actingAs($this->admin)->putJson("/api/services/{$id}", ['category' => 'relief'])
             ->assertStatus(422)->assertJsonValidationErrors(['category']);
 
         // Resending the stored value is not a change.
-        $this->actingAs($this->admin)->putJson("/api/services/{$id}", ['category' => 'programs'])
-            ->assertOk()->assertJsonPath('category', 'programs');
+        $this->actingAs($this->admin)->putJson("/api/services/{$id}", ['category' => 'rescue'])
+            ->assertOk()->assertJsonPath('category', 'rescue');
 
-        $this->assertSame('programs', Service::find($id)->category);
+        $this->assertSame('rescue', Service::find($id)->category);
     }
 
     public function test_the_name_is_locked_after_adding(): void

@@ -30,6 +30,7 @@ import 'package:serbis/screens/borrow_equipment_screen.dart';
 import 'package:serbis/state/account_store.dart';
 import 'package:serbis/state/api_service.dart';
 import 'package:serbis/state/request_store.dart';
+import 'package:serbis/widgets/loading.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class _FakeApi extends ApiService {
@@ -139,6 +140,9 @@ Widget _host(AppState state) => MaterialApp(
       home: BorrowEquipmentScreen(appState: state, user: _resident),
     );
 
+/// The My requests tab, which carries its count once there are requests.
+final _mineTab = find.textContaining('My requests');
+
 /// Text fields inside the open borrow sheet, top to bottom.
 Finder _sheetFields() => find.descendant(of: find.byType(BottomSheet), matching: find.byType(TextField));
 
@@ -148,20 +152,20 @@ void main() {
   });
 
   group('the Available tab', () {
-    testWidgets('shows a spinner while the catalogue is still loading', (tester) async {
+    testWidgets('shows the rows\' shape while the catalogue is still loading', (tester) async {
       final api = _FakeApi(equipmentRows: [_equipmentRow(1, 'Wheelchair', 2)])
         ..equipmentGate = Completer<void>();
       await tester.pumpWidget(_host(AppState(api)));
       await tester.pump();
 
-      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      expect(find.byType(SkeletonRows), findsOneWidget);
       expect(find.text('Wheelchair'), findsNothing);
 
       api.equipmentGate!.complete();
       await tester.pumpAndSettle();
 
       expect(find.text('Wheelchair'), findsOneWidget);
-      expect(find.byType(CircularProgressIndicator), findsNothing);
+      expect(find.byType(SkeletonRows), findsNothing);
     });
 
     testWidgets('a failed catalogue offers a retry that refetches', (tester) async {
@@ -176,7 +180,7 @@ void main() {
       // a successful second attempt is distinguishable from a no-op.
       api.equipmentError = null;
       api.equipmentRows = [_equipmentRow(1, 'Wheelchair', 2)];
-      await tester.tap(find.text('Retry'));
+      await tester.tap(find.text('Try again'));
       await tester.pumpAndSettle();
 
       expect(api.getEquipmentsCalls, 2);
@@ -331,9 +335,8 @@ void main() {
       );
       // And moved them to the tab the new request is actually on — it is
       // invisible on the Available tab it was filed from.
-      expect(find.text('My requests'), findsOneWidget);
-      expect(find.text('Wheelchair'), findsWidgets);
-      expect(find.text('Quantity: 2'), findsOneWidget);
+      expect(find.text('My requests (1)'), findsOneWidget);
+      expect(find.text('Wheelchair × 2'), findsOneWidget);
     });
   });
 
@@ -343,7 +346,7 @@ void main() {
       await tester.pumpWidget(_host(AppState(_FakeApi(equipmentRows: []))));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('My requests'));
+      await tester.tap(_mineTab);
       await tester.pumpAndSettle();
 
       expect(find.text('No borrow requests yet'), findsOneWidget);
@@ -366,11 +369,10 @@ void main() {
       await tester.pumpWidget(_host(AppState(api)));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('My requests'));
+      await tester.tap(_mineTab);
       await tester.pumpAndSettle();
 
-      expect(find.text('Megaphone'), findsOneWidget);
-      expect(find.text('Quantity: 3'), findsOneWidget);
+      expect(find.text('Megaphone × 3'), findsOneWidget);
       expect(find.text('No borrow requests yet'), findsNothing);
     });
 
@@ -396,29 +398,29 @@ void main() {
         borrowRows: rows,
       ))));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('My requests'));
+      await tester.tap(_mineTab);
       await tester.pumpAndSettle();
     }
 
     testWidgets('splits open requests from past ones', (tester) async {
       await openMine(tester, [row(1, 'Pending'), row(2, 'Returned'), row(3, 'Cancelled')]);
 
-      expect(find.text('In progress'), findsOneWidget);
+      expect(find.text('In progress  1'), findsOneWidget);
       expect(find.text('Past requests'), findsOneWidget);
       expect(
-        tester.getTopLeft(find.text('Item 1')).dy < tester.getTopLeft(find.text('Past requests')).dy,
+        tester.getTopLeft(find.text('Item 1 × 1')).dy < tester.getTopLeft(find.text('Past requests')).dy,
         isTrue,
         reason: 'the pending request sits above the Past heading',
       );
     });
 
-    testWidgets('an approved pickup shows the status box, steps and both actions', (tester) async {
+    testWidgets('an approved pickup shows its status, steps and both actions', (tester) async {
       await openMine(tester, [row(1, 'Approved', method: 'Pickup')]);
 
-      expect(find.text('Approved — ready to pick up'), findsOneWidget);
-      expect(find.text('Request sent'), findsOneWidget);
+      // The status and the step in progress say the same words.
+      expect(find.text('Ready to pick up'), findsNWidgets(2));
+      expect(find.text('Sent'), findsOneWidget);
       expect(find.text('Wed, Sep 30, 1:11 AM'), findsOneWidget, reason: 'done steps carry their time');
-      expect(find.text('Ready to pick up'), findsOneWidget);
       expect(find.text('Call MDRRMO'), findsOneWidget);
       expect(find.text('Cancel request'), findsOneWidget);
 
@@ -430,8 +432,7 @@ void main() {
     testWidgets('a released delivery reads Delivered and can no longer be cancelled', (tester) async {
       await openMine(tester, [row(1, 'Released', method: 'Delivery')]);
 
-      expect(find.text('Delivered to you'), findsOneWidget);
-      expect(find.text('Delivered'), findsOneWidget);
+      expect(find.text('Delivered'), findsNWidgets(2));
       expect(find.text("Return it to MDRRMO when you're done."), findsOneWidget);
       expect(find.text('Cancel request'), findsNothing);
     });
@@ -439,17 +440,16 @@ void main() {
     testWidgets('a denied request shows MDRRMO\'s reason and no steps', (tester) async {
       await openMine(tester, [row(1, 'Denied', reason: 'Out of stock')]);
 
-      expect(find.text('Not approved'), findsOneWidget);
+      expect(find.text('Not approved · Oct 1'), findsOneWidget);
       expect(find.text("MDRRMO's reason: Out of stock"), findsOneWidget);
-      expect(find.text('Request sent'), findsNothing);
+      expect(find.text('Sent'), findsNothing);
       expect(find.text('Cancel request'), findsNothing);
     });
 
     testWidgets('a cancelled request offers Borrow again only while the item exists', (tester) async {
       await openMine(tester, [row(1, 'Cancelled'), row(2, 'Cancelled', equipmentId: 99)]);
 
-      expect(find.text('Cancelled'), findsNWidgets(2));
-      expect(find.text('You cancelled this on Thu, Oct 1, 2:05 PM.'), findsNWidgets(2));
+      expect(find.text('Cancelled by you · Oct 1'), findsNWidgets(2));
       expect(find.text('Borrow again'), findsOneWidget, reason: 'item 99 is not in the catalogue');
 
       await tester.tap(find.text('Borrow again'));
@@ -482,7 +482,7 @@ void main() {
     Future<void> openMine(WidgetTester tester, _FakeApi api) async {
       await tester.pumpWidget(_host(AppState(api)));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('My requests'));
+      await tester.tap(_mineTab);
       await tester.pumpAndSettle();
     }
 
@@ -507,7 +507,9 @@ void main() {
       await openMine(tester, api);
 
       expect(find.text('Handover photos'), findsOneWidget);
-      expect(find.text('Released'), findsOneWidget);
+      // Captioned with the loan's own words, never the server's "Released".
+      expect(find.text('Released'), findsNothing);
+      expect(find.text('Picked up'), findsWidgets);
       expect(find.text('Returned'), findsWidgets);
       expect(api.photoStagesFetched, <String>['release', 'return']);
       expect(find.byType(Image), findsNWidgets(2));
@@ -520,8 +522,22 @@ void main() {
       )..photos = <String, List<int>>{'release': _onePixelPng};
       await openMine(tester, api);
 
-      expect(find.text('Released'), findsOneWidget);
+      expect(find.text('Released'), findsNothing);
       expect(api.photoStagesFetched, <String>['release']);
+    });
+
+    testWidgets('a delivered loan captions its release photo "Delivered"', (tester) async {
+      final api = _FakeApi(
+        equipmentRows: [_equipmentRow(1, 'Megaphone', 2)],
+        borrowRows: [
+          borrowRow(hasRelease: true)..['fulfillment_method'] = 'Delivery',
+        ],
+      )..photos = <String, List<int>>{'release': _onePixelPng};
+      await openMine(tester, api);
+
+      expect(find.text('Delivered'), findsOneWidget);
+      expect(find.text('Picked up'), findsNothing);
+      expect(find.text('Released'), findsNothing);
     });
 
     testWidgets('a photo the server will not serve leaves a placeholder, not a crash',
@@ -538,6 +554,42 @@ void main() {
       expect(find.byType(Image), findsNothing);
       expect(tester.takeException(), isNull);
     });
+  });
+
+  // C_BorrowSheet: the sheet at 320px in both languages, catalogued and not,
+  // with Delivery chosen and a refused send drawing its errors.
+  group('the borrow sheet at 320px', () {
+    for (final other in [false, true]) {
+      for (final filipino in [false, true]) {
+        testWidgets('${other ? 'an uncatalogued item' : 'a catalogued item'} fits in ${filipino ? 'Filipino' : 'English'}',
+            (tester) async {
+          tester.view.physicalSize = const Size(320, 1400);
+          tester.view.devicePixelRatio = 1;
+          addTearDown(tester.view.reset);
+          final state = AppState(_FakeApi(equipmentRows: [_equipmentRow(1, 'Portable generator (5 kVA)', 4)]));
+          if (filipino) state.setLanguage(AppLanguage.filipino);
+          await tester.pumpWidget(_host(state));
+          await tester.pumpAndSettle();
+
+          Future<void> tap(String text) async {
+            final target = find.text(text).last;
+            await tester.ensureVisible(target);
+            await tester.pumpAndSettle();
+            await tester.tap(target);
+            await tester.pumpAndSettle();
+          }
+
+          await tap(other ? (filipino ? 'May iba ka pang kailangan?' : 'Need something else?') : (filipino ? 'Hiramin' : 'Borrow'));
+          expect(tester.takeException(), isNull);
+          if (!other) expect(find.text(filipino ? 'Hanggang 4' : 'Up to 4'), findsOneWidget);
+
+          await tap(filipino ? 'Ihahatid' : 'Delivery');
+          expect(tester.takeException(), isNull);
+          await tap(filipino ? 'Ipadala ang kahilingan' : 'Send request');
+          expect(tester.takeException(), isNull);
+        });
+      }
+    }
   });
 
   // #1, #9 and #10. Each of the three added a field the resident could not

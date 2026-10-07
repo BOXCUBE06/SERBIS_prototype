@@ -220,6 +220,7 @@ void main() {
     });
 
     testWidgets('an undated material sinks and says so', (tester) async {
+      final semantics = tester.ensureSemantics();
       await _pumpHome(tester, materials: [
         _material(1, 'Undated'),
         _material(2, 'Dated', publishedAt: DateTime(2026, 7, 31, 8)),
@@ -228,7 +229,9 @@ void main() {
       final dated = tester.getTopLeft(find.text('Dated'));
       final undated = tester.getTopLeft(find.text('Undated'));
       expect(dated.dy, lessThan(undated.dy));
-      expect(find.text('Date not recorded'), findsOneWidget);
+      expect(find.text('—'), findsOneWidget);
+      expect(find.bySemanticsLabel(RegExp('Date not recorded')), findsOneWidget);
+      semantics.dispose();
     });
 
     testWidgets('an empty catalogue says nothing has been published',
@@ -284,8 +287,8 @@ void main() {
         (tester) async {
       await _pumpSheet(tester, [_request(status: 'Responding')]);
 
-      // The plain-language status for a Responding row, not the badge word.
-      expect(find.text('MDRRMO is responding'), findsOneWidget);
+      // The same word Track uses for a Responding row.
+      expect(find.text('Responding'), findsOneWidget);
       expect(find.textContaining('TXN-000007'), findsOneWidget);
       // A real timestamp, not the old fixed copy.
       expect(find.textContaining(':'), findsWidgets);

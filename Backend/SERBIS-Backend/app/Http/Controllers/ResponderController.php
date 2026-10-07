@@ -30,7 +30,7 @@ class ResponderController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'contact_no' => ['required', 'string', 'max:32', 'regex:'.PhoneNumber::REGEX],
-            'position' => 'required|string|max:255',
+            'position' => ['required', Rule::in(Responder::POSITIONS)],
             'status' => ['sometimes', 'required', Rule::in(Responder::STATUSES)],
         ]);
 
@@ -61,7 +61,7 @@ class ResponderController extends Controller
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
             'contact_no' => ['sometimes', 'required', 'string', 'max:32', 'regex:'.PhoneNumber::REGEX],
-            'position' => 'sometimes|required|string|max:255',
+            'position' => ['sometimes', 'required', Rule::in(Responder::POSITIONS)],
             'status' => ['sometimes', 'required', Rule::in(Responder::STATUSES)],
         ]);
 

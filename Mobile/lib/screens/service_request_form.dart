@@ -10,8 +10,9 @@ import '../state/account_store.dart';
 import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
-import '../widgets/form_inputs.dart';
 import '../widgets/ambulance_steps.dart';
+import '../widgets/feedback.dart' show FormErrorSummary;
+import '../widgets/form_inputs.dart';
 import '../widgets/form_section.dart';
 import '../widgets/form_steps.dart';
 import '../widgets/service_form_fields.dart';
@@ -389,9 +390,9 @@ class ServiceRequestFormState extends State<ServiceRequestForm> {
       backgroundColor: Colors.transparent,
       isScrollControlled: true,
       builder: (_) => ConfirmationSheet(
-        refNo: filed.refNo,
+        request: filed,
+        title: service.displayName(f),
         filipino: f,
-        scheduledAt: filed.scheduledAt,
         onViewTrack: () {
           Navigator.pop(context);
           widget.onSubmitted();
@@ -421,16 +422,26 @@ class ServiceRequestFormState extends State<ServiceRequestForm> {
     final stepped = steps.length > 1;
     return Column(
       children: [
-        TabHeaderBar(
-          title: _service.displayName(f),
-          subtitle: stepped
-              ? '${trEn(f, 'Step {n} of {total}').replaceAll('{n}', '${_step + 1}').replaceAll('{total}', '${steps.length}')}'
-                  ' · ${trEn(f, steps[_step])}'
-              : tr(f, 'services.subtitle'),
-          filipino: f,
-          onBack: handleBack,
-          onNotifications: widget.onOpenNotifications,
-        ),
+        if (stepped)
+          FormStepHeader(
+            title: _service.displayName(f),
+            stepNames: steps,
+            step: _step,
+            filipino: f,
+            // Back, not Close: it steps back through the form before leaving.
+            leadingIcon: Icons.arrow_back_rounded,
+            leadingLabel: tr(f, 'nav.back'),
+            onLeading: handleBack,
+            onNotifications: widget.onOpenNotifications,
+          )
+        else
+          TabHeaderBar(
+            title: _service.displayName(f),
+            subtitle: tr(f, 'services.subtitle'),
+            filipino: f,
+            onBack: handleBack,
+            onNotifications: widget.onOpenNotifications,
+          ),
         Expanded(
           child: ListView(
             // A new key per step, so each step opens at its top.
@@ -443,8 +454,10 @@ class ServiceRequestFormState extends State<ServiceRequestForm> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      if (stepped) ...[
-                        FormStepProgress(step: _step, total: steps.length),
+                      // One field at a time is refused, so this names that
+                      // field rather than counting; the field says what to do.
+                      if (_errors.isNotEmpty && !stepped) ...[
+                        FormErrorSummary.one(field: _refusedFieldName(f), filipino: f),
                         const SizedBox(height: AppSpacing.lg),
                       ],
                       ..._structuredBody(f),
@@ -500,43 +513,40 @@ class ServiceRequestFormState extends State<ServiceRequestForm> {
           filipino: f,
           errors: _errors,
           dateKey: _dateKey,
+          firstSectionExtra: _landmarkField(f),
         ),
         FormSection(label: tr(f, 'form_section.attachments'), children: _attachmentFields(f)),
-        _landmarkField(f),
       ];
     }
 
     return switch (_step) {
       0 => [
-          ...intro,
-          NumberedCard(number: 1, title: trEn(f, reliefStepNames[0]), children: [
-            ServiceFormFields(
-              data: form,
-              onChanged: () => setState(() {}),
-              filipino: f,
-              sectionIndex: 0,
-              fulfillment: false,
-              labels: false,
-            ),
-          ]),
+          FormStepIntro(title: tr(f, 'relief.step1.title'), body: tr(f, 'relief.step1.body')),
+          ServiceFormFields(
+            data: form,
+            onChanged: () => setState(() {}),
+            filipino: f,
+            sectionIndex: 0,
+            fulfillment: false,
+            labels: false,
+          ),
         ],
       1 => [
-          NumberedCard(number: 2, title: trEn(f, reliefStepNames[1]), children: [
-            ServiceFormFields(
-              data: form,
-              onChanged: () => setState(() {}),
-              filipino: f,
-              sectionIndex: 1,
-              labels: false,
-            ),
-          ]),
+          FormStepIntro(title: tr(f, 'relief.step2.title'), body: tr(f, 'relief.step2.body')),
+          ServiceFormFields(
+            data: form,
+            onChanged: () => setState(() {}),
+            filipino: f,
+            sectionIndex: 1,
+            labels: false,
+          ),
         ],
       _ => [
-          NumberedCard(number: 3, title: trEn(f, reliefStepNames[2]), children: [
-            ..._attachmentFields(f),
-            _landmarkField(f),
-          ]),
-          ..._reliefReview(f, form),
+          FormStepIntro(title: tr(f, 'relief.step3.title'), body: tr(f, 'relief.step3.body')),
+          ..._attachmentFields(f),
+          _landmarkField(f),
+          const SizedBox(height: AppSpacing.md),
+          _reliefReview(f, form),
         ],
     };
   }
@@ -552,7 +562,7 @@ class ServiceRequestFormState extends State<ServiceRequestForm> {
             label: attachments == ServiceAttachments.letterRequired
                 ? trEn(f, 'Request letter (required)')
                 : trEn(f, 'Supporting document (optional)'),
-            hint: trEn(f, 'Tap to upload a photo or PDF (jpg/png/pdf, max 4MB)'),
+            hint: trEn(f, 'PDF, JPG or PNG, up to 4 MB'),
             filipino: f,
             fileName: _drafts.letter?.name,
             errorText: _errors['letter'],
@@ -569,7 +579,7 @@ class ServiceRequestFormState extends State<ServiceRequestForm> {
         key: _idKey,
         child: AttachmentUploadField(
           label: trEn(f, 'Valid ID (required)'),
-          hint: trEn(f, 'Tap to upload a photo of a valid ID (jpg/png, max 2MB)'),
+          hint: trEn(f, 'JPG or PNG, up to 2 MB'),
           filipino: f,
           fileName: _drafts.validId?.name,
           errorText: _errors['validId'],
@@ -578,7 +588,7 @@ class ServiceRequestFormState extends State<ServiceRequestForm> {
       ),
       AttachmentUploadField(
         label: trEn(f, 'Site photo (optional)'),
-        hint: trEn(f, 'Tap to add a photo of a nearby landmark (jpg/png, max 4MB)'),
+        hint: trEn(f, 'A photo of a nearby landmark. JPG or PNG, up to 4 MB'),
         filipino: f,
         fileName: _drafts.sitePhoto?.name,
         onTap: _pickSitePhoto,
@@ -587,42 +597,46 @@ class ServiceRequestFormState extends State<ServiceRequestForm> {
     ];
   }
 
-  Widget _landmarkField(bool f) => Padding(
-        padding: const EdgeInsets.only(top: AppSpacing.sm),
-        child: AppTextField(
-          label: trEn(f, 'Landmark (optional)'),
-          hint: trEn(f, 'e.g. beside the chapel'),
-          controller: _drafts.landmark,
-        ),
+  /// The refused field's name as the form shows it, or null when the key is
+  /// not one this form knows.
+  String? _refusedFieldName(bool f) {
+    final key = _errors.keys.first;
+    if (key == 'validId') return trEn(f, 'Valid ID');
+    if (key == 'letter') return trEn(f, 'Request letter');
+    final field = _structuredForm.spec.fields.where((field) => field.key == key).firstOrNull;
+    return field == null ? null : trEn(f, field.label);
+  }
+
+  Widget _landmarkField(bool f) => AppTextField(
+        label: trEn(f, 'Landmark (optional)'),
+        hint: trEn(f, 'e.g. beside the chapel'),
+        controller: _drafts.landmark,
       );
 
-  /// What the resident entered on the first two relief steps, each card with
-  /// Edit back to its step. Row labels are the form's own field labels.
-  List<Widget> _reliefReview(bool f, StructuredFormData form) {
-    final none = trEn(f, 'Not given');
-    String or(String value) => value.trim().isEmpty ? none : value.trim();
-    String text(String key) => or(form.field(key).text);
-    String label(String key) => trEn(f, form.spec.fields.firstWhere((field) => field.key == key).label);
+  /// What the resident entered on the first two relief steps, one row per
+  /// step with Edit back to it: "Juan Dela Cruz · 5 · Purok 3, San Fabian".
+  Widget _reliefReview(bool f, StructuredFormData form) {
+    String answers(Iterable<String> values) {
+      final given = values.map((v) => v.trim()).where((v) => v.isNotEmpty).toList();
+      return given.isEmpty ? trEn(f, 'Not given') : given.join(' · ');
+    }
+
     final delivery = form.fulfillmentMethod == 'Delivery';
-    final cards = [
+    final values = [
+      [for (final key in const ['household_head', 'household_size', 'address']) form.field(key).text],
       [
-        for (final key in const ['household_head', 'address', 'household_size']) (label(key), text(key)),
-      ],
-      [
-        (label('assistance'), trEn(f, form.choice('assistance'))),
-        (trEn(f, 'How should this reach you?'), trEn(f, form.fulfillmentMethod)),
-        if (delivery) (trEn(f, 'Delivery address'), or(form.deliveryAddress.text)),
+        trEn(f, form.choice('assistance')),
+        trEn(f, form.fulfillmentMethod),
+        if (delivery) form.deliveryAddress.text,
       ],
     ];
-    return [
-      for (var i = 0; i < cards.length; i++)
-        AmbulanceReviewCard(
-          title: trEn(f, reliefStepNames[i]),
-          rows: cards[i],
-          filipino: f,
-          onEdit: () => _goToStep(i),
-        ),
-    ];
+    return ReviewList(
+      filipino: f,
+      rows: [
+        for (var i = 0; i < values.length; i++)
+          (label: trEn(f, reliefStepNames[i]), value: answers(values[i]), onEdit: () => _goToStep(i)),
+      ],
+    );
   }
 
   /// Ambulance only: which of the five steps is showing, and the inline

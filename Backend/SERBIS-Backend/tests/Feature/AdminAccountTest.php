@@ -265,18 +265,22 @@ class AdminAccountTest extends TestCase
         $this->assertSame('Active', $solo->fresh()->status);
     }
 
-    public function test_an_account_with_no_history_is_deleted_outright(): void
+    public function test_an_account_with_no_history_is_deactivated_too_and_can_come_back(): void
     {
         // What a typo looks like: created minutes ago, nothing recorded against
-        // it, no reason to keep the row.
+        // it. It used to be deleted outright, which made closing irreversible for
+        // these accounts only; now every close can be undone.
         $this->postJson('/api/admins', $this->payload())->assertStatus(201);
         $typo = User::where('username', 'grace')->first();
 
         $this->deleteJson("/api/admins/{$typo->admin_id}")
             ->assertStatus(200)
-            ->assertJsonPath('deactivated', false);
+            ->assertJsonPath('deactivated', true);
 
-        $this->assertNull(User::find($typo->admin_id));
+        $this->assertSame('Inactive', $typo->fresh()->status);
+
+        $this->patchJson("/api/admins/{$typo->admin_id}/reactivate")->assertOk();
+        $this->assertSame('Active', $typo->fresh()->status);
     }
 
     public function test_an_account_with_history_is_deactivated_rather_than_deleted(): void

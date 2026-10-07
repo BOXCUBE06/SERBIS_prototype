@@ -107,7 +107,8 @@ void main() {
       // trying to reload.
       await _open(tester, _fixture);
 
-      expect(find.byIcon(Icons.wifi_off_rounded), findsOneWidget);
+      // A green status line now, not an icon box.
+      expect(find.text('Available offline'), findsOneWidget);
       expect(
         find.textContaining('saved for offline reading'),
         findsOneWidget,
@@ -268,7 +269,8 @@ void main() {
 
       // Degrades to a header and the offline notice rather than throwing.
       expect(find.text('Empty Article'), findsOneWidget);
-      expect(find.byIcon(Icons.wifi_off_rounded), findsOneWidget);
+      // A green status line now, not an icon box.
+      expect(find.text('Available offline'), findsOneWidget);
     });
 
     testWidgets('every real catalogue article renders without overflowing',

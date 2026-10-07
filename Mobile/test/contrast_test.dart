@@ -105,10 +105,10 @@ void main() {
   });
 
   group('form labels', () {
-    test('are large, bold and full-strength ink', () {
+    test('are large, semibold and full-strength ink', () {
       final style = AppText.fieldLabel();
       expect(style.fontSize, greaterThanOrEqualTo(14));
-      expect(style.fontWeight, FontWeight.w700);
+      expect(style.fontWeight, FontWeight.w600);
       expect(style.color, AppColors.ink);
       expect(_ratio(style.color!, AppColors.surface), greaterThanOrEqualTo(4.5));
       expect(_ratio(style.color!, AppColors.paper), greaterThanOrEqualTo(4.5));

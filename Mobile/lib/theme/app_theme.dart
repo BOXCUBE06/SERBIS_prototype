@@ -11,11 +11,14 @@ class AppColors {
   static const amber600 = Color(0xFF9A5A0F);
   static const amber50 = Color(0xFFFCEFDF);
 
-  static const red600 = Color(0xFFB03B27);
-  static const red50 = Color(0xFFFBEAE6);
+  static const red600 = Color(0xFFA8352A);
+  static const red50 = Color(0xFFFBEDEB);
 
-  /// Outline of a red action drawn on white (Log out).
-  static const redBorder = Color(0xFFE2B4AD);
+  /// Dot of a red status line.
+  static const redDot = Color(0xFFC0392B);
+
+  /// Outline of a red action drawn on white (Cancel, Log out).
+  static const redBorder = Color(0xFFE3BDB6);
 
   /// Outline of an amber note on [amber50].
   static const amberBorder = Color(0xFFF0D2A8);
@@ -28,9 +31,14 @@ class AppColors {
 
   static const ink = Color(0xFF1E2A24);
   static const inkMuted = Color(0xFF4A554F);
-  static const inkFaint = Color(0xFF5F6A64);
+  /// Placeholders and the faintest readable text (5:1 on white).
+  static const inkFaint = Color(0xFF5F6862);
 
-  static const line = Color(0xFFE7E2D6);
+  /// Card and list borders.
+  static const line = Color(0xFFECE7DE);
+
+  /// Thin dividers between rows inside one card.
+  static const divider = Color(0xFFF1EDE5);
   static const grey50 = Color(0xFFF1EFEA);
 
   // Inputs: a warm off-white fill that never reads as disabled.
@@ -51,18 +59,33 @@ class AppColors {
 
   /// Dashed "ask for something else" card and its icon tile.
   // List cards and section headings of the redesigned tabs.
-  static const cardBorder = Color(0xFFE6E0D6);
-  static const cardDivider = Color(0xFFEEE8DE);
+  static const cardBorder = line;
+  static const cardDivider = divider;
   static const sectionInk = Color(0xFF1E3D2F);
 
   static const dashed = Color(0xFFBFB7A9);
   static const sand = Color(0xFFECE6DC);
 
-  static const headerGradient = LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: [green900, green700, green600],
-  );
+  /// Grey status dot (cancelled, closed).
+  static const greyDot = Color(0xFF9AA19C);
+
+  /// The flat header behind every screen title. No gradient.
+  static const header = Color(0xFF16483A);
+
+  /// Toast background.
+  static const toast = Color(0xFF1C2B24);
+
+  /// Toast action and success icon, readable on [toast].
+  static const toastAction = Color(0xFF9FD6B5);
+
+  /// Toast warning icon, on [toast].
+  static const toastWarn = Color(0xFFF2B49F);
+
+  /// Offline banner background.
+  static const offline = Color(0xFF3E4842);
+
+  /// Skeleton placeholder blocks.
+  static const skeleton = Color(0xFFECE6DC);
 }
 
 /// Corner radii. Anything rounder than half its height reads as a pill.
@@ -75,6 +98,9 @@ class AppRadius {
   /// List cards (Borrow catalogue).
   static const double card = 16;
   static const double xl = 20;
+
+  /// Bottom corners of the flat header.
+  static const double header = 20;
   static const double xxl = 28;
   static const double pill = 999;
 }
@@ -142,6 +168,12 @@ class AppTextSize {
 
   /// The resident's name on the profile card.
   static const double cardName = 20;
+
+  // Roles of the calm redesign. Weights never exceed 600.
+  static const double pageTitle = 20;
+  static const double cardTitle = 18;
+  static const double section = 16;
+  static const double detail = 14;
 }
 
 /// A 4-unit scale so spacing reads as a deliberate rhythm instead of one
@@ -191,17 +223,18 @@ class AppText {
 
   /// Only these are bundled. A weight outside the set does not fail — Flutter
   /// picks the nearest declared one — so a `w300` would render as `w400` and
-  /// look almost right, which is worse than an error.
+  /// look almost right, which is worse than an error. Nothing asks for more
+  /// than 600; the 700 file stays in `pubspec.yaml` only so a stray `w700`
+  /// still renders in this face rather than a synthetic bold.
   static const List<FontWeight> bundledWeights = [
     FontWeight.w400,
     FontWeight.w500,
     FontWeight.w600,
-    FontWeight.w700,
   ];
 
   static TextStyle display({
     double size = AppTextSize.headline,
-    FontWeight weight = FontWeight.w700,
+    FontWeight weight = FontWeight.w600,
     Color color = AppColors.ink,
     double? letterSpacing,
     double? height,
@@ -219,7 +252,25 @@ class AppText {
   /// that cannot be read at a glance is one a resident fills in wrong, and these
   /// screens are used outdoors, on small phones, by people of every age.
   static TextStyle fieldLabel() =>
-      display(size: AppTextSize.bodyLg, weight: FontWeight.w700, height: 1.3);
+      display(size: AppTextSize.body, weight: FontWeight.w600, height: 1.3);
+
+  /// 20/600: the title in the header.
+  static TextStyle pageTitle({Color color = AppColors.ink}) =>
+      display(size: AppTextSize.pageTitle, color: color, height: 1.25);
+
+  /// 18/600: a card's or dialog's title.
+  static TextStyle cardTitle({Color color = AppColors.ink}) =>
+      display(size: AppTextSize.cardTitle, color: color, height: 1.3);
+
+  /// 16/600: a section heading above a card or list.
+  static TextStyle section({Color color = AppColors.sectionInk}) =>
+      display(size: AppTextSize.section, color: color, height: 1.3);
+
+  /// 14: dates, times, reference numbers, with even-width digits so times
+  /// line up.
+  static TextStyle detail({Color color = AppColors.inkMuted, FontWeight weight = FontWeight.w400}) =>
+      body(size: AppTextSize.detail, color: color, weight: weight, height: 1.4)
+          .copyWith(fontFeatures: const [FontFeature.tabularFigures()]);
 
   static TextStyle body({
     double size = AppTextSize.body,
@@ -253,7 +304,7 @@ ThemeData buildAppTheme() {
       surface: AppColors.surface,
     ),
     splashFactory: InkRipple.splashFactory,
-    dividerColor: AppColors.line,
+    dividerColor: AppColors.divider,
     // Fields built straight on Material's TextFormField (the ones with a
     // labelText) get the same large, bold label and readable hint as the app's
     // own field widgets.
@@ -264,7 +315,7 @@ ThemeData buildAppTheme() {
     ),
     inputDecorationTheme: InputDecorationTheme(
       labelStyle: AppText.body(size: AppTextSize.bodyLg, weight: FontWeight.w600, color: AppColors.ink),
-      floatingLabelStyle: AppText.body(size: AppTextSize.bodyLg, weight: FontWeight.w700, color: AppColors.green900),
+      floatingLabelStyle: AppText.body(size: AppTextSize.bodyLg, weight: FontWeight.w600, color: AppColors.green900),
       hintStyle: AppText.body(size: AppTextSize.bodyLg, color: AppColors.inkFaint),
     ),
   );

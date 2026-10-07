@@ -7,6 +7,8 @@ import '../state/account_store.dart';
 import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
+import '../widgets/feedback.dart';
+import '../widgets/loading.dart';
 import '../widgets/motion.dart';
 import '../widgets/request_summary.dart' show SummaryCard;
 import '../widgets/shared_widgets.dart';
@@ -126,6 +128,12 @@ class _ServicesScreenState extends State<ServicesScreen> {
                 filipino: f,
                 onNotifications: widget.onOpenNotifications,
                 onProfile: widget.onOpenProfile,
+                bottom: _SearchField(
+                  controller: _search,
+                  hint: tr(f, 'services.search'),
+                  clearLabel: tr(f, 'services.search_clear'),
+                  onChanged: () => setState(() {}),
+                ),
               ),
             ),
             SliverToBoxAdapter(
@@ -138,11 +146,7 @@ class _ServicesScreenState extends State<ServicesScreen> {
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, AppLayout.navClearance),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _SearchField(controller: _search, filipino: f, onChanged: () => setState(() {})),
-                        const SizedBox(height: 16),
-                        ..._body(f, tiles, loadFailed),
-                      ],
+                      children: _body(f, tiles, loadFailed),
                     ),
                   ),
                 ),
@@ -156,41 +160,26 @@ class _ServicesScreenState extends State<ServicesScreen> {
 
   List<Widget> _body(bool f, List<ServiceCatalogItem> tiles, bool loadFailed) {
     if (_loading && widget.appState.services.isEmpty) {
-      return const [
-        Padding(
-          padding: EdgeInsets.symmetric(vertical: 30),
-          child: Center(child: CircularProgressIndicator()),
-        ),
-      ];
+      return [SkeletonRows(count: 4, filipino: f)];
     }
     if (loadFailed) {
       return [
-        Row(
-          children: [
-            const Icon(Icons.wifi_off_rounded, size: 20, color: AppColors.inkMuted),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                trEn(f, "Couldn't load services. Check your connection and try again."),
-                style: AppText.body(size: 15, color: AppColors.inkMuted),
-              ),
-            ),
-            TextButton(
-              onPressed: () {
-                setState(() => _loading = true);
-                _load();
-              },
-              child: Text(trEn(f, 'Retry')),
-            ),
-          ],
+        LoadErrorBox(
+          title: tr(f, 'services.load_failed'),
+          body: tr(f, 'tab.load_failed'),
+          filipino: f,
+          onRetry: () {
+            setState(() => _loading = true);
+            _load();
+          },
         ),
       ];
     }
     if (tiles.isEmpty) {
       return [
-        Text(
-          tr(f, 'services.no_match').replaceAll('{q}', _search.text.trim()),
-          style: AppText.body(size: 15, color: AppColors.inkMuted),
+        EmptyState(
+          title: tr(f, 'services.no_match').replaceAll('{q}', _search.text.trim()),
+          body: tr(f, 'services.no_match_body'),
         ),
       ];
     }
@@ -198,37 +187,42 @@ class _ServicesScreenState extends State<ServicesScreen> {
   }
 }
 
-/// 52px, 16px text; filters the list as the resident types.
+/// White 52px search box on the green header; filters the list as the
+/// resident types.
 class _SearchField extends StatelessWidget {
   final TextEditingController controller;
-  final bool filipino;
+  final String hint;
+  final String clearLabel;
   final VoidCallback onChanged;
 
-  const _SearchField({required this.controller, required this.filipino, required this.onChanged});
+  const _SearchField({required this.controller, required this.hint, required this.clearLabel, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
     final border = OutlineInputBorder(
-      borderRadius: BorderRadius.circular(14),
-      borderSide: const BorderSide(color: AppColors.fieldBorder),
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      borderSide: BorderSide.none,
     );
     return TextField(
       controller: controller,
       onChanged: (_) => onChanged(),
       textInputAction: TextInputAction.search,
+      // Fills the header's 52px slot exactly.
+      expands: true,
+      maxLines: null,
+      textAlignVertical: TextAlignVertical.center,
       style: AppText.body(size: 16),
       decoration: InputDecoration(
-        hintText: tr(filipino, 'services.search'),
-        hintStyle: AppText.body(size: 16, color: AppColors.inkMuted),
+        hintText: hint,
+        hintStyle: AppText.body(size: 16, color: AppColors.inkFaint),
         filled: true,
         fillColor: AppColors.surface,
-        constraints: const BoxConstraints(minHeight: 52),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14),
         prefixIcon: const Icon(Icons.search_rounded, color: AppColors.inkMuted),
         suffixIcon: controller.text.isEmpty
             ? null
             : IconButton(
-                tooltip: tr(filipino, 'services.search_clear'),
+                tooltip: clearLabel,
                 icon: const Icon(Icons.close_rounded, color: AppColors.inkMuted),
                 onPressed: () {
                   controller.clear();
@@ -237,7 +231,7 @@ class _SearchField extends StatelessWidget {
               ),
         border: border,
         enabledBorder: border,
-        focusedBorder: border.copyWith(borderSide: const BorderSide(color: AppColors.green700, width: 1.5)),
+        focusedBorder: border.copyWith(borderSide: const BorderSide(color: AppColors.green600, width: 2)),
       ),
     );
   }
@@ -283,10 +277,10 @@ class _GroupedServices extends StatelessWidget {
       children: [
         for (final key in keys) ...[
           Padding(
-            padding: const EdgeInsets.fromLTRB(2, 4, 2, 8),
+            padding: const EdgeInsets.fromLTRB(4, 4, 4, 10),
             child: Semantics(
               header: true,
-              child: Text(_heading(key), style: AppText.display(size: 17, weight: FontWeight.w600, color: AppColors.sectionInk)),
+              child: Text(_heading(key), style: AppText.display(size: AppTextSize.section, weight: FontWeight.w600, color: AppColors.sectionInk)),
             ),
           ),
           SummaryCard(children: [
@@ -298,7 +292,7 @@ class _GroupedServices extends StatelessWidget {
                 onTap: () => onOpen(service),
               ),
           ]),
-          const SizedBox(height: 16),
+          const SizedBox(height: 18),
         ],
       ],
     );
@@ -326,18 +320,18 @@ class _ServiceRow extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 76),
+          constraints: const BoxConstraints(minHeight: 68),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Row(
               children: [
                 Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(color: AppColors.greenTonal, borderRadius: BorderRadius.circular(12)),
-                  child: Icon(iconForServiceCode(service.code), size: 22, color: AppColors.green700),
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(color: AppColors.greenSelected, borderRadius: BorderRadius.circular(10)),
+                  child: Icon(iconForServiceCode(service.code), size: 20, color: AppColors.green700),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -349,7 +343,7 @@ class _ServiceRow extends StatelessWidget {
                           description,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.4),
+                          style: AppText.detail(),
                         ),
                       ],
                     ],

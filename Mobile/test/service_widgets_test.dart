@@ -19,9 +19,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:serbis/models/request_models.dart';
 import 'package:serbis/theme/app_theme.dart';
-import 'package:serbis/widgets/borrow_request_widgets.dart' show StatusBox;
 import 'package:serbis/widgets/service_widgets.dart';
+import 'package:serbis/widgets/status_line.dart';
 
 Future<void> _pump(WidgetTester tester, Widget child) async {
   tester.view.physicalSize = const Size(1080, 4800);
@@ -46,7 +47,7 @@ BoxDecoration _outerDecoration(WidgetTester tester, Type widget) {
 
 void main() {
   group('AttachmentUploadField', () {
-    testWidgets('with nothing attached it shows the hint and invites an upload',
+    testWidgets('with nothing attached it says what it takes and offers Choose file',
         (tester) async {
       await _pump(
         tester,
@@ -60,13 +61,13 @@ void main() {
 
       expect(find.text('Valid ID'), findsOneWidget);
       expect(find.text('Tap to attach a photo of your ID'), findsOneWidget);
-      expect(find.byIcon(Icons.cloud_upload_outlined), findsOneWidget);
+      expect(find.text('Choose file'), findsOneWidget);
       expect(find.byIcon(Icons.check_circle_rounded), findsNothing);
       // Nothing to take back off yet.
       expect(find.byIcon(Icons.close_rounded), findsNothing);
     });
 
-    testWidgets('with a file attached it names the file instead of the hint',
+    testWidgets('with a file attached it names the file and offers another',
         (tester) async {
       await _pump(
         tester,
@@ -79,9 +80,9 @@ void main() {
       );
 
       expect(find.text('drivers-licence.jpg'), findsOneWidget);
-      expect(find.text('Tap to attach a photo of your ID'), findsNothing);
       expect(find.byIcon(Icons.check_circle_rounded), findsOneWidget);
-      expect(find.byIcon(Icons.cloud_upload_outlined), findsNothing);
+      expect(find.text('Choose another file'), findsOneWidget);
+      expect(find.text('Choose file'), findsNothing);
     });
 
     testWidgets('a required attachment offers no way to clear it',
@@ -265,48 +266,75 @@ void main() {
   });
 
   group('ConfirmationSheet', () {
-    testWidgets("carries the server's reference number, substituted",
-        (tester) async {
+    ServiceRequest filed({String refNo = 'SR-2026-0042', ReqStatus status = ReqStatus.review, DateTime? scheduledAt}) =>
+        ServiceRequest(
+          serviceId: 1,
+          description: '',
+          type: ServiceType.road,
+          refNo: refNo,
+          status: status,
+          metaLines: const [],
+          createdAt: DateTime(2026, 9, 30, 9, 14),
+          scheduledAt: scheduledAt,
+        );
+
+    testWidgets("names what was sent, the server's reference and its status", (tester) async {
       await _pump(
         tester,
-        ConfirmationSheet(refNo: 'SR-2026-0042', filipino: false, onViewTrack: () {}),
+        ConfirmationSheet(request: filed(), title: 'Road clearing', filipino: false, onViewTrack: () {}),
       );
 
-      expect(find.text('Request submitted'), findsOneWidget);
+      expect(find.text('Request sent'), findsOneWidget);
+      expect(find.text('Road clearing'), findsOneWidget);
       expect(find.textContaining('SR-2026-0042'), findsOneWidget);
-      // The placeholder surviving into the sheet is the failure this catches —
-      // the resident would be handed "Reference #{ref}" and have nothing to
-      // quote back to the office.
-      expect(find.textContaining('{ref}'), findsNothing);
+      // The same words Track will show for it.
+      expect(find.byType(StatusLine), findsOneWidget);
+      expect(find.text('Under review'), findsOneWidget);
+      expect(find.textContaining('Updated'), findsOneWidget);
       expect(find.text('View in Track'), findsOneWidget);
+      expect(find.text('Done'), findsOneWidget);
     });
 
-    testWidgets('substitutes the reference in Filipino too', (tester) async {
+    testWidgets('reads in Filipino too', (tester) async {
       await _pump(
         tester,
-        ConfirmationSheet(refNo: 'SR-2026-0043', filipino: true, onViewTrack: () {}),
+        ConfirmationSheet(request: filed(refNo: 'SR-2026-0043'), title: 'Paglinis ng daan', filipino: true, onViewTrack: () {}),
       );
 
-      expect(find.text('Naisumite ang Kahilingan'), findsOneWidget);
+      expect(find.text('Naipadala ang kahilingan'), findsOneWidget);
       expect(find.textContaining('SR-2026-0043'), findsOneWidget);
-      expect(find.textContaining('{ref}'), findsNothing);
+      expect(find.text('Sinusuri'), findsOneWidget);
       expect(find.text('Tingnan sa Track'), findsOneWidget);
+      expect(find.text('Tapos na'), findsOneWidget);
     });
 
-    testWidgets('says it in a status box, and a booking adds its time in a second one', (tester) async {
+    testWidgets('a booking still under review adds its time', (tester) async {
       await _pump(
         tester,
         ConfirmationSheet(
-          refNo: 'SR-9',
+          request: filed(scheduledAt: DateTime(2026, 10, 12, 15, 30)),
+          title: 'Ambulance',
           filipino: false,
           onViewTrack: () {},
-          scheduledAt: DateTime(2026, 10, 12, 15, 30),
         ),
       );
 
-      expect(find.byType(StatusBox), findsNWidgets(2));
-      expect(find.text('Scheduled for'), findsOneWidget);
-      expect(find.text('Oct 12, 2026, 3:30 PM'), findsOneWidget);
+      expect(find.text('Scheduled for Oct 12, 2026, 3:30 PM'), findsOneWidget);
+    });
+
+    testWidgets('a Booked status names the time once, in its own line', (tester) async {
+      await _pump(
+        tester,
+        ConfirmationSheet(
+          request: filed(status: ReqStatus.booked, scheduledAt: DateTime(2026, 10, 12, 15, 30)),
+          title: 'Ambulance',
+          filipino: false,
+          onViewTrack: () {},
+        ),
+      );
+
+      expect(find.text('Booked'), findsOneWidget);
+      expect(find.textContaining('Oct 12, 2026, 3:30 PM'), findsOneWidget);
     });
 
     testWidgets('keeps its content to 600dp on a wide screen', (tester) async {
@@ -315,17 +343,19 @@ void main() {
       addTearDown(tester.view.reset);
       await tester.pumpWidget(MaterialApp(
         theme: buildAppTheme(),
-        home: Scaffold(body: ConfirmationSheet(refNo: 'SR-1', filipino: false, onViewTrack: () {})),
+        home: Scaffold(
+          body: ConfirmationSheet(request: filed(), title: 'Road clearing', filipino: false, onViewTrack: () {}),
+        ),
       ));
 
-      expect(tester.getSize(find.byType(StatusBox)).width, lessThanOrEqualTo(600));
+      expect(tester.getSize(find.byType(StatusLine)).width, lessThanOrEqualTo(600));
     });
 
-    testWidgets('the button hands the resident to the Track tab', (tester) async {
+    testWidgets('View in Track hands the resident to the Track tab', (tester) async {
       var opened = 0;
       await _pump(
         tester,
-        ConfirmationSheet(refNo: 'SR-1', filipino: false, onViewTrack: () => opened++),
+        ConfirmationSheet(request: filed(), title: 'Road clearing', filipino: false, onViewTrack: () => opened++),
       );
 
       await tester.tap(find.text('View in Track'));
@@ -333,6 +363,27 @@ void main() {
 
       expect(opened, 1);
     });
+
+    for (final filipino in [false, true]) {
+      testWidgets('fits a 320px phone without overflow (${filipino ? 'Filipino' : 'English'})', (tester) async {
+        tester.view.physicalSize = const Size(320, 900);
+        tester.view.devicePixelRatio = 1;
+        addTearDown(tester.view.reset);
+        await tester.pumpWidget(MaterialApp(
+          theme: buildAppTheme(),
+          home: Scaffold(
+            body: ConfirmationSheet(
+              request: filed(scheduledAt: DateTime(2026, 10, 12, 15, 30)),
+              title: 'Simulation drills / NSED',
+              filipino: filipino,
+              onViewTrack: () {},
+            ),
+          ),
+        ));
+
+        expect(tester.takeException(), isNull);
+      });
+    }
   });
 
   group('ServiceGrid', () {

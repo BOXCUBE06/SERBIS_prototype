@@ -12,6 +12,7 @@ use App\Models\ServiceRequest;
 use App\Models\Vehicle;
 use App\Support\AnalyticsCache;
 use App\Traits\ResolvesUploadDisks;
+use Database\Seeders\DevVolumeSeeder;
 use Database\Seeders\RequestDataSeeder;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
@@ -31,6 +32,8 @@ class ReseedRequestData extends Command
 
     protected $signature = 'serbis:reseed-requests
         {--seed=1 : Random seed; the same seed gives the same data}
+        {--volume : Also seed residents, staff and SMS history, and generate ~1000 requests over 24 months}
+        {--scale=1 : With --volume, multiplies every count (0.1 for a quick run)}
         {--force : Skip the confirmation}';
 
     protected $description = 'LOCAL ONLY: wipe all request and borrowing data and generate a fresh realistic set';
@@ -58,13 +61,19 @@ class ReseedRequestData extends Command
     {
         $database = config('database.connections.'.config('database.default').'.database');
 
-        if (app()->environment('production')) {
-            $this->error('Refusing to run in production.');
+        if (! app()->environment(['local', 'testing'])) {
+            $this->error('Refusing to run outside local/testing (env: '.app()->environment().').');
 
             return self::FAILURE;
         }
         if (! in_array($database, self::DATABASES, true)) {
             $this->error("Refusing to run against '{$database}'; only ".implode(', ', self::DATABASES).'.');
+
+            return self::FAILURE;
+        }
+        // Seeded phone numbers are valid Philippine mobiles and some belong to real people.
+        if (! config('serbis.sms_fake')) {
+            $this->error('Refusing to run: SERBIS_SMS_FAKE is not true, so a text sent from this database could reach a real phone.');
 
             return self::FAILURE;
         }
@@ -79,7 +88,14 @@ class ReseedRequestData extends Command
 
         // Nothing may leave this machine: SMS (SkySMS) and push (FCM) both go through Http.
         Http::preventStrayRequests();
-        config(['serbis.sms_fake' => true]);
+
+        $volume = (bool) $this->option('volume');
+        $scale = max(0.01, (float) $this->option('scale'));
+        if ($volume) {
+            $people = new DevVolumeSeeder;
+            $people->scale = $scale;
+            $people->setCommand($this)->run();
+        }
 
         $residentsBefore = Resident::orderBy('resident_id')->pluck('barangay_id', 'resident_id')->all();
 
@@ -100,6 +116,9 @@ class ReseedRequestData extends Command
 
         $seeder = new RequestDataSeeder;
         $seeder->seed = (int) $this->option('seed');
+        if ($volume) {
+            $this->sizeForVolume($seeder, $scale);
+        }
         $seeder->setCommand($this)->run();
 
         $this->reconcileStock();
@@ -118,6 +137,21 @@ class ReseedRequestData extends Command
         $this->info('Distinct barangays on requests: '.DB::table('tbl_service_request')->distinct()->count('barangay_id'));
 
         return self::SUCCESS;
+    }
+
+    /** About 1000 requests and 300 loans over 24 months; open statuses only in the last 28 days. */
+    private function sizeForVolume(RequestDataSeeder $seeder, float $scale): void
+    {
+        $scaled = fn (array $plan) => array_map(fn ($count) => max(1, (int) round($count * $scale)), $plan);
+
+        $seeder->weighted = true;
+        $seeder->spanDays = 730;
+        $seeder->openDays = 28;
+        $seeder->finalLoanDays = 730;
+        $seeder->otherEquipmentPercent = 5;
+        $seeder->servicePlan = $scaled(['Responding' => 3, 'Pending' => 11, 'Resolved' => 674, 'Cancelled' => 83, 'Disapproved' => 79]);
+        $seeder->ambulancePlan = $scaled(['Responding' => 1, 'Booked' => 6, 'Pending' => 5, 'Resolved' => 116, 'Cancelled' => 12, 'Disapproved' => 10]);
+        $seeder->loanPlan = $scaled(['Pending' => 8, 'Approved' => 6, 'Released' => 12, 'Overdue' => 5, 'Returned' => 217, 'Denied' => 30, 'Cancelled' => 22]);
     }
 
     /** available = total - quantity out on Released loans (the rule serbis:report-equipment-stock checks). */

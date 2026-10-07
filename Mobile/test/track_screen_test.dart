@@ -64,19 +64,20 @@ void main() {
       loans: [_loan('Wheelchair', BorrowStatus.pending)],
     );
 
-    double y(String text) => tester.getTopLeft(find.text(text)).dy;
+    // Section titles carry their count: "In progress  1".
+    double y(String text) => tester.getTopLeft(find.textContaining(text)).dy;
     expect(find.text('Track'), findsOneWidget);
     expect(find.text('Your requests and borrowed items'), findsOneWidget);
     expect(y('In progress'), lessThan(y('Borrowed items')));
-    expect(y('Borrowed items'), lessThan(y('Past')));
+    expect(y('Borrowed items'), lessThan(y('Past requests')));
   });
 
   testWidgets('an empty section is hidden', (tester) async {
     await _pump(tester, requests: [_request(1, 'Pending')]);
 
-    expect(find.text('In progress'), findsOneWidget);
-    expect(find.text('Borrowed items'), findsNothing);
-    expect(find.text('Past'), findsNothing);
+    expect(find.text('In progress  1'), findsOneWidget);
+    expect(find.textContaining('Borrowed items'), findsNothing);
+    expect(find.text('Past requests'), findsNothing);
   });
 
   testWidgets('Past shows the latest 5, then Show older requests loads the rest', (tester) async {
@@ -103,14 +104,14 @@ void main() {
     expect(find.text('Show older requests'), findsNothing);
   });
 
-  testWidgets('nothing at all: one muted line and Browse services opens Services', (tester) async {
+  testWidgets('nothing at all: the empty state, and Browse services opens Services', (tester) async {
     var browsed = 0;
     await _pump(tester, onBrowseServices: () => browsed++);
 
-    expect(find.text('You have no requests yet.'), findsOneWidget);
-    expect(find.text('In progress'), findsNothing);
-    expect(find.text('Borrowed items'), findsNothing);
-    expect(find.text('Past'), findsNothing);
+    expect(find.text('No requests yet'), findsOneWidget);
+    expect(find.textContaining('In progress'), findsNothing);
+    expect(find.textContaining('Borrowed items'), findsNothing);
+    expect(find.text('Past requests'), findsNothing);
 
     await tester.tap(find.text('Browse services'));
     expect(browsed, 1);
@@ -128,6 +129,6 @@ void main() {
 
     expect(find.text('Cancel request'), findsOneWidget);
     expect(find.text('Call MDRRMO'), findsOneWidget);
-    expect(find.text('Waiting for MDRRMO'), findsOneWidget);
+    expect(find.text('Under review'), findsWidgets);
   });
 }

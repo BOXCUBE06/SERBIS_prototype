@@ -11,7 +11,6 @@ import 'package:serbis/state/account_store.dart';
 import 'package:serbis/state/api_service.dart';
 import 'package:serbis/state/request_store.dart';
 import 'package:serbis/theme/app_theme.dart';
-import 'package:serbis/widgets/borrow_request_widgets.dart' show StatusBox;
 import 'package:serbis/widgets/shared_widgets.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -115,7 +114,6 @@ void main() {
     testWidgets('no advisories and no recent requests are each one muted line, not a box', (tester) async {
       await _pumpSheet(tester);
 
-      expect(find.byType(StatusBox), findsNothing);
       expect(find.text('No advisories have been sent to you.'), findsOneWidget);
       expect(find.text('No updates on your requests in the last 30 days.'), findsOneWidget);
       expect(find.text('Advisories and updates on your requests'), findsOneWidget);
@@ -223,7 +221,7 @@ void main() {
       expect(find.text('Edit my details'), findsOneWidget);
       expect(find.text('Account details'), findsNothing);
       final name = tester.widget<Text>(find.text('Maria Santos'));
-      expect(name.style!.fontSize, AppTextSize.cardName);
+      expect(name.style!.fontSize, AppTextSize.cardTitle);
     });
   });
 }

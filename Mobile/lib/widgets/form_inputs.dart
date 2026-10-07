@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 
 import '../models/phone_number.dart';
 import '../theme/app_theme.dart';
+import 'feedback.dart' show FieldError;
 
 /// The app's labelled text field. Lived as `_Field` inside the services screen,
 /// where nothing else could reach it.
@@ -135,12 +136,11 @@ class AppTextField extends StatelessWidget {
             decoration: InputDecoration(
               hintText: hint,
               hintStyle: AppText.body(size: AppTextSize.bodyLg, color: AppColors.inkFaint),
-              errorText: errorText,
-              errorStyle: AppText.body(size: AppTextSize.small, color: AppColors.red600),
+              error: errorText == null ? null : FieldError(errorText!),
               suffixIcon: suffixIcon,
               counterText: '',
-              // 48dp single-line fields.
-              constraints: lines == 1 ? const BoxConstraints(minHeight: 48) : null,
+              // 52dp single-line fields.
+              constraints: lines == 1 ? const BoxConstraints(minHeight: 52) : null,
               filled: true,
               fillColor: AppColors.fieldFill,
               contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
@@ -162,11 +162,11 @@ class AppTextField extends StatelessWidget {
               ),
               errorBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(AppRadius.md),
-                borderSide: const BorderSide(color: AppColors.red600, width: 1.5),
+                borderSide: const BorderSide(color: AppColors.red600, width: 2),
               ),
               focusedErrorBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(AppRadius.md),
-                borderSide: const BorderSide(color: AppColors.red600, width: 1.5),
+                borderSide: const BorderSide(color: AppColors.red600, width: 2),
               ),
             ),
           ),

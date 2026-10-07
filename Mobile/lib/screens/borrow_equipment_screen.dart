@@ -5,16 +5,20 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../data/hotlines.dart' show callHotlineNumber;
 import '../models/borrow_models.dart';
-import '../models/request_models.dart' show formatStepTime;
+import '../models/request_models.dart' show formatMonthShort, formatStepTime;
 import '../state/account_store.dart' show AppUser;
 import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
 import '../widgets/form_inputs.dart';
 import '../widgets/borrow_request_widgets.dart';
+import '../widgets/feedback.dart';
 import '../widgets/form_section.dart';
+import '../widgets/loading.dart';
 import '../widgets/offline_banner.dart';
+import '../widgets/request_summary.dart' show SummaryCard;
 import '../widgets/shared_widgets.dart';
+import '../widgets/status_line.dart';
 
 /// Browse the equipment MDRRMO lends out and file a loan request, or check the
 /// status of ones already filed. A request that is still Pending or Approved
@@ -115,11 +119,6 @@ class BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
     });
   }
 
-  int get _pendingCount => _myRequests.where((r) => r.status == BorrowStatus.pending).length;
-
-  /// Anything not yet finished: pending, approved or out on loan.
-  int get _inProgressCount => _myRequests.where((r) => !r.status.isTerminal).length;
-
   /// A null [item] opens the sheet for something the catalogue does not list,
   /// which is the only way `other_equipment_text` is ever sent.
   Future<void> _openBorrowSheet(Equipment? item) async {
@@ -158,52 +157,44 @@ class BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
   @override
   Widget build(BuildContext context) {
     final f = widget.appState.language == AppLanguage.filipino;
+    final mine = _myRequests.length;
 
     return Scaffold(
       backgroundColor: AppColors.paper,
-      appBar: widget.embedded
-          ? null
-          : AppBar(
-              backgroundColor: AppColors.paper,
-              elevation: 0,
-              foregroundColor: AppColors.ink,
-              title: Text(trEn(f, 'Borrow equipment'), style: AppText.display(size: AppTextSize.title)),
-            ),
       body: RefreshIndicator(
         color: AppColors.green700,
         // Pull-to-refresh belongs to the resident's own requests only.
         notificationPredicate: (n) => _showMine && n.depth == 0,
-        edgeOffset: widget.embedded ? TabHeader.minHeight + _TabsHeader.height : _TabsHeader.height,
+        edgeOffset: TabHeader.minHeight + TabHeader.bottomHeight,
         onRefresh: _loadMine,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            if (widget.embedded)
-              SliverPersistentHeader(
-                pinned: true,
-                delegate: TabHeader(
-                  title: trEn(f, 'Borrow equipment'),
-                  subtitle: trEn(f, 'Free loans from Echague MDRRMO'),
-                  filipino: f,
-                  onNotifications: widget.onOpenNotifications,
-                  onProfile: widget.onOpenProfile,
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: TabHeader(
+                title: trEn(f, 'Borrow equipment'),
+                subtitle: trEn(f, 'Free loans from Echague MDRRMO'),
+                filipino: f,
+                // Pushed from Home on a host with no Borrow tab: a back arrow
+                // instead of the bell and profile.
+                onBack: widget.embedded ? null : () => Navigator.of(context).maybePop(),
+                onNotifications: widget.embedded ? widget.onOpenNotifications : null,
+                onProfile: widget.embedded ? widget.onOpenProfile : null,
+                bottom: _Segmented(
+                  labels: [
+                    trEn(f, 'Available'),
+                    mine == 0 ? trEn(f, 'My requests') : trEn(f, 'My requests ({n})').replaceAll('{n}', '$mine'),
+                  ],
+                  selected: _showMine ? 1 : 0,
+                  onChanged: (i) => setState(() => _showMine = i == 1),
                 ),
               ),
+            ),
             if (widget.appState.borrowIsOffline)
               SliverToBoxAdapter(
                 child: OfflineBanner(filipino: f, lastUpdated: widget.appState.borrowRequestsFetchedAt),
               ),
-            SliverPersistentHeader(
-              pinned: true,
-              delegate: _TabsHeader(
-                availableLabel: trEn(f, 'Available'),
-                mineLabel: trEn(f, 'My requests'),
-                pending: _pendingCount,
-                pendingLabel: trEn(f, '{n} pending').replaceAll('{n}', '$_pendingCount'),
-                showMine: _showMine,
-                onChanged: (mine) => setState(() => _showMine = mine),
-              ),
-            ),
             ...(_showMine ? _mineSlivers(f) : _availableSlivers(f)),
             const SliverToBoxAdapter(child: SizedBox(height: AppLayout.navClearance)),
           ],
@@ -218,43 +209,45 @@ class BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
         sliver: child,
       );
 
+  /// The list starts 16 under the header.
+  Widget _list(List<Widget> children) =>
+      _pad(SliverList.list(children: [const SizedBox(height: AppSpacing.lg), ...children]));
+
   List<Widget> _availableSlivers(bool f) {
     if (_loadingEquipment) {
-      return const [SliverFillRemaining(hasScrollBody: false, child: Center(child: CircularProgressIndicator()))];
+      return [_list([SkeletonRows(count: 5, filipino: f)])];
     }
 
     if (_equipmentError != null && _equipment.isEmpty) {
       return [
-        SliverFillRemaining(
-          hasScrollBody: false,
-          child: _ErrorState(
+        _list([
+          LoadErrorBox(
+            title: trEn(f, "Couldn't load equipment"),
+            body: _equipmentError!,
             filipino: f,
-            message: _equipmentError!,
             onRetry: () {
               setState(() => _loadingEquipment = true);
               _loadEquipment();
             },
           ),
-        ),
+        ]),
       ];
     }
 
-    final other = _OtherEquipmentCard(filipino: f, onTap: () => _openBorrowSheet(null));
+    final other = SummaryCard(children: [_OtherEquipmentRow(filipino: f, onTap: () => _openBorrowSheet(null))]);
 
     // Reachable from the empty catalogue too: an office with nothing listed is
     // exactly when a resident has to name the item themselves.
     if (_equipment.isEmpty) {
       return [
-        _pad(SliverList.list(children: [
-          const SizedBox(height: AppSpacing.lg),
-          _EmptyState(
-            icon: Icons.inventory_2_outlined,
+        _list([
+          EmptyState(
             title: trEn(f, 'Nothing available right now'),
             body: trEn(f, 'MDRRMO has no equipment listed for loan at the moment.'),
           ),
-          const SizedBox(height: AppSpacing.md),
+          const SizedBox(height: 14),
           other,
-        ])),
+        ]),
       ];
     }
 
@@ -262,55 +255,41 @@ class BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
     final shown = query.isEmpty
         ? _equipment
         : _equipment.where((e) => e.name.toLowerCase().contains(query)).toList();
-    final inProgress = _inProgressCount;
 
     return [
-      _pad(SliverList.list(children: [
-        const SizedBox(height: AppSpacing.md),
-        if (inProgress > 0) ...[
-          _InProgressBanner(
-            text: inProgress == 1
-                ? trEn(f, 'You have 1 request in progress')
-                : trEn(f, 'You have {n} requests in progress').replaceAll('{n}', '$inProgress'),
-            viewLabel: trEn(f, 'View'),
-            onView: () => setState(() => _showMine = true),
-          ),
-          const SizedBox(height: AppSpacing.md),
-        ],
+      _list([
         _SearchField(controller: _search, hint: trEn(f, 'Search equipment')),
-        const SizedBox(height: AppSpacing.md),
-        if (shown.isEmpty) ...[
-          _EmptyState(
-            icon: Icons.search_off_rounded,
+        const SizedBox(height: 14),
+        if (shown.isEmpty)
+          EmptyState(
             title: trEn(f, 'No equipment matches your search'),
             body: trEn(f, 'Try another name, or ask for it below.'),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-        ],
-        for (final item in shown) ...[
-          _EquipmentCard(filipino: f, item: item, onBorrow: () => _openBorrowSheet(item)),
-          const SizedBox(height: AppSpacing.md),
-        ],
+          )
+        else
+          SummaryCard(children: [
+            for (final item in shown) _EquipmentRow(filipino: f, item: item, onBorrow: () => _openBorrowSheet(item)),
+          ]),
+        const SizedBox(height: 14),
         other,
-      ])),
+      ]),
     ];
   }
 
   List<Widget> _mineSlivers(bool f) {
     if (_loadingMine && _myRequests.isEmpty) {
-      return const [SliverFillRemaining(hasScrollBody: false, child: Center(child: CircularProgressIndicator()))];
+      return [_list([SkeletonCard(filipino: f)])];
     }
 
     if (_myRequests.isEmpty) {
       return [
-        SliverFillRemaining(
-          hasScrollBody: false,
-          child: _EmptyState(
-            icon: Icons.assignment_outlined,
+        _list([
+          EmptyState(
             title: trEn(f, 'No borrow requests yet'),
             body: trEn(f, 'Items you request from the Available tab will show up here.'),
+            actionLabel: trEn(f, 'See available equipment'),
+            onAction: () => setState(() => _showMine = false),
           ),
-        ),
+        ]),
       ];
     }
 
@@ -318,212 +297,101 @@ class BorrowEquipmentScreenState extends State<BorrowEquipmentScreen> {
     final past = _myRequests.where((r) => r.status.isTerminal).toList();
     final phone = mdrrmoNumber(widget.appState.hotlines);
 
-    Widget card(BorrowRequest r) {
-      // Borrow again only while the item is still in the catalogue.
-      final item = _equipment.where((e) => e.id == r.equipmentId).firstOrNull;
-      return Padding(
-        padding: const EdgeInsets.only(bottom: AppSpacing.md),
-        child: _BorrowRequestCard(
-          request: r,
-          filipino: f,
-          onCancel: () => widget.appState.cancelBorrowRequest(r.id),
-          loadPhoto: (stage) => widget.appState.borrowPhoto(r.id!, stage),
-          onCall: phone == null ? null : () => callHotlineNumber(phone),
-          onBorrowAgain: item == null ? null : () => _openBorrowSheet(item),
-        ),
-      );
-    }
+    Future<List<int>?> loadPhoto(BorrowRequest r, String stage) => widget.appState.borrowPhoto(r.id!, stage);
 
     return [
-      _pad(SliverList.list(children: [
-        const SizedBox(height: AppSpacing.lg),
-        if (widget.appState.borrowRequestsFromCache)
+      _list([
+        if (widget.appState.borrowRequestsFromCache) ...[
           StaleDataNote(filipino: f, lastUpdated: widget.appState.borrowRequestsFetchedAt),
+          const SizedBox(height: AppSpacing.md),
+        ],
         if (active.isNotEmpty) ...[
-          SectionHeader(title: trEn(f, 'In progress')),
-          for (final r in active) card(r),
+          SectionHeader(title: trEn(f, 'In progress'), count: active.length),
+          for (final r in active)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.md),
+              child: _BorrowRequestCard(
+                request: r,
+                filipino: f,
+                onCancel: () => widget.appState.cancelBorrowRequest(r.id),
+                loadPhoto: (stage) => loadPhoto(r, stage),
+                onCall: phone == null ? null : () => callHotlineNumber(phone),
+              ),
+            ),
         ],
         if (past.isNotEmpty) ...[
           if (active.isNotEmpty) const SizedBox(height: AppSpacing.md),
           SectionHeader(title: trEn(f, 'Past requests')),
-          for (final r in past) card(r),
+          SummaryCard(children: [
+            for (final r in past)
+              _PastLoanRow(
+                request: r,
+                filipino: f,
+                loadPhoto: (stage) => loadPhoto(r, stage),
+                onBorrowAgain: () {
+                  // Borrow again only while the item is still in the catalogue.
+                  final item = _equipment.where((e) => e.id == r.equipmentId).firstOrNull;
+                  return item == null ? null : () => _openBorrowSheet(item);
+                }(),
+              ),
+          ]),
         ],
-      ])),
+      ]),
     ];
   }
 }
 
-/// The Available / My requests tabs, pinned under the header.
-class _TabsHeader extends SliverPersistentHeaderDelegate {
-  // 12 + 4 outer padding, 4 + 4 track padding, 48 tab.
-  static const height = 72.0;
+/// Two choices on the green header, the chosen one on white.
+class _Segmented extends StatelessWidget {
+  final List<String> labels;
+  final int selected;
+  final ValueChanged<int> onChanged;
 
-  final String availableLabel;
-  final String mineLabel;
-  final int pending;
-  final String pendingLabel;
-  final bool showMine;
-  final ValueChanged<bool> onChanged;
-
-  const _TabsHeader({
-    required this.availableLabel,
-    required this.mineLabel,
-    required this.pending,
-    required this.pendingLabel,
-    required this.showMine,
-    required this.onChanged,
-  });
+  const _Segmented({required this.labels, required this.selected, required this.onChanged});
 
   @override
-  double get maxExtent => height;
-
-  @override
-  double get minExtent => height;
-
-  @override
-  bool shouldRebuild(_TabsHeader old) =>
-      old.showMine != showMine || old.pending != pending || old.mineLabel != mineLabel;
-
-  @override
-  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+  Widget build(BuildContext context) {
     return Container(
-      color: AppColors.paper,
-      padding: const EdgeInsets.fromLTRB(AppLayout.gutter, 12, AppLayout.gutter, 4),
-      child: Container(
-        padding: const EdgeInsets.all(4),
-        decoration: BoxDecoration(color: AppColors.grey50, borderRadius: BorderRadius.circular(AppRadius.pill)),
-        child: Row(
-          children: [
-            Expanded(child: _tab(availableLabel, !showMine, () => onChanged(false))),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(color: Colors.white.withValues(alpha: .12), borderRadius: BorderRadius.circular(AppRadius.md)),
+      child: Row(
+        children: [
+          for (var i = 0; i < labels.length; i++) ...[
+            if (i > 0) const SizedBox(width: 4),
             Expanded(
-              child: _tab(
-                mineLabel,
-                showMine,
-                () => onChanged(true),
-                badge: pending > 0 ? _CountBadge(count: pending, label: pendingLabel) : null,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _tab(String label, bool active, VoidCallback onTap, {Widget? badge}) {
-    return Semantics(
-      selected: active,
-      button: true,
-      child: GestureDetector(
-        onTap: onTap,
-        behavior: HitTestBehavior.opaque,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          height: 48,
-          decoration: BoxDecoration(
-            color: active ? AppColors.surface : Colors.transparent,
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-            boxShadow: active
-                ? [BoxShadow(color: AppColors.green900.withValues(alpha: .06), blurRadius: 8, offset: const Offset(0, 2))]
-                : null,
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Flexible(
-                child: Text(
-                  label,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppText.display(
-                    size: 16,
-                    weight: FontWeight.w600,
-                    color: active ? AppColors.ink : AppColors.inkMuted,
+              child: Semantics(
+                selected: i == selected,
+                button: true,
+                child: Material(
+                  color: i == selected ? AppColors.surface : Colors.transparent,
+                  borderRadius: BorderRadius.circular(9),
+                  child: InkWell(
+                    onTap: () => onChanged(i),
+                    borderRadius: BorderRadius.circular(9),
+                    child: Center(
+                      child: Text(
+                        labels[i],
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppText.display(
+                          size: AppTextSize.body,
+                          weight: i == selected ? FontWeight.w600 : FontWeight.w500,
+                          color: i == selected ? AppColors.green700 : Colors.white,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
-              if (badge != null) ...[const SizedBox(width: 6), badge],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Round primary-coloured count, e.g. pending requests.
-class _CountBadge extends StatelessWidget {
-  final int count;
-
-  /// What the number means, for screen readers ("2 pending").
-  final String label;
-
-  const _CountBadge({required this.count, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Semantics(
-      label: label,
-      excludeSemantics: true,
-      child: Container(
-        constraints: const BoxConstraints(minWidth: 20),
-        height: 20,
-        padding: const EdgeInsets.symmetric(horizontal: 6),
-        alignment: Alignment.center,
-        decoration: BoxDecoration(color: AppColors.green700, borderRadius: BorderRadius.circular(AppRadius.pill)),
-        child: Text(
-          '$count',
-          style: AppText.display(size: AppTextSize.caption, weight: FontWeight.w700, color: Colors.white),
-        ),
-      ),
-    );
-  }
-}
-
-/// "You have N requests in progress — View", above the catalogue.
-class _InProgressBanner extends StatelessWidget {
-  final String text;
-  final String viewLabel;
-  final VoidCallback onView;
-
-  const _InProgressBanner({required this.text, required this.viewLabel, required this.onView});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.greenNotice,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        side: const BorderSide(color: AppColors.greenNoticeBorder),
-      ),
-      child: InkWell(
-        onTap: onView,
-        canRequestFocus: false,
-        borderRadius: BorderRadius.circular(AppRadius.lg),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 48),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            child: Row(
-              children: [
-                const Icon(Icons.schedule_rounded, size: 18, color: AppColors.green700),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(text, style: AppText.body(size: AppTextSize.body, weight: FontWeight.w500)),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  viewLabel,
-                  style: AppText.display(size: AppTextSize.body, weight: FontWeight.w600, color: AppColors.green700),
-                ),
-              ],
             ),
-          ),
-        ),
+          ],
+        ],
       ),
     );
   }
 }
 
-/// 48dp search box; filtering happens in the screen.
+/// 52px search box; filtering happens in the screen.
 class _SearchField extends StatelessWidget {
   final TextEditingController controller;
   final String hint;
@@ -545,9 +413,9 @@ class _SearchField extends StatelessWidget {
         hintStyle: AppText.body(size: AppTextSize.bodyLg, color: AppColors.inkFaint),
         prefixIcon: const Icon(Icons.search_rounded, color: AppColors.inkMuted),
         filled: true,
-        fillColor: AppColors.fieldFill,
-        constraints: const BoxConstraints(minHeight: 48),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+        fillColor: AppColors.surface,
+        constraints: const BoxConstraints(minHeight: 52),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 15),
         border: border,
         enabledBorder: border,
         focusedBorder: border.copyWith(borderSide: const BorderSide(color: AppColors.green600, width: 1.5)),
@@ -556,79 +424,58 @@ class _SearchField extends StatelessWidget {
   }
 }
 
-/// One catalogue item: name and stock on the left, a tonal Borrow button on
-/// the right. The whole card opens the borrow sheet.
-class _EquipmentCard extends StatelessWidget {
+/// One catalogue item: name over its stock, and a Borrow link. The whole row
+/// opens the borrow sheet.
+class _EquipmentRow extends StatelessWidget {
   final Equipment item;
   final VoidCallback onBorrow;
   final bool filipino;
 
-  const _EquipmentCard({required this.item, required this.filipino, required this.onBorrow});
+  const _EquipmentRow({required this.item, required this.filipino, required this.onBorrow});
 
   @override
   Widget build(BuildContext context) {
     final f = filipino;
     final stock = item.availableQuantity;
     final out = stock <= 0;
-    final low = stock == 1;
 
-    final (Color dot, Color textColor, String stockText) = out
-        ? (AppColors.inkFaint, AppColors.inkMuted, trEn(f, 'Unavailable'))
-        : low
-            ? (AppColors.amberDot, AppColors.amberInk, trEn(f, 'Only 1 left'))
-            : (AppColors.green600, AppColors.inkMuted, trEn(f, '{n} available').replaceAll('{n}', '$stock'));
+    final (String stockText, StatusTone tone) = out
+        ? (trEn(f, 'Unavailable'), StatusTone.grey)
+        : stock == 1
+            ? (trEn(f, 'Only 1 left'), StatusTone.amber)
+            : (trEn(f, '{n} available').replaceAll('{n}', '$stock'), StatusTone.green);
 
     return Opacity(
       opacity: out ? .55 : 1,
-      child: Material(
-        color: AppColors.surface,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadius.card),
-          side: const BorderSide(color: AppColors.line),
-        ),
-        child: InkWell(
-          onTap: out ? null : onBorrow,
-          canRequestFocus: false,
-          borderRadius: BorderRadius.circular(AppRadius.card),
+      child: InkWell(
+        onTap: out ? null : onBorrow,
+        canRequestFocus: false,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 68),
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 16, 14, 16),
+            padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
             child: Row(
               children: [
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(item.name, style: AppText.display(size: AppTextSize.bodyLg, weight: FontWeight.w600)),
-                      const SizedBox(height: 4),
-                      Row(
-                        children: [
-                          Container(width: 7, height: 7, decoration: BoxDecoration(color: dot, shape: BoxShape.circle)),
-                          const SizedBox(width: 6),
-                          Flexible(
-                            child: Text(stockText, style: AppText.body(size: AppTextSize.small, color: textColor)),
-                          ),
-                        ],
-                      ),
+                      Text(item.name, style: AppText.display(size: AppTextSize.bodyLg, weight: FontWeight.w600, height: 1.3)),
+                      const SizedBox(height: AppSpacing.xs),
+                      StatusLine(label: stockText, tone: tone),
                     ],
                   ),
                 ),
-                const SizedBox(width: 12),
-                SizedBox(
-                  height: 36,
-                  child: TextButton(
-                    onPressed: out ? null : onBorrow,
-                    style: TextButton.styleFrom(
-                      backgroundColor: AppColors.greenTonal,
-                      foregroundColor: AppColors.green700,
-                      disabledBackgroundColor: AppColors.grey50,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      // 36dp drawn; the whole card is the bigger target.
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadius.sm)),
-                      textStyle: AppText.display(size: AppTextSize.body, weight: FontWeight.w600),
-                    ),
-                    child: Text(trEn(f, 'Borrow')),
+                const SizedBox(width: 8),
+                TextButton(
+                  onPressed: out ? null : onBorrow,
+                  style: TextButton.styleFrom(
+                    foregroundColor: AppColors.green700,
+                    minimumSize: const Size(44, 44),
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    textStyle: AppText.display(size: AppTextSize.body, weight: FontWeight.w600),
                   ),
+                  child: Text(trEn(f, 'Borrow')),
                 ),
               ],
             ),
@@ -639,56 +486,40 @@ class _EquipmentCard extends StatelessWidget {
   }
 }
 
-/// The way into an uncatalogued request. Its own card rather than a field in
+/// The way into an uncatalogued request. Its own row rather than a field in
 /// the sheet: opening the sheet without an item is what makes sending both an
 /// `equipment_id` and an `other_equipment_text` unrepresentable.
-class _OtherEquipmentCard extends StatelessWidget {
+class _OtherEquipmentRow extends StatelessWidget {
   final VoidCallback onTap;
   final bool filipino;
 
-  const _OtherEquipmentCard({required this.onTap, required this.filipino});
+  const _OtherEquipmentRow({required this.onTap, required this.filipino});
 
   @override
   Widget build(BuildContext context) {
     final f = filipino;
-    final radius = BorderRadius.circular(AppRadius.card);
-    return CustomPaint(
-      foregroundPainter: const _DashedBorder(radius: AppRadius.card),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: radius,
-        child: InkWell(
-          onTap: onTap,
-          canRequestFocus: false,
-          borderRadius: radius,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 16, 14, 16),
-            child: Row(
-              children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(color: AppColors.sand, borderRadius: BorderRadius.circular(AppRadius.sm)),
-                  child: const Icon(Icons.add_rounded, color: AppColors.inkMuted),
+    return InkWell(
+      onTap: onTap,
+      canRequestFocus: false,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 68),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(trEn(f, 'Need something else?'),
+                        style: AppText.display(size: AppTextSize.bodyLg, weight: FontWeight.w600, height: 1.3)),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(trEn(f, "Ask for an item that's not on this list"), style: AppText.detail()),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(trEn(f, 'Need something else?'),
-                          style: AppText.display(size: AppTextSize.bodyLg, weight: FontWeight.w600)),
-                      const SizedBox(height: 2),
-                      Text(
-                        trEn(f, "Ask for an item that's not on this list"),
-                        style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
-                      ),
-                    ],
-                  ),
-                ),
-                const Icon(Icons.chevron_right_rounded, color: AppColors.inkMuted),
-              ],
-            ),
+              ),
+              const Icon(Icons.chevron_right_rounded, color: AppColors.inkMuted),
+            ],
           ),
         ),
       ),
@@ -696,31 +527,8 @@ class _OtherEquipmentCard extends StatelessWidget {
   }
 }
 
-/// 1.5px dashed rounded border; Flutter has no dashed BorderSide.
-class _DashedBorder extends CustomPainter {
-  final double radius;
-
-  const _DashedBorder({required this.radius});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = AppColors.dashed
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-    final path = Path()
-      ..addRRect(RRect.fromRectAndRadius(Offset.zero & size, Radius.circular(radius)).deflate(.75));
-    for (final metric in path.computeMetrics()) {
-      for (var d = 0.0; d < metric.length; d += 9) {
-        canvas.drawPath(metric.extractPath(d, d + 5), paint);
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(_DashedBorder old) => old.radius != radius;
-}
-
+/// A loan still in progress: what and how many, when it was sent, where it
+/// stands and since when, its steps, and what the resident can do.
 class _BorrowRequestCard extends StatelessWidget {
   final BorrowRequest request;
   final bool filipino;
@@ -736,75 +544,52 @@ class _BorrowRequestCard extends StatelessWidget {
   /// Dials MDRRMO; null hides the button (no number in the hotline list).
   final VoidCallback? onCall;
 
-  /// Opens this item's borrow sheet; null when it is no longer in the catalogue.
-  final VoidCallback? onBorrowAgain;
-
   const _BorrowRequestCard({
     required this.request,
     required this.filipino,
     required this.onCancel,
     required this.loadPhoto,
     this.onCall,
-    this.onBorrowAgain,
   });
 
   @override
   Widget build(BuildContext context) {
     final f = filipino;
     final r = request;
-    final past = r.status.isTerminal;
-    final cancelled = r.status == BorrowStatus.cancelled;
+    final status = borrowStatus(r, f);
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(r.itemLabel, style: AppText.display(size: 20, weight: FontWeight.w600)),
-                    const SizedBox(height: 2),
-                    Text(
-                      trEn(f, 'Quantity: {n}').replaceAll('{n}', '${r.quantity}'),
-                      style: AppText.body(size: 15, color: AppColors.inkMuted),
-                    ),
-                  ],
-                ),
-              ),
-              if (cancelled) CancelledChip(filipino: f),
-            ],
+          Text(_loanTitle(r), style: AppText.display(size: AppTextSize.cardTitle, weight: FontWeight.w600, height: 1.3)),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            [
+              if (r.createdAt != null) tr(f, 'track.sent').replaceAll('{date}', formatStepTime(r.createdAt!)),
+              trEn(f, r.fulfillmentMethod == 'Delivery' ? 'Delivery' : 'Pickup'),
+            ].join(' · '),
+            style: AppText.detail(),
           ),
           // Rows filed before `purpose` existed have none, and the card says
           // nothing rather than showing an empty line.
           if (r.purpose != null && r.purpose!.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.sm),
-            Text.rich(
-              TextSpan(children: [
-                TextSpan(text: '${trEn(f, 'Reason:')} ', style: const TextStyle(fontWeight: FontWeight.w600)),
-                TextSpan(text: r.purpose!),
-              ]),
-              style: AppText.body(size: 15, color: AppColors.ink, height: 1.45),
-            ),
+            _Purpose(purpose: r.purpose!, filipino: f),
           ],
-          const SizedBox(height: AppSpacing.md),
-          if (cancelled)
-            Text(
-              r.updatedAt == null
-                  ? trEn(f, 'You cancelled this request.')
-                  : trEn(f, 'You cancelled this on {date}.').replaceAll('{date}', formatStepTime(r.updatedAt!)),
-              style: AppText.body(size: 15, color: AppColors.inkMuted),
-            )
-          else
-            BorrowStatusBox(request: r, filipino: f),
-          if (!past) ...[
-            const SizedBox(height: AppSpacing.lg),
-            r.id == null
-                ? Text(trEn(f, 'Sending...'), style: AppText.body(size: 15, color: AppColors.inkMuted))
-                : BorrowProgressSteps(request: r, filipino: f),
-          ],
+          const SizedBox(height: AppSpacing.lg),
+          StatusLine(
+            label: status.label,
+            tone: status.tone,
+            large: true,
+            updatedAt: r.updatedAt ?? r.createdAt,
+            filipino: f,
+          ),
+          const SizedBox(height: 6),
+          Text(status.next, style: AppText.body(color: AppColors.inkMuted, height: 1.5)),
+          const SizedBox(height: AppSpacing.lg),
+          r.id == null
+              ? Text(trEn(f, 'Sending...'), style: AppText.body(size: 15, color: AppColors.inkMuted))
+              : BorrowProgressSteps(request: r, filipino: f),
           // Staff photograph the item at the counter; the resident only reads
           // it back. A row with neither photo draws nothing at all.
           if (r.id != null && (r.hasReleasePhoto || r.hasReturnPhoto)) ...[
@@ -812,32 +597,121 @@ class _BorrowRequestCard extends StatelessWidget {
             _HandoverPhotos(
               filipino: f,
               hasRelease: r.hasReleasePhoto,
+              releaseLabel: tr(f, r.fulfillmentMethod == 'Delivery' ? 'status.delivered' : 'status.picked_up'),
               hasReturn: r.hasReturnPhoto,
               loadPhoto: loadPhoto,
             ),
           ],
-          if (!past && onCall != null) ...[
+          if (onCall != null) ...[
             const SizedBox(height: AppSpacing.lg),
-            BorrowCardButton(label: trEn(f, 'Call MDRRMO'), icon: Icons.call_rounded, primary: true, onPressed: onCall!),
+            AppButton(label: trEn(f, 'Call MDRRMO'), icon: Icons.call_rounded, onPressed: onCall),
           ],
           // Pending and Approved only, matching the server's CANCELLABLE_FROM.
           // An id-less row is still in flight, so there is nothing to cancel yet.
           if (r.id != null && r.status.isCancellable) ...[
             const SizedBox(height: AppSpacing.sm),
-            BorrowCardButton(
+            AppButton(
               label: tr(f, 'common.cancel_request'),
-              icon: Icons.close_rounded,
-              textColor: AppColors.red600,
+              style: AppButtonStyle.cancel,
               // No ref number on a borrowing — the dialog reads "Cancel request?".
               onPressed: () => showCancelDialog(context, '', onCancel, filipino: f),
             ),
           ],
-          if (past && onBorrowAgain != null) ...[
-            const SizedBox(height: AppSpacing.md),
-            BorrowCardButton(label: trEn(f, 'Borrow again'), icon: Icons.replay_rounded, onPressed: onBorrowAgain!),
-          ],
         ],
       ),
+    );
+  }
+}
+
+/// A finished loan, one row: "Returned · Sep 26", MDRRMO's reason when it was
+/// not approved, the handover photos when staff took any, and Borrow again.
+class _PastLoanRow extends StatelessWidget {
+  final BorrowRequest request;
+  final bool filipino;
+  final Future<List<int>?> Function(String stage) loadPhoto;
+
+  /// Opens this item's borrow sheet; null when it is no longer in the catalogue.
+  final VoidCallback? onBorrowAgain;
+
+  const _PastLoanRow({required this.request, required this.filipino, required this.loadPhoto, this.onBorrowAgain});
+
+  @override
+  Widget build(BuildContext context) {
+    final f = filipino;
+    final r = request;
+    final status = borrowStatus(r, f);
+    final at = r.updatedAt ?? r.createdAt;
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 68),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(_loanTitle(r), style: AppText.display(size: AppTextSize.bodyLg, weight: FontWeight.w600, height: 1.3)),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    [status.label, if (at != null) '${formatMonthShort(at)} ${at.toLocal().day}'].join(' · '),
+                    style: AppText.detail(),
+                  ),
+                  if (r.status == BorrowStatus.denied) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(status.next, style: AppText.detail()),
+                  ],
+                  if (r.id != null && (r.hasReleasePhoto || r.hasReturnPhoto)) ...[
+                    const SizedBox(height: 12),
+                    _HandoverPhotos(
+                      filipino: f,
+                      hasRelease: r.hasReleasePhoto,
+                      releaseLabel: tr(f, r.fulfillmentMethod == 'Delivery' ? 'status.delivered' : 'status.picked_up'),
+                      hasReturn: r.hasReturnPhoto,
+                      loadPhoto: loadPhoto,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (onBorrowAgain != null)
+              TextButton(
+                onPressed: onBorrowAgain,
+                style: TextButton.styleFrom(
+                  foregroundColor: AppColors.green700,
+                  minimumSize: const Size(44, 44),
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  textStyle: AppText.display(size: AppTextSize.body, weight: FontWeight.w600),
+                ),
+                child: Text(trEn(f, 'Borrow again')),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// "Wheelchair × 1".
+String _loanTitle(BorrowRequest r) => '${r.itemLabel} × ${r.quantity}';
+
+/// "Reason: <what the resident said it is for>".
+class _Purpose extends StatelessWidget {
+  final String purpose;
+  final bool filipino;
+
+  const _Purpose({required this.purpose, required this.filipino});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text.rich(
+      TextSpan(children: [
+        TextSpan(text: '${trEn(filipino, 'Reason:')} ', style: const TextStyle(fontWeight: FontWeight.w600)),
+        TextSpan(text: purpose),
+      ]),
+      style: AppText.body(color: AppColors.ink, height: 1.45),
     );
   }
 }
@@ -847,6 +721,9 @@ class _BorrowRequestCard extends StatelessWidget {
 /// to add or replace one.
 class _HandoverPhotos extends StatelessWidget {
   final bool hasRelease;
+
+  /// The loan's own word for the release step: "Picked up" or "Delivered".
+  final String releaseLabel;
   final bool hasReturn;
   final Future<List<int>?> Function(String stage) loadPhoto;
   final bool filipino;
@@ -854,6 +731,7 @@ class _HandoverPhotos extends StatelessWidget {
   const _HandoverPhotos({
     required this.filipino,
     required this.hasRelease,
+    required this.releaseLabel,
     required this.hasReturn,
     required this.loadPhoto,
   });
@@ -872,14 +750,14 @@ class _HandoverPhotos extends StatelessWidget {
           children: [
             if (hasRelease)
               _HandoverThumbnail(
-                label: trEn(filipino, 'Released'),
+                label: releaseLabel,
                 stage: 'release',
                 loadPhoto: loadPhoto,
               ),
             if (hasRelease && hasReturn) const SizedBox(width: 10),
             if (hasReturn)
               _HandoverThumbnail(
-                label: trEn(filipino, 'Returned'),
+                label: tr(filipino, 'status.returned'),
                 stage: 'return',
                 loadPhoto: loadPhoto,
               ),
@@ -988,11 +866,7 @@ class _HandoverThumbnailState extends State<_HandoverThumbnail> {
   Widget _tile() {
     if (_loading) {
       return const Center(
-        child: SizedBox(
-          width: 18,
-          height: 18,
-          child: CircularProgressIndicator(strokeWidth: 2),
-        ),
+        child: AppSpinner(color: AppColors.green700, size: 18),
       );
     }
 
@@ -1005,60 +879,6 @@ class _HandoverThumbnailState extends State<_HandoverThumbnail> {
     }
 
     return Image.memory(bytes, fit: BoxFit.cover, width: 76, height: 76);
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String body;
-
-  const _EmptyState({required this.icon, required this.title, required this.body});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 40, color: AppColors.inkFaint),
-            const SizedBox(height: 12),
-            Text(title, style: AppText.display(size: AppTextSize.bodyLg), textAlign: TextAlign.center),
-            const SizedBox(height: 6),
-            Text(body, style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted, height: 1.5), textAlign: TextAlign.center),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ErrorState extends StatelessWidget {
-  final String message;
-  final VoidCallback onRetry;
-  final bool filipino;
-
-  const _ErrorState({required this.message, required this.onRetry, required this.filipino});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.wifi_off_rounded, size: 40, color: AppColors.inkFaint),
-            const SizedBox(height: 12),
-            Text(message, style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted), textAlign: TextAlign.center),
-            const SizedBox(height: 12),
-            TextButton(onPressed: onRetry, child: Text(trEn(filipino, 'Retry'))),
-          ],
-        ),
-      ),
-    );
   }
 }
 
@@ -1328,7 +1148,11 @@ class _BorrowSheetState extends State<_BorrowSheet> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(_t('Quantity'), style: AppText.fieldLabel()),
-                Text(_t('How many you need'), style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted)),
+                // The ceiling the stepper stops at, said before it is hit.
+                Text(
+                  _uncatalogued ? _t('How many you need') : _t('Up to {n}').replaceAll('{n}', '$_maxQuantity'),
+                  style: AppText.detail(),
+                ),
               ],
             ),
           ),

@@ -3,6 +3,7 @@
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AmbulanceAvailabilityController;
 use App\Http\Controllers\AmbulanceDestinationController;
+use App\Http\Controllers\AmbulanceScheduleController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BarangayController;
@@ -284,6 +285,11 @@ Route::middleware(['auth:sanctum', 'is.admin', 'throttle:admin-api'])->group(fun
     // a section that can be handed out (AdminSections::ASSIGNABLE). The refusals
     // in the controller still apply to them.
     Route::middleware('section:staff')->group(function () {
+        // Bulk actions on the selected rows, each account checked as the single
+        // route would. Before the resource and the {id} routes, so `bulk` is never read as an id.
+        Route::post('admins/bulk/close', [AdminController::class, 'bulkClose']);
+        Route::post('admins/bulk/reactivate', [AdminController::class, 'bulkReactivate']);
+        Route::put('admins/bulk/permissions', [AdminController::class, 'bulkPermissions']);
         Route::apiResource('admins', AdminController::class);
         // Registered after the resource so `admins/{id}` never shadows it.
         Route::patch('admins/{id}/reactivate', [AdminController::class, 'reactivate']);
@@ -359,5 +365,7 @@ Route::middleware(['auth:sanctum', 'is.admin', 'throttle:admin-api'])->group(fun
         Route::patch('conduction-requests/{id}/trip-log', [ConductionRequestController::class, 'tripLog']);
         Route::get('conduction-requests/{id}/print', [ConductionRequestController::class, 'print']);
         Route::get('responder-names', [ResponderController::class, 'names']);
+        // The schedule popup: patients and requesters by name, so not the resident-safe ambulance-availability.
+        Route::get('ambulance-schedule', [AmbulanceScheduleController::class, 'index']);
     });
 });

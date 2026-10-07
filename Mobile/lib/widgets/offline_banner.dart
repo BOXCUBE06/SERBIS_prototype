@@ -28,7 +28,7 @@ class OfflineBanner extends StatelessWidget {
     final at = lastUpdated;
 
     return Material(
-      color: AppColors.red50,
+      color: AppColors.offline,
       child: SafeArea(
         bottom: false,
         child: Padding(
@@ -36,7 +36,7 @@ class OfflineBanner extends StatelessWidget {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.wifi_off_rounded, size: 18, color: AppColors.red600),
+              const Icon(Icons.wifi_off_rounded, size: 20, color: Colors.white),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
@@ -44,7 +44,7 @@ class OfflineBanner extends StatelessWidget {
                   children: [
                     Text(
                       tr(filipino, 'offline.title'),
-                      style: AppText.display(size: AppTextSize.small, weight: FontWeight.w700, color: AppColors.red600),
+                      style: AppText.display(size: AppTextSize.small, weight: FontWeight.w600, color: Colors.white),
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -52,7 +52,7 @@ class OfflineBanner extends StatelessWidget {
                           ? tr(filipino, 'offline.never_updated')
                           : '${tr(filipino, 'offline.last_updated')} '
                               '${formatTimelineTime(at, filipino)}',
-                      style: AppText.body(size: AppTextSize.small, color: const Color(0xFF7A3527), height: 1.4),
+                      style: AppText.detail(color: Colors.white.withValues(alpha: .88)),
                     ),
                   ],
                 ),

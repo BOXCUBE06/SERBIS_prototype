@@ -1,8 +1,6 @@
 
 library serbis.models.borrow;
 
-import '../state/translations.dart';
-
 /// A row from `GET /api/equipments` — the catalogue a resident borrows from.
 /// Read-only here: writing stock belongs to the admin panel.
 class Equipment {
@@ -58,27 +56,9 @@ BorrowStatus borrowStatusFromText(String statusText) {
   }
 }
 
+/// What a status reads as lives in `borrowStatus()` (borrow_request_widgets),
+/// since the words for Approved and Released depend on pickup or delivery.
 extension BorrowStatusX on BorrowStatus {
-  /// [label] in the resident's language.
-  String labelFor(bool filipino) => trEn(filipino, label);
-
-  String get label {
-    switch (this) {
-      case BorrowStatus.pending:
-        return 'Pending review';
-      case BorrowStatus.approved:
-        return 'Approved — awaiting pickup';
-      case BorrowStatus.released:
-        return 'Released to you';
-      case BorrowStatus.returned:
-        return 'Returned';
-      case BorrowStatus.denied:
-        return 'Not approved';
-      case BorrowStatus.cancelled:
-        return 'Cancelled by you';
-    }
-  }
-
   bool get isTerminal =>
       this == BorrowStatus.returned ||
       this == BorrowStatus.denied ||

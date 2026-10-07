@@ -5,9 +5,11 @@ import '../models/request_models.dart';
 import '../state/request_store.dart';
 import '../theme/app_theme.dart';
 import '../widgets/borrow_request_widgets.dart';
+import '../widgets/feedback.dart';
 import '../widgets/offline_banner.dart';
 import '../widgets/request_summary.dart';
 import '../widgets/shared_widgets.dart';
+import '../widgets/status_line.dart';
 
 /// How many finished requests show before "Show older requests".
 const _pastShown = 5;
@@ -107,8 +109,10 @@ class _TrackScreenState extends State<TrackScreen> {
     final loans = openLoanSummaries(widget.appState, f);
     final phone = mdrrmoNumber(widget.appState.hotlines);
 
+    Key? keyOf(ServiceRequest r) => r.id == null ? null : _cardKeys.putIfAbsent(r.id!, GlobalKey.new);
+
     Widget card(ServiceRequest r) => Padding(
-          key: r.id == null ? null : _cardKeys.putIfAbsent(r.id!, GlobalKey.new),
+          key: keyOf(r),
           padding: const EdgeInsets.only(bottom: AppSpacing.md),
           child: _RequestCard(
             request: r,
@@ -163,28 +167,35 @@ class _TrackScreenState extends State<TrackScreen> {
                         StaleDataNote(filipino: f, lastUpdated: widget.appState.requestsFetchedAt),
                         const SizedBox(height: AppSpacing.md),
                       ],
-                      if (empty) _EmptyState(filipino: f, onBrowse: widget.onBrowseServices),
+                      if (empty)
+                        EmptyState(
+                          title: tr(f, 'track.empty'),
+                          body: tr(f, 'track.empty_body'),
+                          actionLabel: tr(f, 'track.browse'),
+                          onAction: widget.onBrowseServices,
+                        ),
                       if (active.isNotEmpty) ...[
-                        SectionHeader(title: tr(f, 'track.in_progress')),
+                        SectionHeader(title: tr(f, 'track.in_progress'), count: active.length),
                         for (final r in active) card(r),
                       ],
-                      // Open loans, so everything Home's "See all (N)" counts is listed here.
+                      // Open loans, so every request Home counts is listed here.
                       if (loans.isNotEmpty) ...[
-                        SectionHeader(title: tr(f, 'track.loans')),
+                        SectionHeader(title: tr(f, 'track.loans'), count: loans.length),
                         SummaryCard(children: [
                           for (final loan in loans) RequestSummaryRow(request: loan, onTap: widget.onOpenMyLoans),
                         ]),
-                        const SizedBox(height: AppSpacing.lg),
+                        const SizedBox(height: AppSpacing.xl),
                       ],
                       if (past.isNotEmpty) ...[
                         SectionHeader(title: tr(f, 'track.past')),
-                        for (final r in shownPast) card(r),
-                        if (!_showAllPast && past.length > _pastShown)
-                          BorrowCardButton(
-                            label: tr(f, 'track.show_older'),
-                            icon: Icons.expand_more_rounded,
-                            onPressed: () => setState(() => _showAllPast = true),
-                          ),
+                        SummaryCard(children: [
+                          for (final r in shownPast) _PastRow(key: keyOf(r), request: r, filipino: f),
+                          if (!_showAllPast && past.length > _pastShown)
+                            _ShowOlderRow(
+                              label: tr(f, 'track.show_older'),
+                              onTap: () => setState(() => _showAllPast = true),
+                            ),
+                        ]),
                       ],
                     ],
                   ),
@@ -198,35 +209,8 @@ class _TrackScreenState extends State<TrackScreen> {
   }
 }
 
-class _EmptyState extends StatelessWidget {
-  final bool filipino;
-  final VoidCallback onBrowse;
-
-  const _EmptyState({required this.filipino, required this.onBrowse});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        const SizedBox(height: AppSpacing.lg),
-        Text(
-          tr(filipino, 'track.empty'),
-          textAlign: TextAlign.center,
-          style: AppText.body(size: 16, color: AppColors.inkMuted, height: 1.5),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        BorrowCardButton(
-          label: tr(filipino, 'track.browse'),
-          icon: Icons.grid_view_rounded,
-          primary: true,
-          onPressed: onBrowse,
-        ),
-      ],
-    );
-  }
-}
-
+/// An open request: what it is, where it stands and since when, what happens
+/// next, its steps, and the two things the resident can do about it.
 class _RequestCard extends StatelessWidget {
   final ServiceRequest request;
   final bool filipino;
@@ -249,54 +233,120 @@ class _RequestCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final f = filipino;
     final r = request;
-    final open = isOpenRequest(r);
+    final status = serviceStatus(r, f);
 
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(requestTitle(r, f), style: AppText.display(size: 18, weight: FontWeight.w600)),
-          const SizedBox(height: 2),
+          Text(requestTitle(r, f), style: AppText.display(size: AppTextSize.cardTitle, weight: FontWeight.w600, height: 1.3)),
+          const SizedBox(height: AppSpacing.xs),
           Text(
-            r.refNo.isEmpty ? tr(f, 'track.ref_pending') : r.refNo,
-            style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
+            [
+              r.refNo.isEmpty ? tr(f, 'track.ref_pending') : r.refNo,
+              if (r.createdAt != null) tr(f, 'track.sent').replaceAll('{date}', formatStepTime(r.createdAt!)),
+            ].join(' · '),
+            style: AppText.detail(),
           ),
-          const SizedBox(height: AppSpacing.md),
-          serviceStatusBox(r, f),
-          if (r.createdAt != null) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              tr(f, 'track.filed').replaceAll('{date}', formatStepTime(r.createdAt!)),
-              style: AppText.body(size: 15, color: AppColors.inkMuted),
-            ),
-          ],
-          if (open && r.responders.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.lg),
+          StatusLine(
+            label: status.label,
+            tone: status.tone,
+            large: true,
+            updatedAt: r.updatedAt ?? r.createdAt,
+            filipino: f,
+          ),
+          const SizedBox(height: 6),
+          Text(status.next, style: AppText.body(color: AppColors.inkMuted, height: 1.5)),
+          if (r.responders.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.md),
             Text(
               tr(f, 'request.responders_heading'),
-              style: AppText.body(size: 15, weight: FontWeight.w700, color: AppColors.inkMuted),
+              style: AppText.body(size: 15, weight: FontWeight.w600, color: AppColors.inkMuted),
             ),
             const SizedBox(height: 6),
             ...r.responders.map((responder) => _ResponderTile(responder: responder)),
           ],
-          if (open) ...[
+          const SizedBox(height: AppSpacing.lg),
+          _Steps(steps: r.timelineFor(f)),
+          if (onCall != null) ...[
             const SizedBox(height: AppSpacing.lg),
-            _Steps(steps: r.timelineFor(f)),
-          ],
-          if (open && onCall != null) ...[
-            const SizedBox(height: AppSpacing.lg),
-            BorrowCardButton(label: tr(f, 'track.call'), icon: Icons.call_rounded, primary: true, onPressed: onCall!),
+            AppButton(label: tr(f, 'track.call'), icon: Icons.call_rounded, onPressed: onCall),
           ],
           if (r.cancellable) ...[
             const SizedBox(height: AppSpacing.sm),
-            BorrowCardButton(
+            AppButton(
               label: tr(f, 'common.cancel_request'),
-              icon: Icons.close_rounded,
-              textColor: AppColors.red600,
+              style: AppButtonStyle.cancel,
               onPressed: () => showCancelDialog(context, r.refNo, onCancel, filipino: f),
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// A finished request, one row: "Completed · Sep 28 · TXN-000282", plus
+/// MDRRMO's reason when it was not approved or the trip did not happen.
+class _PastRow extends StatelessWidget {
+  final ServiceRequest request;
+  final bool filipino;
+
+  const _PastRow({super.key, required this.request, required this.filipino});
+
+  @override
+  Widget build(BuildContext context) {
+    final f = filipino;
+    final r = request;
+    final status = serviceStatus(r, f);
+    final at = r.updatedAt ?? r.createdAt;
+    final explains = r.status == ReqStatus.disapproved || r.isNotTransported;
+
+    return ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 68),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(requestTitle(r, f), style: AppText.display(size: AppTextSize.bodyLg, weight: FontWeight.w600, height: 1.3)),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              [
+                status.label,
+                if (at != null) '${formatMonthShort(at)} ${at.toLocal().day}',
+                if (r.refNo.isNotEmpty) r.refNo,
+              ].join(' · '),
+              style: AppText.detail(),
+            ),
+            if (explains) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Text(status.next, style: AppText.detail()),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The last row of Past requests while some are still folded away.
+class _ShowOlderRow extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+
+  const _ShowOlderRow({required this.label, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 52),
+        child: Center(
+          child: Text(label, style: AppText.display(size: AppTextSize.body, weight: FontWeight.w600, color: AppColors.green700)),
+        ),
       ),
     );
   }

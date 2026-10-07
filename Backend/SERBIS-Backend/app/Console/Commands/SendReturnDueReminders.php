@@ -102,7 +102,10 @@ class SendReturnDueReminders extends Command
         // per-row log lines. Only bookings are behind it, and only a booking
         // that actually needed a text makes this a failure: a day with none to
         // send exits 0 whatever the SkySMS config, since nothing was missed.
-        if ($bookings->isNotEmpty() && ! app(SmsGateway::class)->configured()) {
+        // Faking counts as configured: SkySmsGateway returns a fake success before it looks for a key.
+        $gateway = app(SmsGateway::class);
+
+        if ($bookings->isNotEmpty() && ! $gateway->configured() && ! $gateway->faking()) {
             Log::warning("SkySMS not configured, {$bookings->count()} booking reminder(s) skipped");
             $this->summary($sent, 0, 0, $noDevice, skippedNotConfigured: $bookings->count());
 

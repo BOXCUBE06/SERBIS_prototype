@@ -19,6 +19,7 @@ import 'package:serbis/state/api_service.dart';
 import 'package:serbis/state/request_store.dart';
 import 'package:serbis/theme/app_theme.dart';
 import 'package:serbis/widgets/shared_widgets.dart' show ConfirmDialog;
+import 'package:serbis/widgets/feedback.dart' show FieldError;
 
 const _barangays = [
   {'barangay_id': 1, 'barangay_name': 'San Fabian'},
@@ -147,21 +148,26 @@ Future<_FakeApi> _openSheet(
   WidgetTester tester, {
   void Function(AppUser)? onUserChanged,
   AppUser user = _resident,
+  Size size = const Size(1080, 3200),
+  double ratio = 3,
+  bool filipino = false,
 }) async {
   // A phone-shaped viewport. The default 800x600 clips this screen and the
   // offscreen rows never build, so a field under test goes unfound for the
   // wrong reason.
-  tester.view.physicalSize = const Size(1080, 3200);
-  tester.view.devicePixelRatio = 3;
+  tester.view.physicalSize = size;
+  tester.view.devicePixelRatio = ratio;
   addTearDown(tester.view.reset);
 
   final api = _FakeApi();
+  final state = AppState(api);
+  if (filipino) state.setLanguage(AppLanguage.filipino);
 
   await tester.pumpWidget(MaterialApp(
     theme: buildAppTheme(),
     home: Scaffold(
       body: ProfileScreen(
-        appState: AppState(api),
+        appState: state,
         userStore: UserStore(api),
         user: user,
         onUserChanged: onUserChanged ?? (_) {},
@@ -173,7 +179,7 @@ Future<_FakeApi> _openSheet(
   ));
   await tester.pumpAndSettle();
 
-  await tester.tap(find.text('Edit my details'));
+  await tester.tap(find.text(filipino ? 'I-edit ang aking detalye' : 'Edit my details'));
   await tester.pumpAndSettle();
 
   return api;
@@ -215,6 +221,19 @@ Future<void> _openChangePhone(WidgetTester tester) async {
 }
 
 void main() {
+  for (final filipino in [false, true]) {
+    testWidgets('the sheet fits 320px in ${filipino ? 'Filipino' : 'English'} without overflow', (tester) async {
+      await _openSheet(tester, size: const Size(320, 1600), ratio: 1, filipino: filipino);
+
+      expect(tester.takeException(), isNull);
+      // Save is grey until something changes, and says why.
+      expect(
+        find.text(filipino ? 'Baguhin ang isang detalye sa itaas para mai-save.' : 'Change a detail above to save.'),
+        findsOneWidget,
+      );
+    });
+  }
+
   testWidgets('the sheet opens prefilled with what is on file', (tester) async {
     await _openSheet(tester);
 
@@ -553,7 +572,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final password = tester.widget<TextField>(_changeFields().at(1));
-      expect(password.decoration?.errorText,
+      expect((password.decoration?.error as FieldError?)?.message,
           'Enter your current password to change your phone number.');
       // Shown once, under its field.
       expect(find.byKey(const Key('change-phone-error')), findsNothing);
@@ -578,7 +597,7 @@ void main() {
       await tester.pumpAndSettle();
 
       final phone = tester.widget<TextField>(_changeFields().at(0));
-      expect(phone.decoration?.errorText,
+      expect((phone.decoration?.error as FieldError?)?.message,
           'That number is already registered to another account.');
     });
 

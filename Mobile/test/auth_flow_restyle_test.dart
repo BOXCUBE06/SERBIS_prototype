@@ -13,7 +13,8 @@ import 'package:serbis/state/account_store.dart';
 import 'package:serbis/state/api_service.dart';
 import 'package:serbis/theme/app_theme.dart';
 import 'package:serbis/widgets/auth_layout.dart';
-import 'package:serbis/widgets/borrow_request_widgets.dart' show StatusBox;
+import 'package:serbis/widgets/status_line.dart' show StatusLine;
+import 'package:serbis/widgets/status_line.dart';
 import 'package:serbis/widgets/shared_widgets.dart';
 
 class _Api extends ApiService {}
@@ -77,7 +78,6 @@ Future<void> _pumpUnavailable(WidgetTester tester, {bool filipino = false, Size 
     theme: buildAppTheme(),
     home: Scaffold(
       body: UnavailableTabScreen(
-        icon: Icons.medical_services_outlined,
         title: filipino ? 'Ambulansya' : 'Ambulance',
         message: filipino ? 'Hindi maikarga ang listahan ng serbisyo.' : 'The service list could not be loaded.',
         filipino: filipino,
@@ -129,12 +129,12 @@ void main() {
   }
 
   group('the awaiting approval screen', () {
-    testWidgets('says it in an amber status box under the shared header', (tester) async {
+    testWidgets('says it in an amber status line under the shared header', (tester) async {
       await _pumpAwaiting(tester);
 
       expect(find.byType(TabHeaderBar), findsOneWidget);
       expect(find.text('Your account'), findsOneWidget);
-      expect(find.byType(StatusBox), findsOneWidget);
+      expect(find.byType(StatusLine), findsOneWidget);
       expect(find.text('Awaiting MDRRMO approval'), findsOneWidget);
       expect(tester.getSize(find.widgetWithText(AppButton, 'Check again')).height, greaterThanOrEqualTo(48));
     });
@@ -142,24 +142,26 @@ void main() {
     testWidgets('keeps its content to 600dp on a wide screen', (tester) async {
       await _pumpAwaiting(tester, size: const Size(1400, 1000));
 
-      expect(tester.getSize(find.byType(StatusBox)).width, lessThanOrEqualTo(600));
+      expect(tester.getSize(find.widgetWithText(AppButton, 'Check again')).width, lessThanOrEqualTo(600));
     });
 
-    testWidgets('fits 320px in Filipino without overflow', (tester) async {
-      await _pumpAwaiting(tester, filipino: true, size: const Size(320, 1400));
+    for (final filipino in [false, true]) {
+      testWidgets('fits 320px in ${filipino ? 'Filipino' : 'English'} without overflow', (tester) async {
+        await _pumpAwaiting(tester, filipino: filipino, size: const Size(320, 1400));
 
-      expect(find.text('Iyong account'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
+        expect(find.text(filipino ? 'Iyong account' : 'Your account'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+    }
   });
 
   group('the unavailable tab', () {
-    testWidgets('says Not available in a status box with the reason, and a 48dp retry', (tester) async {
+    testWidgets('says Not available in a status line with the reason, and a 48dp retry', (tester) async {
       await _pumpUnavailable(tester);
 
       expect(find.byType(TabHeaderBar), findsOneWidget);
       expect(find.text('Ambulance'), findsOneWidget);
-      expect(find.byType(StatusBox), findsOneWidget);
+      expect(find.byType(StatusLine), findsOneWidget);
       expect(find.text('Not available'), findsOneWidget);
       expect(find.text('The service list could not be loaded.'), findsOneWidget);
       expect(tester.getSize(find.widgetWithText(AppButton, 'Try again')).height, greaterThanOrEqualTo(48));

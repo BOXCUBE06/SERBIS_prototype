@@ -33,6 +33,8 @@ class ReseedRequestDataTest extends TestCase
         parent::setUp();
 
         $this->artisan('migrate:fresh');
+        // The command refuses to run with real SMS possible (phpunit.xml pins this false).
+        config(['serbis.sms_fake' => true]);
         // The real private disk is the developer's storage/app/private.
         Storage::fake(config('filesystems.uploads.private'));
 
@@ -71,6 +73,13 @@ class ReseedRequestDataTest extends TestCase
     public function test_it_refuses_in_production(): void
     {
         $this->app['env'] = 'production';
+
+        $this->artisan('serbis:reseed-requests', ['--force' => true])->assertFailed();
+    }
+
+    public function test_it_refuses_in_staging(): void
+    {
+        $this->app['env'] = 'staging';
 
         $this->artisan('serbis:reseed-requests', ['--force' => true])->assertFailed();
     }

@@ -8,6 +8,7 @@ import '../widgets/hotline_list.dart';
 import '../widgets/request_summary.dart' show SummaryCard;
 import '../widgets/shared_widgets.dart';
 import 'library/article_reader_screen.dart';
+import '../widgets/loading.dart' show AppSpinner;
 
 class LibraryScreen extends StatelessWidget {
   final AppState appState;
@@ -139,12 +140,12 @@ class _LibItem extends StatelessWidget {
         MaterialPageRoute(builder: (_) => ArticleReaderScreen(article: article, filipino: filipino)),
       ),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 72),
+        constraints: const BoxConstraints(minHeight: 68),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
             children: [
-              IconBadge(icon: article.icon, bg: article.iconBg, fg: article.iconFg, size: 44, iconSize: 20),
+              IconBadge(icon: article.icon, bg: article.iconBg, fg: article.iconFg, size: 40, iconSize: 20, radius: AppRadius.sm),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -152,7 +153,7 @@ class _LibItem extends StatelessWidget {
                   children: [
                     Text(title, style: AppText.display(size: AppTextSize.bodyLg, weight: FontWeight.w600)),
                     const SizedBox(height: 2),
-                    Text('$subtitle · $pages', style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted)),
+                    Text('$subtitle · $pages', style: AppText.detail()),
                   ],
                 ),
               ),
@@ -188,11 +189,7 @@ class _PublishedMaterials extends StatelessWidget {
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 18),
             child: Center(
-              child: SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
+              child: AppSpinner(color: AppColors.green700, size: 24),
             ),
           )
         else if (materials.isEmpty)
@@ -308,17 +305,18 @@ class _MaterialRow extends StatelessWidget {
     return InkWell(
       onTap: () => _open(context),
       child: ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: 72),
+        constraints: const BoxConstraints(minHeight: 68),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
             children: [
               IconBadge(
                 icon: material.icon,
                 bg: AppColors.green50,
                 fg: AppColors.green700,
-                size: 44,
+                size: 40,
                 iconSize: 20,
+                radius: AppRadius.sm,
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -335,7 +333,7 @@ class _MaterialRow extends StatelessWidget {
                       runSpacing: 4,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        Text(meta, style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted)),
+                        Text(meta, style: AppText.detail()),
                         // Only drawn when true. There is no "unverified"
                         // badge: absence is not a warning about the file, it
                         // is MDRRMO not having got to it yet.
@@ -412,7 +410,7 @@ class _VerifiedBadge extends StatelessWidget {
             const SizedBox(width: 4),
             Text(
               filipino ? 'Beripikado' : 'Verified',
-              style: AppText.display(size: AppTextSize.caption, weight: FontWeight.w700, color: AppColors.green700),
+              style: AppText.display(size: AppTextSize.caption, weight: FontWeight.w600, color: AppColors.green700),
             ),
           ],
         ),
@@ -445,7 +443,7 @@ class _Notice extends StatelessWidget {
                 style: TextButton.styleFrom(minimumSize: const Size(64, 48), foregroundColor: AppColors.green700),
                 child: Text(
                   filipino ? 'Subukan muli' : 'Retry',
-                  style: AppText.display(size: AppTextSize.body, weight: FontWeight.w700, color: AppColors.green700),
+                  style: AppText.display(size: AppTextSize.body, weight: FontWeight.w600, color: AppColors.green700),
                 ),
               ),
             ],

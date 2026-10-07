@@ -12,8 +12,8 @@ use Illuminate\Support\Facades\DB;
  * Seeded from what was actually in tbl_ambulance_bookings.destination on
  * this deployment, audited 2026-09-19: three distinct values — "Echague
  * District Hospital" (2 bookings), and "asd" / "asdas" (1 each, plainly
- * manual test typos, not real destinations). Only the one real value is
- * seeded here. The dropdown's "Others" option is the fallback for
+ * manual test typos, not real destinations). That one real value is seeded
+ * here, with the two hospitals the office added (2026-10-07). The dropdown's "Others" option is the fallback for
  * everywhere else a resident might actually be sent — this list is not
  * expected to be complete, only correct.
  */
@@ -21,6 +21,8 @@ class AmbulanceDestinationSeeder extends Seeder
 {
     private const DESTINATIONS = [
         'Echague District Hospital',
+        'Isabela Southern Specialist Hospital Inc.',
+        'Southern Isabela Medical Center',
     ];
 
     public function run(): void

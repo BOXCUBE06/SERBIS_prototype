@@ -73,7 +73,7 @@ class DashboardLiveFiguresTest extends TestCase
     public function test_responders_are_counted_by_availability(): void
     {
         foreach (['available', 'available', 'deployed', 'off_duty'] as $i => $status) {
-            Responder::create(['name' => "R$i", 'contact_no' => '09170000000', 'position' => 'EMT', 'status' => $status]);
+            Responder::create(['name' => "R$i", 'contact_no' => '09170000000', 'position' => 'Logistics', 'status' => $status]);
         }
 
         $this->getJson('/api/admin/dashboard')->assertOk()->assertJsonPath('responders', ['available' => 2, 'total' => 4]);
