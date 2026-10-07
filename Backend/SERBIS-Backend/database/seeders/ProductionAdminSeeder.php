@@ -2,10 +2,12 @@
 
 namespace Database\Seeders;
 
+use App\Support\PhoneNumber;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use RuntimeException;
 
 /**
  * The one real admin account, for a deployment where tbl_user starts empty.
@@ -13,49 +15,41 @@ use Illuminate\Support\Facades\Hash;
  * Distinct from AdminSeeder, which plants admin@serbis.com / password123 and
  * refuses to run outside local/testing precisely because that credential is
  * public. This one carries no password of its own: it reads ADMIN_SEED_PASSWORD
- * from the environment and refuses to run without it, so nothing that could log
+ * from the environment and throws without it while no Admin exists, so nothing that could log
  * anyone in is ever committed to the repository.
  *
- * Idempotent on the email or the username: either one present means the
- * account exists (the username is editable in Staff Accounts, the email column
- * is unique, so checking one alone can crash the boot on a duplicate insert).
- * A second run leaves the existing password alone
- * rather than resetting it to whatever the env var happens to hold — after the
- * admin has changed their password in the panel, a redeploy must not put the
- * old one back.
+ * Skipped whenever any Admin row exists, so a second run never inserts again
+ * and never resets a password the admin has since changed in the panel. The
+ * account is created as the super admin. Name, email and username come from
+ * ADMIN_SEED_NAME / ADMIN_SEED_EMAIL / ADMIN_SEED_USERNAME (defaults below);
+ * ADMIN_SEED_PHONE, when set, becomes the number sign-in codes go to.
  */
 class ProductionAdminSeeder extends Seeder
 {
-    private const ADMIN_EMAIL = 'jilmarferrer29@gmail.com';
-
-    /** Staff sign in with this. Same name the username migration derives from the email above. */
-    private const ADMIN_USERNAME = 'jilmarferrer29';
-
     public function run(): void
     {
+        if (DB::table('tbl_user')->where('role', 'Admin')->exists()) {
+            $this->command?->info(
+                'ProductionAdminSeeder skipped: an admin account already exists; password left untouched.'
+            );
+
+            return;
+        }
+
         $password = env('ADMIN_SEED_PASSWORD');
 
+        // Thrown, not logged: under the entrypoint's `set -e` a missing password
+        // with no admin stops the boot, rather than serving a panel nobody can log into.
         if (! is_string($password) || $password === '') {
-            $this->command?->error(
-                'ProductionAdminSeeder skipped: ADMIN_SEED_PASSWORD is not set. '
-                .'Set it in the host dashboard and re-run, or the panel will have no account to log into.'
+            throw new RuntimeException(
+                'ProductionAdminSeeder: no Admin account exists and ADMIN_SEED_PASSWORD is not set. '
+                .'Set it on the host and redeploy; it can be unset once the admin exists.'
             );
-
-            return;
         }
 
-        $exists = DB::table('tbl_user')
-            ->where('username', self::ADMIN_USERNAME)
-            ->orWhere('email_address', self::ADMIN_EMAIL)
-            ->exists();
-
-        if ($exists) {
-            $this->command?->info(
-                'ProductionAdminSeeder skipped: the admin account already exists; password left untouched.'
-            );
-
-            return;
-        }
+        [$first, $last] = array_pad(explode(' ', trim((string) env('ADMIN_SEED_NAME', 'Jilmar Ferrer')), 2), 2, '');
+        $username = strtolower(trim((string) env('ADMIN_SEED_USERNAME', 'jilmarferrer29')));
+        $phone = env('ADMIN_SEED_PHONE');
 
         $now = Carbon::now();
 
@@ -63,17 +57,19 @@ class ProductionAdminSeeder extends Seeder
         // value User::isAdmin() compares against. Lowercase 'admin' reads as a
         // resident to every admin-scoped query — see ServiceRequestController.
         DB::table('tbl_user')->insert([
-            'first_name' => 'Jilmar',
-            'last_name' => 'Ferrer',
+            'first_name' => $first,
+            'last_name' => $last,
             'role' => 'Admin',
             'status' => 'Active',
-            'username' => self::ADMIN_USERNAME,
-            'email_address' => self::ADMIN_EMAIL,
+            'username' => $username,
+            'email_address' => trim((string) env('ADMIN_SEED_EMAIL', 'jilmarferrer29@gmail.com')),
+            'phone_number' => is_string($phone) && $phone !== '' ? (PhoneNumber::normalize($phone) ?: null) : null,
             'password' => Hash::make($password),
+            'is_super_admin' => true,
             'created_at' => $now,
             'updated_at' => $now,
         ]);
 
-        $this->command?->info('ProductionAdminSeeder: created '.self::ADMIN_USERNAME.'.');
+        $this->command?->info('ProductionAdminSeeder: created '.$username.'.');
     }
 }
