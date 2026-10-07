@@ -89,7 +89,6 @@ class RequestDataSeeder extends Seeder
         'road-clearing' => ['Fallen acacia blocking the road to the school.', 'Landslide debris on the farm-to-market road.'],
         'power-line-repair' => ['Sagging line touching the bamboo fence.', 'Post leaning after the storm.'],
         'debris-removal' => ['Debris from a collapsed shed on the creek.', 'Flood debris piled at the drainage.'],
-        'animal-rescue' => ['Carabao stuck in the swollen creek.', 'Dog trapped on a roof.'],
         'sandbagging' => ['Riverbank eroding near the houses.', 'Need sandbags for the purok entrance.'],
         'drrm-trainings-and-seminars' => ['Basic first aid seminar for barangay tanods.', 'DRRM orientation for the council.'],
         'simulation-drills-nsed' => ['Earthquake drill at the elementary school.', 'Fire drill for the market vendors.'],
