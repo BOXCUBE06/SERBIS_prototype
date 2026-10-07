@@ -127,6 +127,15 @@ class RequestDataSeeder extends Seeder
 
     public function run(): void
     {
+        if (! app()->environment(['local', 'testing'])) {
+            $this->command?->warn(
+                'RequestDataSeeder skipped: refuses to seed simulated requests outside local/testing (env: '
+                .app()->environment().').'
+            );
+
+            return;
+        }
+
         mt_srand($this->seed);
         $this->now = CarbonImmutable::now();
 

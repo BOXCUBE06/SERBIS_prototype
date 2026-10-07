@@ -61,8 +61,8 @@ class ReseedRequestData extends Command
     {
         $database = config('database.connections.'.config('database.default').'.database');
 
-        if (app()->environment('production')) {
-            $this->error('Refusing to run in production.');
+        if (! app()->environment(['local', 'testing'])) {
+            $this->error('Refusing to run outside local/testing (env: '.app()->environment().').');
 
             return self::FAILURE;
         }
