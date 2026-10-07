@@ -6,7 +6,7 @@
 # against a database that is already provisioned. config:cache and route:cache
 # overwrite their own files, migrate --force is a no-op once applied, and
 # ProductionSeeder only creates missing catalogue rows (never updating existing
-# ones) and skips the admin and barangay accounts that already exist.
+# ones) and skips the admin account once one exists.
 #
 # Nothing here is allowed to fail quietly. `set -e` aborts the boot on the first
 # non-zero exit, so the server is never started against a half-provisioned
@@ -66,12 +66,10 @@ fi
 #    drops it, PDO gets no ATTR_SSL_CA option) — see the conditional check
 #    below for what still applies when a host does need it.
 #
-#    ADMIN_SEED_PASSWORD and BARANGAY_SEED_PASSWORD (with the
-#    BARANGAY_SEED_PHONE_* numbers) are not checked here: each is required
-#    only while its account is missing. ProductionAdminSeeder and
-#    ProductionBarangayAccountSeeder throw without them in that case, which
-#    fails the db:seed step below and stops the boot; once the accounts exist
-#    they are never read and can be unset.
+#    ADMIN_SEED_PASSWORD is not checked here: it is required only while no
+#    Admin account exists. ProductionAdminSeeder throws without it in that
+#    case, which fails the db:seed step below and stops the boot; once an
+#    admin exists it is never read and can be unset.
 # ---------------------------------------------------------------------------
 for var in \
     APP_KEY \
@@ -108,8 +106,8 @@ fi
 #    One consequence worth stating: once a config cache exists Laravel stops
 #    loading .env at all (LoadEnvironmentVariables returns early), so every
 #    env() call from here on reads the real process environment. That is exactly
-#    what Railway supplies, and it is why the seeders' env('ADMIN_SEED_PASSWORD')
-#    and env('BARANGAY_SEED_PASSWORD') still resolve after this line.
+#    what Railway supplies, and it is why ProductionAdminSeeder's
+#    env('ADMIN_SEED_PASSWORD') still resolves after this line.
 # ---------------------------------------------------------------------------
 php artisan config:cache
 php artisan route:cache
@@ -123,11 +121,11 @@ php artisan route:cache
 php artisan migrate --force
 
 # ---------------------------------------------------------------------------
-# 4. Reference data, the admin and the barangay accounts. ProductionSeeder — never
+# 4. Reference data and the admin account. ProductionSeeder — never
 #    DatabaseSeeder, which seeds fabricated residents, requests and borrowings.
 # ---------------------------------------------------------------------------
 php artisan db:seed --class=ProductionSeeder --force \
-    || fail "ProductionSeeder failed (see above). While an account is missing, ADMIN_SEED_PASSWORD or BARANGAY_SEED_PASSWORD and BARANGAY_SEED_PHONE_* must be set."
+    || fail "ProductionSeeder failed (see above). With no admin account yet, ADMIN_SEED_PASSWORD must be set."
 
 # ---------------------------------------------------------------------------
 # 5. Serve. Apache learns the port only now: PORT is assigned by the platform at

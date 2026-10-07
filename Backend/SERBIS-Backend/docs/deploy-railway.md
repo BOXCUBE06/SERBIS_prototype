@@ -126,8 +126,6 @@ every start regardless of which service triggered it.
 | `ADMIN_SEED_USERNAME` | optional | no | default `jilmarferrer29`; what the admin signs in with. The seeded account is created as the **super admin** (`is_super_admin = true`) — no `staff:make-super-admin` step needed |
 | `ADMIN_SEED_PHONE` | optional | no | the admin's mobile number, stored in `tbl_user.phone_number` for sign-in codes. If not set, **run `php artisan staff:set-phone <username> <number>` before enabling `ADMIN_MFA_ENABLED`** |
 | `SMS_BLAST_CODE_SEED` | **required** while no code exists | **yes** | the shared 6-digit text-blast code, chosen at deploy time, typed directly into the Railway variable. Without it the seeder logs an error and skips (the boot continues), and text blasts stay unusable until a code exists, since rotating needs the current code |
-| `BARANGAY_SEED_PASSWORD` | **required** while any of the three barangay accounts is missing: **the first boot fails if `BARANGAY_SEED_PASSWORD` is missing** | **yes** | shared password for the San Fabian, Pag-asa and San Antonio Ugad barangay accounts, typed directly into the Railway variable. **Unset `BARANGAY_SEED_PASSWORD` after the first successful boot** — an account that exists is skipped and never updated |
-| `BARANGAY_SEED_PHONE_SAN_FABIAN`, `BARANGAY_SEED_PHONE_PAG_ASA`, `BARANGAY_SEED_PHONE_SAN_ANTONIO_UGAD` | **required** while that account is missing | no | each barangay hall's mobile number. Barangay accounts sign in by phone number and a texted code (no username), so the number must be real and not used by another account. Unset after the first successful boot |
 | `SESSION_DRIVER` | optional | no | fixed: `database` |
 | `CACHE_STORE` | optional | no | `file` — `throttleApi()` in `bootstrap/app.php` applies to every route, so a database-backed limiter is two extra round trips per request on a single-instance deploy; move to Redis only if this is ever scaled past one instance |
 | `QUEUE_CONNECTION` | optional | no | fixed: `database` — inert, nothing queues a job |
@@ -285,13 +283,12 @@ assumed.
    **admin login** by username (`ADMIN_SEED_USERNAME`, default
    `jilmarferrer29`, with the `ADMIN_SEED_PASSWORD` just set) returns a
    token, the account is the super admin, and the service catalogue has nine
-   rows with their codes. The three barangay accounts exist and one signs in
-   on the mobile app with its number. Then unset `ADMIN_SEED_PASSWORD`,
-   `BARANGAY_SEED_PASSWORD` and the `BARANGAY_SEED_PHONE_*` variables.
+   rows with their codes. Then unset `ADMIN_SEED_PASSWORD`.
 
-   Production seeds only: barangays (by migration), the super admin, the
-   three barangay accounts, services, equipment, vehicles, the text blast
-   code and ambulance destinations.
+   Production seeds only: barangays (by migration), the super admin,
+   services, equipment, vehicles, the text blast code and ambulance
+   destinations.
+   Barangay accounts are created manually in the admin panel.
    Ambulance destinations (Echague District Hospital, Isabela Southern Specialist Hospital Inc., Southern Isabela Medical Center) are seeded create-only (skipped once the table has rows) and are edited in the database until an admin page exists.
 3. **Storage.** Upload a government ID scan through a real resident signup
    (next step covers the signup itself), view it in the admin panel, then

@@ -10,10 +10,13 @@ use Illuminate\Support\Facades\Hash;
 use RuntimeException;
 
 /**
- * The three barangay accounts MDRRMO starts with. A barangay account is a
- * tbl_residents row with account_type 'barangay', one per barangay (the rule
- * ResidentController enforces); it signs in like any resident, by phone number
- * and a texted code. There is no username.
+ * The three barangay accounts MDRRMO starts with. Not called by
+ * ProductionSeeder: production barangay accounts are created manually in the
+ * admin panel.
+ *
+ * A barangay account is a tbl_residents row with account_type 'barangay', one
+ * per barangay (the rule ResidentController enforces); it signs in like any
+ * resident, by phone number and a texted code. There is no username.
  *
  * Matched by barangay: a barangay that already has its account is skipped and
  * never updated, so a number or password changed in the panel survives a

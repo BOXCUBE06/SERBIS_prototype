@@ -132,9 +132,7 @@ class ProductionCatalogueSeedersTest extends TestCase
 
     public function test_production_seeds_only_the_production_set(): void
     {
-        $env = ['ADMIN_SEED_PASSWORD' => 'SeedPass123!', 'BARANGAY_SEED_PASSWORD' => 'BrgyPass123!',
-            'BARANGAY_SEED_PHONE_SAN_FABIAN' => '09170000001', 'BARANGAY_SEED_PHONE_PAG_ASA' => '09170000002',
-            'BARANGAY_SEED_PHONE_SAN_ANTONIO_UGAD' => '09170000003', 'SMS_BLAST_CODE_SEED' => '123456'];
+        $env = ['ADMIN_SEED_PASSWORD' => 'SeedPass123!', 'SMS_BLAST_CODE_SEED' => '123456'];
         $_SERVER = $env + $_SERVER;
         $this->app['env'] = 'production';
 
@@ -148,8 +146,8 @@ class ProductionCatalogueSeedersTest extends TestCase
         }
 
         $this->assertSame(1, DB::table('tbl_user')->count());
-        $this->assertSame(3, DB::table('tbl_residents')->count());
-        $this->assertSame(0, DB::table('tbl_residents')->where('account_type', '!=', 'barangay')->count());
+        $this->assertSame(0, DB::table('tbl_residents')->where('account_type', 'barangay')->count());
+        $this->assertSame(0, DB::table('tbl_residents')->count());
         $this->assertSame(9, Service::count());
         $this->assertSame(9, Equipment::count());
         $this->assertSame(19, Vehicle::count());
