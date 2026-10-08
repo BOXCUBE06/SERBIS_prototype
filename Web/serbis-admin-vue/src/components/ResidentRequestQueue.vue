@@ -12,6 +12,8 @@
         </template>
       </PageHeader>
 
+      <ListUpdateNotice :update="listUpdate" @show="fetchRequests" />
+
       <DataTablePage
         :loading="initialLoad"
         :refreshing="refreshing"
@@ -108,8 +110,7 @@
         </template>
 
         <template v-slot:item.created_at="{ item }">
-          <div class="tabular">{{ shortDate(item.created_at) }}</div>
-          <div class="text-caption text-medium-emphasis">{{ daysAgo(item.created_at) }}</div>
+          <SubmittedCell :at="item.created_at" />
         </template>
 
         <template v-slot:item.first_responded_at="{ item }">
@@ -185,7 +186,7 @@
               <dt>Phone</dt>
               <dd>
                 <a v-if="requesterPhone(selectedRequest) !== 'N/A'" :href="`tel:${requesterPhone(selectedRequest)}`" class="phone-link">{{ requesterPhone(selectedRequest) }}</a>
-                <span v-else class="text-medium-emphasis">N/A</span>
+                <span v-else class="text-medium-emphasis">Not recorded</span>
               </dd>
             </dl>
             <div class="description-box mt-4">
@@ -244,7 +245,7 @@
               <div class="assign-box">
                 <div class="assign-row">
                   <div class="min-width-0">
-                    <div class="text-caption text-medium-emphasis">Responders</div>
+                    <div class="dd-label">Responders</div>
                     <div v-if="selectedRequest.responders?.length" class="d-flex flex-wrap ga-2 mt-1">
                       <span v-for="r in selectedRequest.responders" :key="r.responder_id" class="person-chip">
                         <v-avatar color="primary" variant="tonal" size="24"><span class="chip-initials">{{ nameInitials(r.name) }}</span></v-avatar>
@@ -259,7 +260,7 @@
                 </div>
                 <div v-if="!isProgramRequest(selectedRequest)" class="assign-row">
                   <div class="min-width-0">
-                    <div class="text-caption text-medium-emphasis">Vehicle</div>
+                    <div class="dd-label">Vehicle</div>
                     <div :class="{ 'text-medium-emphasis': !drawerVehicle }">{{ drawerVehicle || 'None assigned' }}</div>
                   </div>
                   <v-btn v-if="isPending" color="primary-strong" variant="outlined" height="36" class="text-none font-weight-bold flex-shrink-0" @click="openPicker('vehicle')">
@@ -276,7 +277,7 @@
           <section v-if="closedLabel" class="detail-section">
             <h3 class="sect-label">Outcome</h3>
             <dl class="kv">
-              <dt>{{ closedLabel }}</dt><dd>{{ formatDateTime(selectedRequest.resolved_at) || '—' }}</dd>
+              <dt>{{ closedLabel }}</dt><dd>{{ formatDateTime(selectedRequest.resolved_at) || 'Not recorded' }}</dd>
               <template v-if="selectedRequest.status === 'Resolved' && selectedRequest.resolved_at">
                 <dt>Time to resolve</dt><dd>{{ elapsed(selectedRequest.created_at, selectedRequest.resolved_at) }} after filing</dd>
               </template>
@@ -536,9 +537,11 @@ import '@/components/detail-dialog.css'
 import RequestFiltersBar from '@/components/RequestFiltersBar.vue'
 import ExportMenu from '@/components/ExportMenu.vue'
 import BulkSelectionBar from '@/components/BulkSelectionBar.vue'
-import { requesterName, requesterAccountType, isWalkIn, requesterInitials, requesterPhone, requesterBarangay, vehicleName, vehicleIcon, getVehicleNameById, useDescriptionLines, useSelection, transactionNo } from '@/composables/requestDisplay'
+import { requesterName, requesterAccountType, isWalkIn, requesterInitials, requesterPhone, requesterBarangay, requestBarangayName, roleFromBarangay, vehicleName, vehicleIcon, getVehicleNameById, useDescriptionLines, useSelection, transactionNo } from '@/composables/requestDisplay'
 import { useRequestAttachments } from '@/composables/useRequestAttachments'
 import { useRequestFetch, AMBULANCE_SERVICE_CODE, itemId } from '@/composables/useRequestFetch'
+import ListUpdateNotice from '@/components/ListUpdateNotice.vue'
+import SubmittedCell from '@/components/SubmittedCell.vue'
 import { REFERENCE_TTL_MS, useCachedFetch } from '@/composables/useCachedFetch'
 import { useFilteredRequestList } from '@/composables/useFilteredRequestList'
 import { useUpdateStatus } from '@/composables/useUpdateStatus'
@@ -607,7 +610,7 @@ const openCreateDialog = () => {
 const { attachments, lightbox, lightboxAttachment, openLightbox, loadAttachments, releaseAttachments } =
   useRequestAttachments(selectedRequest, { itemId, getHeaders })
 
-const { requests, vehicles, residents, services, responders, listAbortController, refreshing, fetchData, fetchRequests, selectRequest } =
+const { requests, vehicles, residents, services, responders, listAbortController, refreshing, fetchData, fetchRequests, selectRequest, listUpdate } =
   useRequestFetch({ isAmbulance: false, initialLoad, apiError, formData, selectedRequest, loadAttachments })
 
 const reasonDialog = ref(emptyReasonDialog())
@@ -878,7 +881,7 @@ const drawerSecondary = computed(() => {
   const r = selectedRequest.value
   if (!r) return ''
   if (isWalkIn(r)) return 'No account'
-  return drawerBadge.value ? requesterBarangay(r) : `Head of the Family · ${requesterBarangay(r)}`
+  return drawerBadge.value ? requesterBarangay(r) : roleFromBarangay('Head of the Family', requestBarangayName(r))
 })
 
 const WAIT_CLASS = { muted: 'text-medium-emphasis', warning: 'text-warning-strong', error: 'text-error' }
@@ -925,11 +928,6 @@ const summary = computed(() => {
 const formatDateTime = (dateStr) => dateStr ? new Date(dateStr).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : ''
 const shortDate = (d) => (d ? new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '')
 const nameInitials = (name) => (name || '').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase()
-const DAY = 864e5
-const daysAgo = (d) => {
-  const days = Math.floor((Date.now() - time(d)) / DAY)
-  return days <= 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`
-}
 // "17 hours", "3 days": hours under a day, days after.
 const elapsed = (from, to = Date.now()) => {
   const hours = Math.max(0, Math.floor((time(to) - time(from)) / 36e5))

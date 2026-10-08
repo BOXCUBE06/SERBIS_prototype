@@ -52,6 +52,10 @@ export const requesterPhone = (item) => displayPhone(item?.resident?.phone_numbe
 export const requestBarangayName = (item) =>
   item?.barangay?.barangay_name || item?.resident?.barangay?.barangay_name || ''
 
+// A drawer's sub-line: "Head of the Family from Brgy. San Fabian", or the role
+// alone when the barangay is not known.
+export const roleFromBarangay = (role, barangay) => (barangay ? `${role} from Brgy. ${barangay}` : role)
+
 export const requesterBarangay = (item) => {
   if (item?.resident) {return requestBarangayName(item) || 'Unknown Barangay'}
   return isWalkIn(item) ? 'Walk-in (no account)' : 'Unknown Barangay'

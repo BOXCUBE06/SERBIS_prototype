@@ -34,6 +34,8 @@
     <!-- A failed load used to render as an empty table, indistinguishable
          from an empty database — the operator would read a dead API as a
          quiet morning. -->
+    <ListUpdateNotice class="w-100" :update="listUpdate" noun="loan request" @show="showNewLoans" />
+
     <v-card v-if="loadError" elevation="0" border rounded="lg" class="bg-surface">
       <div class="text-center py-12 px-6">
         <v-icon size="40" aria-hidden="true" class="text-error mb-2">mdi-cloud-off-outline</v-icon>
@@ -140,12 +142,18 @@
         </div>
       </template>
 
-      <!-- The pill, then one plain line: the due countdown and how long it has been in this stage. -->
+      <!-- The pill, and a line only when something needs attention: overdue
+           (red) or Pending more than two days (amber). The filing time has its
+           own column. -->
       <template v-slot:item.status="{ item }">
         <div class="d-flex flex-column align-start ga-1">
           <StatusPill small :status="item.status" :icon="statusIcon(item.status)" />
-          <span class="text-caption" :class="dueClass(item)">{{ timelineLine(item) }}</span>
+          <span v-if="statusNote(item)" class="text-caption" :class="statusNote(item).class">{{ statusNote(item).text }}</span>
         </div>
+      </template>
+
+      <template v-slot:item.created_at="{ item }">
+        <SubmittedCell :at="item.created_at" />
       </template>
 
       <template v-slot:item.actions="{ item }">
@@ -258,7 +266,7 @@
       </template>
 
       <template v-slot:item.created_at="{ item }">
-        {{ fmtDate(item.created_at) }}
+        <SubmittedCell :at="item.created_at" />
       </template>
     </DataTablePage>
 
@@ -370,7 +378,7 @@
           <v-row>
             <v-col v-for="stage in photoStages(selectedRecord)" :key="stage" cols="12" sm="6">
               <div class="photo-card h-100">
-                <div class="text-caption text-uppercase font-weight-bold text-medium-emphasis mb-3">
+                <div class="dd-label mb-3">
                   {{ stage === 'release' ? 'At release' : 'At return' }}
                 </div>
 
@@ -660,10 +668,15 @@ import SegmentedTabs from '@/components/SegmentedTabs.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import PersonCell from '@/components/PersonCell.vue'
 import ExportMenu from '@/components/ExportMenu.vue'
+import ListUpdateNotice from '@/components/ListUpdateNotice.vue'
+import SubmittedCell from '@/components/SubmittedCell.vue'
+import { dueClass, dueLabel, isOverdue, parseDay, statusNote } from '@/composables/borrowingDue'
+import { pulse } from '@/composables/usePulse'
+import { pulseDiff } from '@/composables/pulseDiff'
 import BulkSelectionBar from '@/components/BulkSelectionBar.vue'
 import DetailDrawer from '@/components/DetailDrawer.vue'
 import '@/components/detail-dialog.css'
-import { borrowingTransactionNo } from '@/composables/requestDisplay'
+import { borrowingTransactionNo, roleFromBarangay } from '@/composables/requestDisplay'
 import { matchesTransaction } from '@/composables/transactionSearch'
 import { pendingOf } from '@/composables/useReasonActions'
 import { BORROWING_STATUSES, statusIcon } from '@/composables/borrowingStatus'
@@ -765,18 +778,21 @@ const personSecondary = (b) => displayPhone(b.resident?.phone_number) || b.resid
 const activeHeaders = [
   { title: 'Txn no.', key: 'borrow_id', width: '11%' },
   { title: 'Head of the Family', key: 'resident', value: residentSortValue, width: '21%' },
-  { title: 'Barangay', key: 'barangay', value: barangaySortValue, width: '13%' },
-  { title: 'Equipment', key: 'equipment', value: (b) => itemName(b), width: '21%' },
-  { title: 'Status', key: 'status', width: '18%' },
+  { title: 'Requested', key: 'created_at', width: '13%' },
+  { title: 'Barangay', key: 'barangay', value: barangaySortValue, width: '12%' },
+  // Narrowed for Requested; the name and purpose truncate with a tooltip.
+  { title: 'Equipment', key: 'equipment', value: (b) => itemName(b), width: '14%' },
+  // The line under the pill is now one short note at most.
+  { title: 'Status', key: 'status', width: '13%' },
   { title: 'Actions', key: 'actions', sortable: false, align: 'end', width: '232px' },
 ]
 
 const historyHeaders = [
   { title: 'Txn no.', key: 'borrow_id', width: '13%' },
   { title: 'Head of the Family', key: 'resident', value: residentSortValue, width: '21%' },
+  { title: 'Requested', key: 'created_at', width: '16%' },
   { title: 'Barangay', key: 'barangay', value: barangaySortValue, width: '15%' },
   { title: 'Equipment', key: 'equipment', value: (b) => itemName(b), width: '22%' },
-  { title: 'Requested', key: 'created_at', width: '16%' },
   { title: 'Outcome', key: 'status', width: '13%' },
 ]
 
@@ -1002,12 +1018,6 @@ const fmtDateTime = (iso) => iso ? new Date(iso).toLocaleString(undefined, { dat
 // as UTC midnight, which is the 9th in any timezone west of Greenwich and shifts
 // the whole overdue calculation by a day; building from the parts keeps it local.
 // The slice tolerates a legacy row that serialised a time along with the date.
-const parseDay = (value) => {
-  if (!value) return null
-  const [y, m, d] = String(value).slice(0, 10).split('-').map(Number)
-  if (!y || !m || !d) return null
-  return new Date(y, m - 1, d)
-}
 // Two kinds of value reach this. `due_date` is a bare calendar date and must be
 // read as-is; `created_at` is a UTC instant and must be converted, or a record
 // filed at 21:00 Manila time reports the previous day. Anything carrying a time
@@ -1027,18 +1037,7 @@ const daysFromToday = (n) => {
   return toDateInput(d)
 }
 
-// Whole days between today and the due date, both taken at local midnight so a
-// request due later today reads 0 rather than a fraction of a day.
-const dueDelta = (item) => {
-  const due = parseDay(item?.due_date)
-  if (!due) return null
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  return Math.round((due - today) / 86_400_000)
-}
 
-// A returned or denied record cannot be overdue, however far past its date it
-// sits — the item is back, or it never left.
 // Display only — MDRRMO feedback, 2026-09-18: an admin deciding whether to
 // approve a new request sees how this same resident treated equipment
 // before, but nothing here blocks or auto-denies anything. `borrowings` is
@@ -1058,20 +1057,7 @@ const borrowerHistory = computed(() => {
     .sort((a, b) => new Date(b.returned_at || b.created_at) - new Date(a.returned_at || a.created_at))
 })
 
-const isOverdue = (item) => {
-  if (!item || terminalStatuses.has(item.status)) return false
-  const delta = dueDelta(item)
-  return delta !== null && delta < 0
-}
 
-const dueLabel = (item) => {
-  const delta = dueDelta(item)
-  if (delta === null) return ''
-  if (delta < 0) return `${-delta} day${delta === -1 ? '' : 's'} overdue`
-  if (delta === 0) return 'Due today'
-  if (delta === 1) return 'Due tomorrow'
-  return `Due in ${delta} days`
-}
 
 // Aging measures from the moment the record entered its current stage, so a
 // released item reports how long it has been out rather than how long ago the
@@ -1085,21 +1071,13 @@ const agingLabel = (item) => {
   return `${pluralize(days, 'day')} ${released ? 'out' : 'waiting'}`
 }
 
-// One plain line under the status pill: the due countdown, then the age.
-const timelineLine = (item) => [dueLabel(item), agingLabel(item)].filter(Boolean).join(' · ')
 
-// Red once overdue, amber inside the 1-day reminder window (matches
-// SendReturnDueReminders' own window), quiet otherwise.
-const dueClass = (item) => {
-  if (isOverdue(item)) return 'text-error font-weight-bold'
-  return ['Due today', 'Due tomorrow'].includes(dueLabel(item)) ? 'text-warning-strong' : 'text-medium-emphasis'
-}
 
 // ---- the drawer's header
 const drawerName = computed(() => [selectedRecord.value?.resident?.first_name, selectedRecord.value?.resident?.last_name].filter(Boolean).join(' ') || 'Unknown Head of the Family')
 const drawerSecondary = computed(() => {
   const barangay = selectedRecord.value?.resident?.barangay?.barangay_name
-  return barangay ? `Head of the Family · ${barangay}` : 'Head of the Family'
+  return roleFromBarangay('Head of the Family', barangay)
 })
 const drawerPhone = computed(() => displayPhone(selectedRecord.value?.resident?.phone_number))
 // Short of stock matters while the loan is still to be decided or handed over.
@@ -1148,6 +1126,14 @@ const getHeaders = () => ({
 // The full-pane loadError card below is the only notification for a failure —
 // a snackbar on top of it duplicated the same message (ui-audit finding #3).
 const fetchData = () => load()
+
+// Loans filed or changed elsewhere (the mobile app, other staff) since the
+// board loaded (see usePulse.ts). Shown as a notice, never swapped in unasked.
+const listUpdate = computed(() => pulseDiff(initialLoad.value ? undefined : pulse.value?.borrowings, borrowings.value))
+const showNewLoans = () => {
+  invalidate('/borrowings')
+  return load()
+}
 
 // Failures here are non-fatal to the page — the filters just fall back to
 // showing only "All items"/"All barangays" until they load, same as any

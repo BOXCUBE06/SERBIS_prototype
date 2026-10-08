@@ -33,14 +33,13 @@
           <div class="chart-sub">{{ view === 'services' ? 'Requests by service' : 'Times borrowed by item' }}, {{ periodNote }}</div>
         </div>
         <div class="chart-filters">
-          <SegmentedTabs v-model="period" tonal dense aria-label="Period" :items="PERIODS" />
           <SegmentedTabs v-model="view" tonal dense aria-label="Most requested" :items="[{ value: 'services', label: 'Services' }, { value: 'items', label: 'Equipment' }]" />
         </div>
       </div>
       <div v-if="loading" class="skel skel-plot" aria-hidden="true"></div>
       <div v-else-if="ranked.length === 0" class="empty content-in">Nothing {{ periodNote }}</div>
       <!-- A ranked list: each bar is the share of the top entry, the number sits at its end. -->
-      <ol v-else :key="`${period}-${view}`" class="rank-list content-in">
+      <ol v-else :key="view" class="rank-list content-in">
         <li v-for="r in ranked" :key="r.label">
           <span class="rank-name">{{ r.label }}</span>
           <span class="rank-track"><span class="rank-bar" :style="{ width: `${Math.round((r.value / rankMax) * 100)}%` }"></span></span>
@@ -145,17 +144,11 @@ const crosshair = computed(() => ({
 
 const TOP = 8
 const view = ref('services')
-// Windows are Manila days on the server: today, rolling 7 and 30 days, everything.
-const PERIODS = [
-  { value: 'today', label: 'Today', note: 'today' },
-  { value: 'week', label: '7 days', note: 'last 7 days' },
-  { value: 'month', label: '30 days', note: 'last 30 days' },
-  { value: 'all', label: 'All time', note: 'all time' },
-]
-const period = ref('month')
-const periodNote = computed(() => PERIODS.find((p) => p.value === period.value).note)
+// The board's one window: the server's rolling 30 Manila days. It also sends
+// today, 7 days and all time; Analytics is where other windows are read.
+const periodNote = 'last 30 days'
 const ranked = computed(() => {
-  const t = props.top?.[period.value]?.[view.value]
+  const t = props.top?.month?.[view.value]
   return (t?.labels ?? []).map((label, i) => ({ label, value: t.data[i] })).slice().sort((a, b) => b.value - a.value).slice(0, TOP)
 })
 

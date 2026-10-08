@@ -5,16 +5,23 @@
       <div class="min-width-0">
         <div class="dash-overline">{{ today }}</div>
         <h2 class="dash-title">Welcome back, {{ adminFirstName || 'there' }}</h2>
+        <!-- What needs attention, each a link to its list. A count the account
+             cannot read (its section, or a list that failed) is left out. -->
+        <div v-if="bandChips.length > 0" class="band-chips">
+          <router-link v-for="c in bandChips" :key="c.key" :to="c.to" class="band-chip">
+            <b class="band-chip__n" :class="`band-chip__n--${c.tone}`">{{ c.n }}</b>{{ c.label }}
+          </router-link>
+        </div>
       </div>
       <div class="d-flex align-center flex-wrap ga-3">
-        <!-- The bell carries the activity log and the follow-up calls. An account
+        <!-- The bell carries pending accounts, the activity log and the follow-up calls. An account
              holding none of the sections those come from would open an empty
              list, so it is not drawn. -->
         <v-menu v-if="showBell" location="bottom end">
           <template v-slot:activator="{ props }">
             <v-btn icon="mdi-bell-outline" variant="outlined" class="band-btn" v-bind="props" aria-label="System notifications">
-              <!-- A count when staff have someone to ring, a plain dot for activity. -->
-              <v-badge v-if="followUps.length > 0" color="error" :content="followUps.length">
+              <!-- A count when staff have someone to ring or an account to activate, a plain dot for activity. -->
+              <v-badge v-if="bellCount > 0" color="error" :content="bellCount">
                 <v-icon>mdi-bell-outline</v-icon>
               </v-badge>
               <v-badge color="error" dot v-else-if="systemLogs.length > 0">
@@ -25,6 +32,21 @@
           </template>
           <v-card min-width="320" elevation="4" rounded="lg" class="border">
             <v-list density="compact" class="pa-0">
+              <!-- Self-registered accounts staff have yet to activate. Only an
+                   account holding Accounts receives the count. -->
+              <template v-if="pendingAccounts > 0">
+                <v-list-subheader class="font-weight-bold text-uppercase py-2">Awaiting activation</v-list-subheader>
+                <v-divider></v-divider>
+                <v-list-item :to="PENDING_ACCOUNTS_LINK" class="py-3 border-b">
+                  <template v-slot:prepend>
+                    <v-avatar color="warning" variant="tonal" size="32" class="mr-3">
+                      <v-icon color="warning" size="small">mdi-account-clock-outline</v-icon>
+                    </v-avatar>
+                  </template>
+                  <v-list-item-title class="text-body-2 font-weight-bold">{{ pluralize(pendingAccounts, 'pending account') }}</v-list-item-title>
+                  <v-list-item-subtitle class="text-caption">{{ pendingAccountsNote }}</v-list-item-subtitle>
+                </v-list-item>
+              </template>
               <!-- Push-only notices that reached nobody (equipment due-back
                    reminders and available-again notices). There is no text behind
                    them, so this is how staff learn whom to ring. -->
@@ -181,6 +203,7 @@ import { isAmbulanceRequest } from '@/composables/useRequestFetch'
 import { requesterName } from '@/composables/requestDisplay'
 import { useCurrentAdmin, adminFirstName } from '@/composables/useCurrentAdmin'
 import { DAY_MS } from '@/composables/dashboardTrends'
+import { pulse } from '@/composables/usePulse'
 
 const router = useRouter()
 
@@ -188,7 +211,16 @@ const router = useRouter()
 // follow-up calls); this only decides whether the bell that shows them is worth
 // drawing at all.
 const { can } = useCurrentAdmin()
-const showBell = computed(() => can('logs') || can('borrowings') || can('ambulance'))
+const showBell = computed(() => can('logs') || can('borrowings') || can('ambulance') || can('residents'))
+
+// From the pulse (usePulse.ts), which sends it only to an account holding Accounts.
+const pendingAccounts = computed(() => pulse.value?.residents?.pending ?? 0)
+const pendingOrganizations = computed(() => pulse.value?.residents?.pending_organizations ?? 0)
+const pendingAccountsNote = computed(() => (pendingOrganizations.value > 0
+  ? `${pluralize(pendingOrganizations.value, 'organization')} among them · open Accounts`
+  : 'Open Accounts to review and activate'))
+const PENDING_ACCOUNTS_LINK = { path: '/users', query: { status: 'Inactive' } }
+const bellCount = computed(() => followUps.value.length + pendingAccounts.value)
 
 const systemLogs = ref([])
 const followUps = ref([])
@@ -378,25 +410,59 @@ const pendingAmbulance = computed(() => rows.value.filter((r) => r.kind === 'amb
 // Which cards this account gets, known before anything loads: the server always
 // sends units and responders; pending requests and overdue need their section. The
 // skeleton counts this, the real cards read it.
-const kpiShown = computed(() => ({ units: true, responders: true, pending: can('ambulance'), overdue: can('borrowings') }))
+const kpiShown = computed(() => ({ units: true, responders: true, pending: can('ambulance'), overdue: can('borrowings'), accounts: can('residents') }))
 const kpiCount = computed(() => Object.values(kpiShown.value).filter(Boolean).length)
 
 // Number colour: red for a problem, amber for nothing left to send out.
+const ONGOING_TRIPS_LINK = { path: '/conduction-requests', query: { status: 'Responding' } }
+const OVERDUE_LINK = { path: '/borrowings', query: { overdue: '1' } }
+
+// The welcome band's chips: the board's three, each only when its count loaded.
+const bandChips = computed(() => {
+  const plural = (n, one, many) => `${n === 1 ? one : many}`
+  const chips = []
+  if (can('ambulance') && trips.value) {
+    chips.push({ key: 'trips', n: tripsOut.value, label: plural(tripsOut.value, 'ongoing ambulance trip', 'ongoing ambulance trips'), tone: 'neutral', to: ONGOING_TRIPS_LINK })
+  }
+  if (can('borrowings') && loaded.borrowings) {
+    const n = overdueRows.value.length
+    chips.push({ key: 'overdue', n, label: plural(n, 'overdue loan', 'overdue loans'), tone: 'error', to: OVERDUE_LINK })
+  }
+  if (can('ambulance') && loaded.services) {
+    chips.push({ key: 'pending', n: pendingAmbulance.value, label: plural(pendingAmbulance.value, 'pending ambulance request', 'pending ambulance requests'), tone: 'warning', to: { path: '/conduction-requests', query: { status: 'Pending' } } })
+  }
+  return chips
+})
+
 const kpis = computed(() => {
   const link = (section, to) => (can(section) ? to : undefined)
   const emptyTone = (free) => (free === 0 ? 'warning' : 'default')
   const items = []
-  if (kpiShown.value.units && units.value) items.push({ label: 'Available units', icon: 'mdi-ambulance', accent: 'primary', value: units.value.free, total: units.value.total, tone: emptyTone(units.value.free), caption: trips.value ? `${tripsOut.value} on trips` : '', captionTo: link('ambulance', { path: '/conduction-requests', query: { status: 'Responding' } }) })
+  if (kpiShown.value.units && units.value) items.push({ label: 'Available units', icon: 'mdi-ambulance', accent: 'primary', value: units.value.free, total: units.value.total, tone: emptyTone(units.value.free) })
   if (kpiShown.value.responders && responders.value) items.push({ label: 'Available responders', icon: 'mdi-account-hard-hat', accent: 'info', value: responders.value.available, total: responders.value.total, tone: emptyTone(responders.value.available), to: link('responders', '/responders') })
-  if (kpiShown.value.pending && loaded.services) items.push({ label: 'Pending ambulance requests', icon: 'mdi-clock-outline', accent: 'warning', value: pendingAmbulance.value, tone: 'default', to: link('ambulance', '/conduction-requests') })
+  // Ongoing trips needs the trip log; if that list failed, the pending count stands in.
+  if (kpiShown.value.pending && trips.value) items.push({ label: 'Ongoing trips', icon: 'mdi-map-marker-path', accent: 'neutral', value: tripsOut.value, tone: 'default', to: link('ambulance', ONGOING_TRIPS_LINK) })
+  else if (kpiShown.value.pending && loaded.services) items.push({ label: 'Pending ambulance requests', icon: 'mdi-clock-outline', accent: 'warning', value: pendingAmbulance.value, tone: 'default', to: link('ambulance', '/conduction-requests') })
   if (kpiShown.value.overdue && loaded.borrowings) {
     const n = overdueRows.value.length
-    items.push({ label: 'Overdue borrowing', icon: 'mdi-alert-circle-outline', accent: 'error', value: n, tone: n > 0 ? 'error' : 'default', to: link('borrowings', { path: '/borrowings', query: { overdue: '1' } }) })
+    items.push({ label: 'Overdue borrowing', icon: 'mdi-alert-circle-outline', accent: 'error', value: n, tone: n > 0 ? 'error' : 'default', to: link('borrowings', OVERDUE_LINK) })
+  }
+  if (kpiShown.value.accounts && pulse.value?.residents) {
+    items.push({ label: 'Pending accounts', icon: 'mdi-account-clock-outline', accent: 'warning', value: pendingAccounts.value, tone: 'default', to: PENDING_ACCOUNTS_LINK, caption: pendingOrganizations.value > 0 ? pluralize(pendingOrganizations.value, 'organization') : '' })
   }
   return items
 })
 
 onMounted(fetchDashboardData)
+
+// Something filed or changed elsewhere (a resident on the mobile app, other
+// staff): refetch quietly. A glance page with nothing being edited, so no
+// notice; the cached rows stay up until the fresh ones land. The pending-account
+// count reads the pulse directly and needs no refetch.
+const listsStamp = (p) => JSON.stringify([p?.requests, p?.ambulance, p?.trips, p?.borrowings])
+watch(pulse, (next, prev) => {
+  if (prev && next && listsStamp(next) !== listsStamp(prev)) fetchDashboardData()
+})
 </script>
 
 <style scoped>
@@ -630,4 +696,33 @@ onMounted(fetchDashboardData)
 .dash-title { margin: 4px 0 0; font-size: 28px; line-height: 36px; font-weight: 700; letter-spacing: -0.48px; color: #fff; }
 .band-btn { width: 44px; height: 44px; border: 1px solid rgba(255, 255, 255, 0.4) !important; border-radius: 50% !important; color: #fff; }
 .band-avatar { background: rgba(255, 255, 255, 0.16); color: #fff; }
+.band-chips { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.band-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px 6px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 14px;
+  text-decoration: none;
+  transition: background var(--motion-hover) ease;
+}
+.band-chip:hover { background: rgba(255, 255, 255, 0.18); }
+.band-chip:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.band-chip__n {
+  min-width: 26px;
+  height: 26px;
+  padding: 0 6px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-variant-numeric: tabular-nums;
+}
+.band-chip__n--neutral { background: #E2E8F0; color: rgb(var(--v-theme-secondary)); }
+.band-chip__n--error { background: rgb(var(--v-theme-error)); color: #fff; }
+.band-chip__n--warning { background: rgb(var(--v-theme-warning)); color: #2A1500; }
+.kpi-tile--neutral { background: rgba(100, 116, 139, 0.14); color: #475569; }
 </style>

@@ -1,6 +1,7 @@
 import { ref, type Ref } from 'vue'
 
 import { useCachedFetch } from './useCachedFetch'
+import { refreshPulse } from './usePulse'
 
 /**
  * The borrowings list, fetched once and shared by every view that needs it.
@@ -56,6 +57,9 @@ async function fetchRows(): Promise<void> {
   } finally {
     initialLoad.value = false
     reloading.value = false
+    // Catch the pulse up with the rows, so this page's own write is not
+    // offered back to it as someone else's change.
+    refreshPulse()
   }
 }
 

@@ -28,6 +28,8 @@
         </template>
       </v-alert>
 
+      <ListUpdateNotice :update="listUpdate" noun="account" @show="showNewAccounts" />
+
       <!-- The type tabs' counts reflect status/barangay/search, everything but
            the type itself, so switching tabs previews how many rows will show. -->
       <DataTablePage
@@ -434,6 +436,7 @@
 
 <script setup>
 import { ref, computed, nextTick, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { authHeaders } from '@/composables/adminUi'
 import {
   accountInitials,
@@ -470,6 +473,9 @@ import StatusPill from '@/components/StatusPill.vue'
 import FilterSelect from '@/components/FilterSelect.vue'
 import EditDialog from '@/components/EditDialog.vue'
 import RowActions from '@/components/RowActions.vue'
+import ListUpdateNotice from '@/components/ListUpdateNotice.vue'
+import { pulse, refreshPulse } from '@/composables/usePulse'
+import { pulseDiff } from '@/composables/pulseDiff'
 
 const residents = ref([])
 // resident_id -> object URL. Only rows the server says have a photo are ever
@@ -489,7 +495,11 @@ const photoError = ref('')
 const form = ref(null)
 
 const selectedResident = ref(null)
-const filters = ref({ status: 'All', barangay: 'All', type: 'All' })
+// ?status=Inactive opens the list on Pending: the dashboard card and the bell
+// link here that way. Only a value the filter offers is taken.
+const route = useRoute()
+const linkedStatus = RESIDENT_STATUS_FILTER_ITEMS.some((i) => i.value === route.query.status) ? route.query.status : 'All'
+const filters = ref({ status: linkedStatus, barangay: 'All', type: 'All' })
 
 // Sorting is client-side: GET /residents returns every account in one response,
 // so the server has nothing to add. Each header sorts on what its cell prints
@@ -800,7 +810,16 @@ const applyResidents = (data) => {
 const fetchResidents = () => get('/residents', { onData: applyResidents })
 
 // After a write: drop the cached list, then fetch past it.
-const reloadResidents = () => { invalidate('/residents'); return fetchResidents() }
+// The pulse is refreshed after, so this page's own write is not offered back to it.
+const reloadResidents = async () => {
+  invalidate('/residents')
+  await fetchResidents()
+  refreshPulse()
+}
+
+// Accounts registered or changed elsewhere since the list loaded (see usePulse.ts).
+const listUpdate = computed(() => pulseDiff(initialLoad.value ? undefined : pulse.value?.residents, residents.value))
+const showNewAccounts = () => reloadResidents().catch((error) => { apiError.value = error.message })
 
 // Photos load for the rows on screen only (v-intersect on the avatar), and the
 // blobs outlive the page (residentPhoto.ts). Not awaited: the table is useful the

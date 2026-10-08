@@ -30,3 +30,9 @@
 
 # Office lock files (e.g. docs-paper/~$Manuscript.docx while Word has it open).
 ~$*
+
+# Manual screenshot capture: saved admin sign-in sessions (local tokens)
+docs/user-manuals/tools/capture/.state/
+# Manual screenshot capture: scratch images written by contact_sheet.py and the
+# change check (samples/ holds the real upload fixtures and stays tracked).
+docs/user-manuals/tools/capture/*.png

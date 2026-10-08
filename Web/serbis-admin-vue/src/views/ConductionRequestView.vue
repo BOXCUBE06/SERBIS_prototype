@@ -41,6 +41,8 @@
       </v-window-item>
 
       <v-window-item value="trip-logs">
+        <ListUpdateNotice :update="tripUpdate" noun="trip record" @show="showNewTrips" />
+
         <v-alert v-if="apiError && !createDialog.open && !detail.open" type="error" variant="tonal" density="compact" closable class="mb-4" @click:close="apiError = ''">
           {{ apiError }}
         </v-alert>
@@ -165,11 +167,12 @@
             <v-btn variant="outlined" color="primary" size="small" class="text-none font-weight-bold" :loading="bookingsLoading" @click="fetchBookings">Retry</v-btn>
           </template>
         </v-alert>
+        <label class="dd-field-label" for="trip-new-link-to-an-approved-request-optional">Link to an approved request (optional)</label>
         <v-autocomplete
           :model-value="createDialog.form.service_request_id"
           @update:model-value="onLinkBooking"
           :items="bookingOptions"
-          label="Link to an approved request (optional)"
+          id="trip-new-link-to-an-approved-request-optional"
           placeholder="Search by name or date"
           variant="outlined"
           density="comfortable"
@@ -187,19 +190,24 @@
           <h3 class="sect-label">Patient</h3>
           <v-row density="compact">
             <v-col cols="12" sm="8">
-              <v-text-field v-model="createDialog.form.patient_name" label="Name" placeholder="Juan Dela Cruz" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+              <label class="dd-field-label" for="trip-new-name">Name</label>
+              <v-text-field v-model="createDialog.form.patient_name" id="trip-new-name" placeholder="Juan Dela Cruz" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
             </v-col>
             <v-col cols="6" sm="4">
-              <v-text-field v-model="createDialog.form.patient_age" label="Age" placeholder="45" type="number" min="0" max="150" variant="outlined" density="comfortable"></v-text-field>
+              <label class="dd-field-label" for="trip-new-age">Age</label>
+              <v-text-field v-model="createDialog.form.patient_age" id="trip-new-age" placeholder="45" type="number" min="0" max="150" variant="outlined" density="comfortable"></v-text-field>
             </v-col>
             <v-col cols="12">
-              <v-text-field v-model="createDialog.form.patient_address" label="Address" placeholder="Purok 3, San Isidro" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+              <label class="dd-field-label" for="trip-new-address">Address</label>
+              <v-text-field v-model="createDialog.form.patient_address" id="trip-new-address" placeholder="Purok 3, San Isidro" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
             </v-col>
             <v-col cols="12">
-              <v-text-field v-model="createDialog.form.patient_contact_number" label="Contact number" placeholder="09171234567" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+              <label class="dd-field-label" for="trip-new-contact-number">Contact number</label>
+              <v-text-field v-model="createDialog.form.patient_contact_number" id="trip-new-contact-number" placeholder="09171234567" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
             </v-col>
             <v-col cols="12">
-              <v-textarea v-model="createDialog.form.medical_diagnosis" label="Medical diagnosis" placeholder="Suspected stroke" variant="outlined" density="comfortable" rows="2" :rules="[required]"></v-textarea>
+              <label class="dd-field-label" for="trip-new-medical-diagnosis">Medical diagnosis</label>
+              <v-textarea v-model="createDialog.form.medical_diagnosis" id="trip-new-medical-diagnosis" placeholder="Suspected stroke" variant="outlined" density="comfortable" rows="2" :rules="[required]"></v-textarea>
             </v-col>
           </v-row>
         </section>
@@ -208,10 +216,12 @@
           <h3 class="sect-label">Trip</h3>
           <v-row density="compact">
             <v-col cols="12" sm="6">
-              <v-text-field v-model="createDialog.form.origin" label="From" placeholder="San Isidro" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+              <label class="dd-field-label" for="trip-new-from">From</label>
+              <v-text-field v-model="createDialog.form.origin" id="trip-new-from" placeholder="San Isidro" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
             </v-col>
             <v-col cols="12" sm="6">
-              <v-text-field v-model="createDialog.form.destination" label="To" placeholder="Echague District Hospital" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+              <label class="dd-field-label" for="trip-new-to">To</label>
+              <v-text-field v-model="createDialog.form.destination" id="trip-new-to" placeholder="Echague District Hospital" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
             </v-col>
             <v-col v-if="vehiclesError" cols="12">
               <v-alert type="warning" variant="tonal" border="start" density="compact">
@@ -224,19 +234,21 @@
             <!-- A linked booking runs on its own approved unit; the server
                  ignores any other, so it is shown, not picked. -->
             <v-col v-if="createDialog.form.service_request_id" cols="12">
+              <label class="dd-field-label" for="trip-new-assigned-unit">Assigned unit</label>
               <v-text-field
                 :model-value="tripVehicleLabel(createDialog.form)"
-                label="Assigned unit"
+                id="trip-new-assigned-unit"
                 variant="outlined"
                 density="comfortable"
                 readonly
               ></v-text-field>
             </v-col>
             <v-col v-else cols="12">
+              <label class="dd-field-label" for="trip-new-fleet-unit">Fleet unit</label>
               <v-select
                 v-model="createDialog.form.vehicle_id"
                 :items="vehicleOptions"
-                label="Fleet unit"
+                id="trip-new-fleet-unit"
                 variant="outlined"
                 density="comfortable"
                 clearable
@@ -248,9 +260,10 @@
                  the picker is, since it is what the double-booking guard
                  below can actually check. -->
             <v-col v-if="!createDialog.form.vehicle_id && !createDialog.form.service_request_id" cols="12">
+              <label class="dd-field-label" for="trip-new-other-vehicle-not-in-the-fleet">Other vehicle (not in the fleet)</label>
               <v-text-field
                 v-model="createDialog.form.vehicle"
-                label="Other vehicle (not in the fleet)"
+                id="trip-new-other-vehicle-not-in-the-fleet"
                 placeholder="Alicia MDRRMO Ambulance"
                 variant="outlined"
                 density="comfortable"
@@ -262,66 +275,60 @@
         <section class="detail-section">
           <h3 class="sect-label">Crew</h3>
           <div v-for="group in personnelGroups" :key="group.field" class="mb-4">
-            <div class="d-flex align-center justify-space-between mb-1">
-              <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">{{ group.label }}</span>
-              <v-btn
-                variant="outlined" color="primary"
-                size="small"
-                density="compact"
-                class="text-none"
-                prepend-icon="mdi-plus"
-                :disabled="createDialog.form[group.field].length >= group.max"
-                @click="addPerson(group.field)"
-              >
-                Add {{ group.singular }}
-              </v-btn>
+            <div v-for="(_n, idx) in createDialog.form[group.field]" :key="idx" class="mb-3">
+              <label class="dd-field-label" :for="`trip-new-${group.field}-${idx}`">{{ group.singular.charAt(0).toUpperCase() + group.singular.slice(1) }} {{ idx + 1 }}</label>
+              <div class="d-flex align-center gap-2">
+                <v-autocomplete
+                  v-if="group.field === 'drivers'"
+                  v-model="createDialog.form[group.field][idx]"
+                  :items="driverOptionsFor(createDialog.form[group.field][idx])"
+                  item-title="title"
+                  item-value="value"
+                  :id="`trip-new-${group.field}-${idx}`"
+                  placeholder="Select a responder"
+                  variant="outlined"
+                  density="compact"
+                  hide-details
+                  clearable
+                  class="flex-grow-1"
+                >
+                  <template v-slot:item="{ item, props }">
+                    <v-list-item v-bind="props" :title="item.title" :subtitle="item.position"></v-list-item>
+                  </template>
+                </v-autocomplete>
+                <ResponderCombobox
+                  v-else-if="group.field === 'authorized_passengers'"
+                  v-model="createDialog.form[group.field][idx]"
+                  :items="passengerOptionsFor(createDialog.form.drivers)"
+                  :id="`trip-new-${group.field}-${idx}`"
+                  class="flex-grow-1"
+                />
+                <v-text-field
+                  v-else
+                  v-model="createDialog.form[group.field][idx]"
+                  :id="`trip-new-${group.field}-${idx}`"
+                  placeholder="Full name"
+                  variant="outlined"
+                  density="compact"
+                  hide-details
+                  class="flex-grow-1"
+                ></v-text-field>
+                <v-btn
+                  v-if="idx > 0 || group.min < 1"
+                  icon="mdi-close"
+                  variant="outlined" color="error"
+                  size="40"
+                  rounded="lg"
+                  :aria-label="`Remove ${group.singular} ${idx + 1}`"
+                  @click="removePerson(group.field, idx)"
+                ></v-btn>
+              </div>
             </div>
-            <div
-              v-for="(_n, idx) in createDialog.form[group.field]"
-              :key="idx"
-              class="d-flex align-center gap-2 mb-2"
-            >
-              <v-autocomplete
-                v-if="group.field === 'drivers'"
-                v-model="createDialog.form[group.field][idx]"
-                :items="driverOptionsFor(createDialog.form[group.field][idx])"
-                item-title="title"
-                item-value="value"
-                :label="`${group.singular} ${idx + 1}`"
-                placeholder="Select a responder"
-                variant="outlined"
-                density="compact"
-                hide-details
-                clearable
-              >
-                <template v-slot:item="{ item, props }">
-                  <v-list-item v-bind="props" :title="item.title" :subtitle="item.position"></v-list-item>
-                </template>
-              </v-autocomplete>
-              <ResponderCombobox
-                v-else-if="group.field === 'authorized_passengers'"
-                v-model="createDialog.form[group.field][idx]"
-                :items="passengerOptionsFor(createDialog.form.drivers)"
-                :label="`${group.singular} ${idx + 1}`"
-              />
-              <v-text-field
-                v-else
-                v-model="createDialog.form[group.field][idx]"
-                :label="`${group.singular} ${idx + 1}`"
-                placeholder="Full name"
-                variant="outlined"
-                density="compact"
-                hide-details
-              ></v-text-field>
-              <v-btn
-                v-if="idx > 0 || group.min < 1"
-                icon="mdi-close"
-                variant="outlined" color="error"
-                size="small"
-                :aria-label="`Remove ${group.singular} ${idx + 1}`"
-                @click="removePerson(group.field, idx)"
-              ></v-btn>
-            </div>
+            <v-btn
+              variant="text" color="primary-strong" density="comfortable" class="text-none font-weight-bold px-1"
+              :disabled="createDialog.form[group.field].length >= group.max"
+              @click="addPerson(group.field)"
+            >+ Add {{ group.singular }}</v-btn>
             <div v-if="createDialog.form[group.field].length >= group.max" class="text-caption text-medium-emphasis">
               Up to {{ group.max }} {{ group.label.toLowerCase() }}.
             </div>
@@ -355,25 +362,23 @@
         <!-- Only ever present on a trip dispatched from a resident's own
              booking — a walk-in trip log, still the common case, carries no
              service_request_id and shows none of this. -->
-        <section v-if="selected.service_request_id" class="detail-section">
-          <h3 class="sect-label">Linked booking</h3>
-          <div class="assign-box">
-            <div class="assign-row">
-              <div class="min-width-0">
-                <div class="mono">{{ transactionNo(selected.service_request_id) }}</div>
-                <div class="text-body-2 text-medium-emphasis">
-                  <template v-if="selected.service_request?.scheduled_at">Scheduled {{ fmtDateTime(selected.service_request.scheduled_at) }}</template>
-                  <template v-if="selected.service_request?.status"> {{ selected.service_request.status }}</template>
-                </div>
-              </div>
+        <div v-if="selected.service_request_id" class="assign-box detail-section">
+          <div class="assign-row">
+            <div class="min-width-0">
+              <div class="dd-label">Linked booking</div>
+              <div class="mono">{{ transactionNo(selected.service_request_id) }}</div>
+              <div v-if="selected.service_request?.scheduled_at" class="text-body-2 text-medium-emphasis">Scheduled {{ fmtDateTime(selected.service_request.scheduled_at) }}</div>
+            </div>
+            <div class="d-flex align-center ga-3 flex-shrink-0">
+              <StatusPill v-if="selected.service_request?.status" :status="selected.service_request.status" />
               <!-- The reverse of Bookings' own "Open trip record": this link used to only go one way. -->
               <v-btn
-                color="primary-strong" variant="outlined" height="40" class="text-none font-weight-bold flex-shrink-0"
+                color="primary-strong" variant="outlined" height="40" class="text-none font-weight-bold"
                 @click="openBooking(selected.service_request_id)"
               >Open booking</v-btn>
             </div>
           </div>
-        </section>
+        </div>
 
         <section class="detail-section">
           <h3 class="sect-label">Patient</h3>
@@ -387,9 +392,13 @@
 
         <section class="detail-section">
           <h3 class="sect-label">Route and vehicle</h3>
+          <div class="dd-route mb-2">
+            <span class="dd-route__mark dd-route__mark--start" aria-hidden="true"></span>
+            <div class="dd-route__stop--start"><div class="dd-label">Pickup</div>{{ selected.origin || NOT_RECORDED }}</div>
+            <span class="dd-route__mark dd-route__mark--end" aria-hidden="true"></span>
+            <div><div class="dd-label">Destination</div>{{ selected.destination || NOT_RECORDED }}</div>
+          </div>
           <dl class="kv">
-            <dt>Pickup</dt><dd>{{ selected.origin || NOT_RECORDED }}</dd>
-            <dt>Destination</dt><dd>{{ selected.destination || NOT_RECORDED }}</dd>
             <dt>Vehicle</dt>
             <dd>{{ selectedVehicleLabel }}<span v-if="selectedVehicleUnverified" class="text-caption text-medium-emphasis"> · fleet list unavailable</span></dd>
             <!-- The fleet has no plate column, so a fleet-linked trip has no
@@ -412,18 +421,18 @@
 
         <section class="detail-section">
           <h3 class="sect-label">Timeline</h3>
-          <v-timeline density="compact" align="start" side="end" truncate-line="both" class="trip-timeline">
-            <v-timeline-item
-              v-for="step in timelineSteps"
-              :key="step.label"
-              :dot-color="step.at || step.done ? step.color : 'grey-lighten-1'"
-              size="x-small"
-            >
-              <div class="font-weight-bold">{{ step.label }}</div>
-              <div v-if="step.at || !step.done" :class="{ 'text-medium-emphasis': !step.at }">{{ step.at ? fmtDateTime(step.at) : 'Pending' }}</div>
-              <div v-if="step.note" class="text-body-2 text-medium-emphasis">{{ step.note }}</div>
-            </v-timeline-item>
-          </v-timeline>
+          <div v-for="step in timelineSteps" :key="step.label">
+            <div class="dd-timeline-row">
+              <span
+                class="dd-timeline-dot"
+                :class="{ 'dd-timeline-dot--done': step.at, 'dd-timeline-dot--warning': step.done && !step.at }"
+                aria-hidden="true"
+              ></span>
+              <span :class="{ 'text-medium-emphasis': !step.at && !step.done }">{{ step.label }}</span>
+              <span class="dd-timeline-time">{{ step.at ? fmtDateTime(step.at) : (step.done ? '' : 'Pending') }}</span>
+            </div>
+            <div v-if="step.note" class="text-body-2 text-medium-emphasis dd-timeline-note">{{ step.note }}</div>
+          </div>
         </section>
 
         <section class="detail-section">
@@ -468,11 +477,15 @@
            crew is on the radio. -->
       <section class="detail-section">
         <h3 class="sect-label">Departure</h3>
-        <div v-for="[field, label] in checkpointFields(['departed_office_at'])" :key="field" class="d-flex align-center gap-2 mb-3">
-          <DateTimePickerField v-model="tripLog.form[field]" type="datetime-local" :label="label" variant="outlined" density="comfortable" class="flex-grow-1"></DateTimePickerField>
-          <v-btn variant="tonal" size="small" class="text-none" @click="setNow(field)">Now</v-btn>
+        <div v-for="[field, label] in checkpointFields(['departed_office_at'])" :key="field" class="mb-3">
+          <label class="dd-field-label" :for="`trip-log-${field}`">{{ label }}</label>
+          <div class="d-flex align-start gap-2">
+            <DateTimePickerField v-model="tripLog.form[field]" type="datetime-local" :id="`trip-log-${field}`" variant="outlined" density="comfortable" class="flex-grow-1"></DateTimePickerField>
+            <v-btn variant="tonal" height="40" class="text-none mt-2" @click="setNow(field)">Now</v-btn>
+          </div>
         </div>
-        <v-text-field v-model="tripLog.form.odometer_start" type="number" min="0" label="Odometer at departure" placeholder="10000" variant="outlined" density="comfortable"></v-text-field>
+        <label class="dd-field-label" for="trip-log-odometer-at-departure">Odometer at departure</label>
+        <v-text-field v-model="tripLog.form.odometer_start" type="number" min="0" id="trip-log-odometer-at-departure" placeholder="10000" variant="outlined" density="comfortable"></v-text-field>
       </section>
 
       <section class="detail-section">
@@ -486,29 +499,37 @@
           density="compact"
           hide-details
         ></v-checkbox>
+        <label class="dd-field-label" for="trip-log-reason-required">Reason (required)</label>
         <v-textarea
           v-if="tripLog.form.did_not_arrive"
           v-model="tripLog.form.no_arrival_reason"
-          label="Reason (required)"
+          id="trip-log-reason-required"
           placeholder="e.g. Patient had already been taken by a relative"
           variant="outlined"
           density="comfortable"
           rows="2"
           class="mt-2"
         ></v-textarea>
-        <div v-for="[field, label] in checkpointFields(tripLog.form.did_not_arrive ? [] : ['arrived_destination_at', 'departed_destination_at'])" :key="field" class="d-flex align-center gap-2 mt-3">
-          <DateTimePickerField v-model="tripLog.form[field]" type="datetime-local" :label="label" variant="outlined" density="comfortable" class="flex-grow-1"></DateTimePickerField>
-          <v-btn variant="tonal" size="small" class="text-none" @click="setNow(field)">Now</v-btn>
+        <div v-for="[field, label] in checkpointFields(tripLog.form.did_not_arrive ? [] : ['arrived_destination_at', 'departed_destination_at'])" :key="field" class="mt-3">
+          <label class="dd-field-label" :for="`trip-log-${field}`">{{ label }}</label>
+          <div class="d-flex align-start gap-2">
+            <DateTimePickerField v-model="tripLog.form[field]" type="datetime-local" :id="`trip-log-${field}`" variant="outlined" density="comfortable" class="flex-grow-1"></DateTimePickerField>
+            <v-btn variant="tonal" height="40" class="text-none mt-2" @click="setNow(field)">Now</v-btn>
+          </div>
         </div>
       </section>
 
       <section class="detail-section">
         <h3 class="sect-label">Return</h3>
-        <div v-for="[field, label] in checkpointFields(['returned_office_at'])" :key="field" class="d-flex align-center gap-2 mb-3">
-          <DateTimePickerField v-model="tripLog.form[field]" type="datetime-local" :label="label" variant="outlined" density="comfortable" class="flex-grow-1"></DateTimePickerField>
-          <v-btn variant="tonal" size="small" class="text-none" @click="setNow(field)">Now</v-btn>
+        <div v-for="[field, label] in checkpointFields(['returned_office_at'])" :key="field" class="mb-3">
+          <label class="dd-field-label" :for="`trip-log-${field}`">{{ label }}</label>
+          <div class="d-flex align-start gap-2">
+            <DateTimePickerField v-model="tripLog.form[field]" type="datetime-local" :id="`trip-log-${field}`" variant="outlined" density="comfortable" class="flex-grow-1"></DateTimePickerField>
+            <v-btn variant="tonal" height="40" class="text-none mt-2" @click="setNow(field)">Now</v-btn>
+          </div>
         </div>
-        <v-text-field v-model="tripLog.form.odometer_end" type="number" min="0" label="Odometer on return" placeholder="10042" variant="outlined" density="comfortable"></v-text-field>
+        <label class="dd-field-label" for="trip-log-odometer-on-return">Odometer on return</label>
+        <v-text-field v-model="tripLog.form.odometer_end" type="number" min="0" id="trip-log-odometer-on-return" placeholder="10042" variant="outlined" density="comfortable"></v-text-field>
       </section>
 
       <!-- All three PEOPLE_FIELDS roles, same pattern as the new-record
@@ -519,67 +540,61 @@
            resolve. -->
       <section class="detail-section">
         <h3 class="sect-label">Crew</h3>
-        <div v-for="group in personnelGroups" :key="group.field" class="mb-3">
-          <div class="d-flex align-center justify-space-between mb-1">
-            <span class="text-caption font-weight-bold text-uppercase text-medium-emphasis">{{ group.label }}</span>
-            <v-btn
-              variant="outlined" color="primary"
-              size="small"
-              density="compact"
-              class="text-none"
-              prepend-icon="mdi-plus"
-              :disabled="tripLog.form[group.field].length >= group.max"
-              @click="addTripPerson(group.field)"
-            >
-              Add {{ group.singular }}
-            </v-btn>
+        <div v-for="group in personnelGroups" :key="group.field" class="mb-4">
+          <div v-for="(_n, idx) in tripLog.form[group.field]" :key="idx" class="mb-3">
+            <label class="dd-field-label" :for="`trip-log-${group.field}-${idx}`">{{ group.singular.charAt(0).toUpperCase() + group.singular.slice(1) }} {{ idx + 1 }}</label>
+            <div class="d-flex align-center gap-2">
+              <v-autocomplete
+                v-if="group.field === 'drivers'"
+                v-model="tripLog.form[group.field][idx]"
+                :items="driverOptionsFor(tripLog.form[group.field][idx])"
+                item-title="title"
+                item-value="value"
+                :id="`trip-log-${group.field}-${idx}`"
+                placeholder="Select a responder"
+                variant="outlined"
+                density="compact"
+                hide-details
+                clearable
+                class="flex-grow-1"
+              >
+                <template v-slot:item="{ item, props }">
+                  <v-list-item v-bind="props" :title="item.title" :subtitle="item.position"></v-list-item>
+                </template>
+              </v-autocomplete>
+              <ResponderCombobox
+                v-else-if="group.field === 'authorized_passengers'"
+                v-model="tripLog.form[group.field][idx]"
+                :items="passengerOptionsFor(tripLog.form.drivers)"
+                :id="`trip-log-${group.field}-${idx}`"
+                class="flex-grow-1"
+              />
+              <v-text-field
+                v-else
+                v-model="tripLog.form[group.field][idx]"
+                :id="`trip-log-${group.field}-${idx}`"
+                placeholder="Full name"
+                variant="outlined"
+                density="compact"
+                hide-details
+                class="flex-grow-1"
+              ></v-text-field>
+              <v-btn
+                v-if="idx > 0 || group.min < 1"
+                icon="mdi-close"
+                variant="outlined" color="error"
+                size="40"
+                rounded="lg"
+                :aria-label="`Remove ${group.singular} ${idx + 1}`"
+                @click="removeTripPerson(group.field, idx)"
+              ></v-btn>
+            </div>
           </div>
-          <div
-            v-for="(_n, idx) in tripLog.form[group.field]"
-            :key="idx"
-            class="d-flex align-center gap-2 mb-2"
-          >
-            <v-autocomplete
-              v-if="group.field === 'drivers'"
-              v-model="tripLog.form[group.field][idx]"
-              :items="driverOptionsFor(tripLog.form[group.field][idx])"
-              item-title="title"
-              item-value="value"
-              :label="`${group.singular} ${idx + 1}`"
-              placeholder="Select a responder"
-              variant="outlined"
-              density="compact"
-              hide-details
-              clearable
-            >
-              <template v-slot:item="{ item, props }">
-                <v-list-item v-bind="props" :title="item.title" :subtitle="item.position"></v-list-item>
-              </template>
-            </v-autocomplete>
-            <ResponderCombobox
-              v-else-if="group.field === 'authorized_passengers'"
-              v-model="tripLog.form[group.field][idx]"
-              :items="passengerOptionsFor(tripLog.form.drivers)"
-              :label="`${group.singular} ${idx + 1}`"
-            />
-            <v-text-field
-              v-else
-              v-model="tripLog.form[group.field][idx]"
-              :label="`${group.singular} ${idx + 1}`"
-              placeholder="Full name"
-              variant="outlined"
-              density="compact"
-              hide-details
-            ></v-text-field>
-            <v-btn
-              v-if="idx > 0 || group.min < 1"
-              icon="mdi-close"
-              variant="outlined" color="error"
-              size="small"
-              :aria-label="`Remove ${group.singular} ${idx + 1}`"
-              @click="removeTripPerson(group.field, idx)"
-            ></v-btn>
-          </div>
+          <v-btn
+            variant="text" color="primary-strong" density="comfortable" class="text-none font-weight-bold px-1"
+            :disabled="tripLog.form[group.field].length >= group.max"
+            @click="addTripPerson(group.field)"
+          >+ Add {{ group.singular }}</v-btn>
           <div v-if="tripLog.form[group.field].length >= group.max" class="text-caption text-medium-emphasis">
             Up to {{ group.max }} {{ group.label.toLowerCase() }}.
           </div>
@@ -588,7 +603,8 @@
 
       <section class="detail-section">
         <h3 class="sect-label">Notes</h3>
-        <v-textarea v-model="tripLog.form.others" label="Others" placeholder="Anything else worth recording about the trip" variant="outlined" density="comfortable" rows="2"></v-textarea>
+        <label class="dd-field-label" for="trip-log-others">Others</label>
+        <v-textarea v-model="tripLog.form.others" id="trip-log-others" placeholder="Anything else worth recording about the trip" variant="outlined" density="comfortable" rows="2"></v-textarea>
       </section>
 
       <template #footer>
@@ -623,6 +639,9 @@ import PersonCell from '@/components/PersonCell.vue'
 import DetailDrawer from '@/components/DetailDrawer.vue'
 import '@/components/detail-dialog.css'
 import ExportMenu from '@/components/ExportMenu.vue'
+import ListUpdateNotice from '@/components/ListUpdateNotice.vue'
+import { pulse, refreshPulse } from '@/composables/usePulse'
+import { pulseDiff } from '@/composables/pulseDiff'
 import { useSelection, transactionNo } from '@/composables/requestDisplay'
 import { manilaDateTime, manilaDay, manilaInputValue } from '@/composables/requestFields'
 import { matchesTransaction } from '@/composables/transactionSearch'
@@ -826,6 +845,14 @@ const fetchData = async () => {
     initialLoad.value = false
     reloading.value = false
   }
+}
+
+// Trip records written by other staff since the list loaded (see usePulse.ts).
+const tripUpdate = computed(() => pulseDiff(initialLoad.value ? undefined : pulse.value?.trips, items.value))
+const showNewTrips = async () => {
+  invalidate('/conduction-requests')
+  await fetchData()
+  refreshPulse()
 }
 
 const rowProps = ({ item }) => ({
