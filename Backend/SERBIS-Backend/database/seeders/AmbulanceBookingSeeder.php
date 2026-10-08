@@ -57,10 +57,10 @@ class AmbulanceBookingSeeder extends Seeder
             return;
         }
 
-        $amb01 = $units['AMB-01'];
-        $amb02 = $units['AMB-02'];
-        $amb03 = $units['AMB-03'];
-        $amb04 = $units['AMB-04'];
+        $amb01 = $units['Ambulance 1'];
+        $amb02 = $units['Ambulance 2'];
+        $amb03 = $units['Ambulance 3'];
+        $amb04 = $units['Ambulance 4'];
 
         // Bookings across all four units over the next 14 days — two apiece,
         // on days and hours that do not collide with any scenario below.
@@ -76,7 +76,7 @@ class AmbulanceBookingSeeder extends Seeder
         // A pair that would overlap if the check were wrong: the same day and
         // the same 2-hour window, but on two different units. If
         // AmbulanceAvailability ever compared windows without scoping to
-        // vehicle_id, booking AMB-02 here would wrongly exclude AMB-01 too.
+        // vehicle_id, booking Ambulance 2 here would wrongly exclude Ambulance 1 too.
         $this->booking($service, $amb01, 3, 9);
         $this->booking($service, $amb02, 3, 9);
 
@@ -88,7 +88,7 @@ class AmbulanceBookingSeeder extends Seeder
 
         // A few unscheduled requests — no window, so they cannot participate
         // in the overlap test at all. Two are plain unassigned walk-in calls;
-        // the third is AMB-04's own mid-trip run, dispatched immediately with
+        // the third is Ambulance 4's own mid-trip run, dispatched immediately with
         // no scheduled window, and is also the booking the mid-trip
         // ConductionRequest below links back to.
         ServiceRequest::factory()->unscheduled()->create([
@@ -115,8 +115,8 @@ class AmbulanceBookingSeeder extends Seeder
         ]);
 
         // Two conduction requests linked back to the booking they fulfil, one
-        // mid-trip and one completed — AMB-04's dispatch above for the first,
-        // a fresh today-scheduled booking on AMB-02 for the second, so the
+        // mid-trip and one completed — Ambulance 4's dispatch above for the first,
+        // a fresh today-scheduled booking on Ambulance 2 for the second, so the
         // completed trip's own vehicle is free to return to Available rather
         // than colliding with a unit this seeder already marks Dispatched or
         // Maintenance.

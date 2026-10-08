@@ -6,7 +6,7 @@
 -->
 <template>
   <div class="chart-grid">
-    <v-card elevation="0" class="dash-card chart-card">
+    <v-card v-if="history" elevation="0" class="dash-card chart-card">
       <div class="chart-head">
         <div>
           <div class="chart-title">Filed &amp; resolved</div>
@@ -61,7 +61,8 @@ import { useChartTheme, withAlpha } from '@/composables/useChartTheme'
 
 const props = defineProps({
   // Every service request: { filedAt, resolvedAt } in ms, resolvedAt null while open.
-  history: { type: Array, default: () => [] },
+  // null when the account cannot read requests: the chart is left out.
+  history: { type: Array, default: null },
   // Ranking per period from /admin/dashboard: { today|week|month|all: { services, items } }, each { labels, data }.
   top: { type: Object, default: null },
   loading: { type: Boolean, default: false },
@@ -78,8 +79,8 @@ const dayLabels = days.map((d) => d.toLocaleDateString('en-PH', { month: 'short'
 const dayTitles = days.map((d) => d.toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric' }))
 
 const flowSeries = computed(() => [
-  { label: 'Filed', data: countByDay(props.history.map((h) => h.filedAt), days) },
-  { label: 'Resolved', data: countByDay(props.history.map((h) => h.resolvedAt).filter(Boolean), days) },
+  { label: 'Filed', data: countByDay((props.history ?? []).map((h) => h.filedAt), days) },
+  { label: 'Resolved', data: countByDay((props.history ?? []).map((h) => h.resolvedAt).filter(Boolean), days) },
 ])
 // Filed is neutral load (slate); resolved is the good news, so it takes the brand
 // teal. The board's own hexes, so the legend swatches match the lines.

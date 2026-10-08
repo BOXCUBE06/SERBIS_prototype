@@ -415,6 +415,12 @@ const Map<String, (String, String)> _strings = {
     "You won't get flood or evacuation texts from MDRRMO.",
     'Hindi ka makakatanggap ng text tungkol sa baha o paglikas mula sa MDRRMO.',
   ),
+  // Shown while the switch is On but the account is still pending: blasts
+  // skip accounts MDRRMO has not activated.
+  'profile.sms_alerts_pending_note': (
+    'Text alerts start once MDRRMO activates your account.',
+    'Magsisimula ang mga text alert kapag na-activate na ng MDRRMO ang iyong account.',
+  ),
   'profile.offline_materials': ('Offline materials', 'Mga offline na materyal'),
   'profile.offline_materials_desc': ('{n} saved · {size} used', '{n} naka-save · {size} ang nagamit'),
   'profile.logout': ('Log out', 'Mag-log out'),
@@ -463,11 +469,6 @@ const Map<String, (String, String)> _strings = {
   'service.debris-removal.desc': (
     'Removal of hazardous debris from public areas.',
     'Pag-aalis ng mapanganib na debris sa mga pampublikong lugar.',
-  ),
-  'service.animal-rescue.name': ('Animal rescue', 'Pagsagip sa hayop'),
-  'service.animal-rescue.desc': (
-    'Rescue operations for stranded or injured animals.',
-    'Pagsagip sa mga naipit o nasugatang hayop.',
   ),
   'service.sandbagging.name': ('Sandbagging', 'Paglalagay ng sandbags'),
   'service.sandbagging.desc': (

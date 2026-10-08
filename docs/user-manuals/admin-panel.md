@@ -661,9 +661,10 @@ The hotlines appear in the app's Safety library and emergency bar.
 2. Click **Add staff account**.
 3. Type the name, username and mobile number.
 4. Type a temporary password twice. It needs at least 8 characters, with upper and lower case letters and a number.
-5. Click **Create account**.
-6. Give the temporary password to the person directly. Like a reset password, it works only until they set their own at first sign-in.
-7. A new account opens no pages. Give it access (see *Set what a staff member can open*).
+5. Under **Starting access**, leave **No sections**, or choose a template: **Communications** or **Operations** (see *Set what a staff member can open*).
+6. Click **Create account**.
+7. Give the temporary password to the person directly. Like a reset password, it works only until they set their own at first sign-in.
+8. With **No sections**, the new account opens no pages until you give it access.
 
 ![ADM-43](screenshots/raw/ADM-43.png)
 
@@ -675,9 +676,12 @@ The hotlines appear in the app's Safety library and emergency bar.
 ## Set what a staff member can open
 
 1. Click the account's **More actions** menu, then **Manage access**.
-2. Tick the pages they may open.
-3. Turn on **Super admin** only for full access, including Staff Accounts.
-4. Click **Save access**.
+2. To start from a template, click it under **Apply template**. It ticks that set of pages:
+   - **Communications**: Dashboard, Analytics, Accounts, Documents, Text Blast (SMS), Emergency Hotlines and Activity Logs.
+   - **Operations**: Dashboard, Analytics, Resident Requests, Ambulance Dispatch, Equipment Borrowing, Vehicles, Responders, Resource Management, Procurement Reference, Accounts, Manage Services, Service Audience, Service Vehicles and Activity Logs.
+3. Tick or untick pages as needed. A template only fills in the boxes, so you can still change them.
+4. Turn on **Super admin** only for full access, including Staff Accounts. No template includes Staff Accounts.
+5. Click **Save access**.
 
 ![ADM-44](screenshots/raw/ADM-44.png)
 

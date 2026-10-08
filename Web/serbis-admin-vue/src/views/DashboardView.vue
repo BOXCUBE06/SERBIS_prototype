@@ -123,7 +123,7 @@
 
     <!-- Everything open, one tab per kind of work. A row opens that request on
          its own page. Only open items; the full history lives on each page. -->
-    <section class="open-requests">
+    <section v-if="shownTabs.length > 0" class="open-requests">
       <div class="open-head">
         <div>
           <h2 class="open-title">Open requests</h2>
@@ -184,7 +184,8 @@
       </DataTablePage>
     </section>
 
-    <DashboardCharts :history="history" :top="top" :loading="loading" />
+    <!-- Filed & resolved is drawn from the request list: left out when the account cannot read it. -->
+    <DashboardCharts :history="readsServices ? history : null" :top="top" :loading="loading" />
 
   </v-container>
 </template>
@@ -211,6 +212,7 @@ const router = useRouter()
 // follow-up calls); this only decides whether the bell that shows them is worth
 // drawing at all.
 const { can } = useCurrentAdmin()
+const readsServices = computed(() => can('requests') || can('ambulance'))
 const showBell = computed(() => can('logs') || can('borrowings') || can('ambulance') || can('residents'))
 
 // From the pulse (usePulse.ts), which sends it only to an account holding Accounts.
@@ -243,10 +245,10 @@ const loadError = ref('')
 const loaded = reactive({ services: false, borrowings: false })
 
 const QUEUE_TABS = [
-  { value: 'services', title: 'Services', test: (r) => r.kind === 'service', hint: 'Resident requests still open, oldest first', empty: 'No open service requests', to: '/manage-requests', noun: 'services' },
-  { value: 'ambulance', title: 'Ambulance', test: (r) => r.kind === 'ambulance' && r.status !== 'Booked', hint: 'Ambulance dispatch requests not yet closed', empty: 'No active dispatch requests', to: '/conduction-requests', noun: 'requests' },
-  { value: 'bookings', title: 'Bookings', test: (r) => r.kind === 'ambulance' && r.status === 'Booked', hint: 'Scheduled ambulance bookings', empty: 'No scheduled bookings', to: '/conduction-requests', noun: 'bookings' },
-  { value: 'borrowing', title: 'Borrowing', test: (r) => r.kind === 'borrow', hint: 'Open equipment loans', empty: 'No open loans', to: '/borrowings', noun: 'loans' },
+  { value: 'services', section: 'requests', title: 'Services', test: (r) => r.kind === 'service', hint: 'Resident requests still open, oldest first', empty: 'No open service requests', to: '/manage-requests', noun: 'services' },
+  { value: 'ambulance', section: 'ambulance', title: 'Ambulance', test: (r) => r.kind === 'ambulance' && r.status !== 'Booked', hint: 'Ambulance dispatch requests not yet closed', empty: 'No active dispatch requests', to: '/conduction-requests', noun: 'requests' },
+  { value: 'bookings', section: 'ambulance', title: 'Bookings', test: (r) => r.kind === 'ambulance' && r.status === 'Booked', hint: 'Scheduled ambulance bookings', empty: 'No scheduled bookings', to: '/conduction-requests', noun: 'bookings' },
+  { value: 'borrowing', section: 'borrowings', title: 'Borrowing', test: (r) => r.kind === 'borrow', hint: 'Open equipment loans', empty: 'No open loans', to: '/borrowings', noun: 'loans' },
 ]
 const KIND_ICONS = { service: 'mdi-clipboard-text-outline', ambulance: 'mdi-ambulance', borrow: 'mdi-toolbox-outline' }
 const KIND_ROUTES = { service: '/manage-requests', ambulance: '/conduction-requests', borrow: '/borrowings' }
@@ -376,11 +378,16 @@ const fetchDashboardData = async () => {
   try {
     await Promise.all([
       get('/admin/dashboard', { onData: (body) => { src.dash = body; apply() } }),
-      pull('services', '/admin/service-requests', list),
-      pull('borrowings', '/borrowings', list),
-      pull('trips', '/conduction-requests', list),
+      // Only the lists this account's sections cover: the others would only
+      // come back 403 and read as a failure (a Communications account holds none).
+      readsServices.value ? pull('services', '/admin/service-requests', list) : null,
+      can('borrowings') ? pull('borrowings', '/borrowings', list) : null,
+      can('ambulance') ? pull('trips', '/conduction-requests', list) : null,
     ])
-    const missing = [!loaded.services && 'resident requests and ambulance bookings', !loaded.borrowings && 'equipment loans'].filter(Boolean)
+    const missing = [
+      readsServices.value && !loaded.services && 'resident requests and ambulance bookings',
+      can('borrowings') && !loaded.borrowings && 'equipment loans',
+    ].filter(Boolean)
     if (missing.length > 0) loadError.value = `Could not load ${missing.join(' or ')}. The list below is incomplete.`
   } catch (error) {
     console.error('Failed to load dashboard:', error)
@@ -388,11 +395,16 @@ const fetchDashboardData = async () => {
   }
 }
 
-const currentTab = computed(() => QUEUE_TABS.find((t) => t.value === queueTab.value))
+// The queue's tabs for the sections this account holds; none at all hides the table.
+const shownTabs = computed(() => QUEUE_TABS.filter((t) => can(t.section)))
+watch(shownTabs, (tabs) => {
+  if (tabs.length > 0 && !tabs.some((t) => t.value === queueTab.value)) queueTab.value = tabs[0].value
+}, { immediate: true })
+const currentTab = computed(() => shownTabs.value.find((t) => t.value === queueTab.value) ?? QUEUE_TABS[0])
 const tabCounts = computed(() => Object.fromEntries(QUEUE_TABS.map((t) => [t.value, rows.value.filter((r) => t.test(r)).length])))
 const visibleRows = computed(() => rows.value.filter((r) => currentTab.value.test(r)))
 // The shared table's tabs, with the counts it shows.
-const queueTabs = computed(() => QUEUE_TABS.map((t) => ({ value: t.value, label: t.title, count: tabCounts.value[t.value] })))
+const queueTabs = computed(() => shownTabs.value.map((t) => ({ value: t.value, label: t.title, count: tabCounts.value[t.value] })))
 const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
 
 // Each page opens the request itself from ?request=<id>.
@@ -410,7 +422,9 @@ const pendingAmbulance = computed(() => rows.value.filter((r) => r.kind === 'amb
 // Which cards this account gets, known before anything loads: the server always
 // sends units and responders; pending requests and overdue need their section. The
 // skeleton counts this, the real cards read it.
-const kpiShown = computed(() => ({ units: true, responders: true, pending: can('ambulance'), overdue: can('borrowings'), accounts: can('residents') }))
+// Units belong to Vehicles and Ambulance, responders to Responders: an account
+// holding none of those (Communications) does not get the cards.
+const kpiShown = computed(() => ({ units: can('vehicles') || can('ambulance'), responders: can('responders'), pending: can('ambulance'), overdue: can('borrowings'), accounts: can('residents') }))
 const kpiCount = computed(() => Object.values(kpiShown.value).filter(Boolean).length)
 
 // Number colour: red for a problem, amber for nothing left to send out.

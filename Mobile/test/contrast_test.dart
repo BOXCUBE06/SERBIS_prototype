@@ -88,7 +88,6 @@ void main() {
       'ambulance-medical-response',
       'road-clearing',
       'relief-goods-distribution',
-      'animal-rescue',
       'power-line-repair',
       'sandbagging',
       'drrm-trainings-and-seminars',

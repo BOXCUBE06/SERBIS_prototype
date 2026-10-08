@@ -271,6 +271,19 @@
             </div>
           </div>
 
+          <!-- A template only ticks boxes; they can still be changed before saving. -->
+          <div class="access-row">
+            <h3 class="access-label">Apply template</h3>
+            <div class="d-flex ga-2">
+              <button
+                v-for="t in ACCESS_TEMPLATES" :key="t.key"
+                type="button" class="access-clear" :disabled="accessDialog.superAdmin"
+                :aria-pressed="appliedTemplate === t.key"
+                @click="accessDialog.granted = [...t.sections]"
+              >{{ t.title }}</button>
+            </div>
+          </div>
+
           <div class="access-row">
             <h3 class="access-label">Sections this account can open</h3>
             <button type="button" class="access-clear" :disabled="accessDialog.superAdmin" @click="toggleAllSections">
@@ -388,7 +401,7 @@
 <script setup>
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { initials as computeInitials, pluralize } from '@/composables/adminUi'
-import { ASSIGNABLE_SECTIONS, SECTION_GROUPS } from '@/composables/adminSections'
+import { ACCESS_TEMPLATES, ASSIGNABLE_SECTIONS, SECTION_GROUPS } from '@/composables/adminSections'
 import { getToken } from '@/composables/authToken'
 import { useSaveFeedback } from '@/composables/useSaveFeedback'
 import {
@@ -490,6 +503,9 @@ const accessDialog = ref({ show: false, item: null, ids: [], mixed: false, loadi
 // Spinner / "Saved" on Save access, as in EditDialog.
 const { shown: accessShown, phase: accessPhase } = useSaveFeedback(() => accessDialog.value.show, () => accessDialog.value.loading, () => accessDialog.value.error)
 
+// The template the ticked boxes match exactly, if any.
+const appliedTemplate = computed(() => ACCESS_TEMPLATES.find((t) =>
+  t.sections.length === accessDialog.value.granted.length && t.sections.every((k) => accessDialog.value.granted.includes(k)))?.key ?? null)
 const allSectionsGranted = computed(() => accessDialog.value.granted.length === ASSIGNABLE_SECTIONS.length)
 
 const getHeaders = () => ({
@@ -557,6 +573,9 @@ const willChangePassword = computed(() => !!form.value.password || !!form.value.
 // The Add / Edit dialog's fields (labels and layout from the Edit/Add staff boards).
 // Staff sign in with the username; no email is collected. The mobile number is
 // where the sign-in code is texted when two-step sign-in is on.
+const TEMPLATE_ITEMS = [{ title: 'No sections', value: 'none' }, ...ACCESS_TEMPLATES.map((t) => ({ title: t.title, value: t.key }))]
+const templateSections = (key) => ACCESS_TEMPLATES.find((t) => t.key === key)?.sections ?? []
+
 const staffFields = computed(() => {
   const editing = modal.value.editing
   return [
@@ -574,6 +593,11 @@ const staffFields = computed(() => {
     { key: 'password', label: editing ? 'New password' : 'Password', required: !editing, half: true, type: 'password', autocomplete: 'new-password', rules: [passwordRequiredRule] },
     { key: 'password_confirmation', label: editing ? 'Confirm new password' : 'Confirm password', required: !editing, half: true, type: 'password', autocomplete: 'new-password', rules: [passwordConfirmRule] },
     ...(willChangePassword.value ? [{ key: 'signout', slot: true }] : []),
+    // Adding only: an access template ticks its sections on the new account.
+    ...(editing ? [] : [{
+      key: 'template', label: 'Starting access', items: TEMPLATE_ITEMS, itemTitle: 'title', itemValue: 'value',
+      hint: 'A template only sets the starting sections. Change them any time with Manage access.',
+    }]),
   ]
 })
 
@@ -630,7 +654,7 @@ const fetchAdmins = async () => {
 }
 
 const openAdd = () => {
-  form.value = { first_name: '', last_name: '', username: '', phone_number: '', password: '', password_confirmation: '' }
+  form.value = { first_name: '', last_name: '', username: '', phone_number: '', password: '', password_confirmation: '', template: 'none' }
   modal.value = { show: true, editing: false, loading: false, error: '', targetId: null }
   clearFieldErrors()
   formRef.value?.resetValidation()
@@ -674,6 +698,8 @@ const save = async () => {
     payload.password = form.value.password
     payload.password_confirmation = form.value.password_confirmation
   }
+  // A new account starts with its template's sections, or none.
+  if (!editing) payload.permissions = templateSections(form.value.template)
 
   modal.value.loading = true
   try {
@@ -1031,6 +1057,8 @@ onMounted(() => {
   cursor: pointer;
 }
 .access-clear:disabled { opacity: 0.45; cursor: default; }
+/* The template the boxes match now. */
+.access-clear[aria-pressed="true"] { background: rgba(var(--v-theme-primary), 0.14); border-color: rgba(var(--v-theme-primary), 0.45); }
 .access-group { margin: 0; padding: 0; border: 0; min-width: 0; }
 .access-group legend { padding: 0; margin-bottom: 8px; font-size: 13px; line-height: 18px; font-weight: 700; color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)); }
 .access-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; }

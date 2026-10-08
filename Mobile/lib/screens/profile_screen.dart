@@ -333,7 +333,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                 : _AlertsSwitch(value: widget.user.smsOptIn, onChanged: _setSmsOptIn),
                           ),
                           if (!widget.user.smsOptIn)
-                            _OffNote(text: tr(filipino, 'profile.sms_alerts_off_note')),
+                            _OffNote(text: tr(filipino, 'profile.sms_alerts_off_note'))
+                          else if (widget.user.isPendingActivation)
+                            _OffNote(text: tr(filipino, 'profile.sms_alerts_pending_note')),
                         ],
                       ),
                       _SettingsRow(

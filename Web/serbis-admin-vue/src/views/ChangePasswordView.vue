@@ -3,7 +3,7 @@
     <v-card class="change-card pa-6" rounded="xl" elevation="0">
       <h1 class="text-h5 font-weight-bold text-high-emphasis mb-2">Set a new password</h1>
       <p class="text-body-2 text-medium-emphasis mb-5">
-        Your password was reset by another admin. Choose a new one to continue.
+        Set your own password to continue.
       </p>
 
       <v-alert

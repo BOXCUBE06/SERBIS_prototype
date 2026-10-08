@@ -80,8 +80,12 @@ class AdminController extends Controller
             // Where the sign-in code goes once ADMIN_MFA_ENABLED is on.
             'phone_number' => ['required', 'string', 'max:20', 'regex:'.PhoneNumber::REGEX],
             'password' => ['required', 'string', 'confirmed', Password::min(8)->mixedCase()->numbers()],
+            // Optional starting access (the panel's access templates), checked
+            // exactly as the access endpoints check it.
+            ...self::permissionRules(),
         ], [
             'username.regex' => User::USERNAME_MESSAGE,
+            ...self::PERMISSION_MESSAGES,
         ]);
 
         // Assigned key by key, and `role` is not among the rules. It is set
@@ -98,12 +102,17 @@ class AdminController extends Controller
             'status' => 'Active',
         ]);
 
-        // No sections until a super admin grants some (updatePermissions). An
-        // empty list, not NULL: NULL is the unrestricted value every account
-        // that existed before permissions did keeps. Set before the first save
-        // so the account is never briefly open to everything, and so the
-        // creation is one row in the log rather than two.
-        $admin->permissions = [];
+        // No sections unless the request names some (an access template); a
+        // super admin grants more later (updatePermissions). An empty list, not
+        // NULL: NULL is the unrestricted value every account that existed
+        // before permissions did keeps. Set before the first save so the
+        // account is never briefly open to everything, and so the creation is
+        // one row in the log rather than two.
+        $admin->permissions = array_values(array_intersect(AdminSections::ASSIGNABLE, $validated['permissions'] ?? []));
+        // The password was typed by whoever made the account, so it is a
+        // temporary one, the same as after resetPassword: the owner replaces it
+        // at first sign-in before IsAdmin lets them further.
+        $admin->must_change_password = true;
         $admin->save();
 
         // Re-read, so the response carries the columns the database defaulted
@@ -299,16 +308,26 @@ class AdminController extends Controller
         return null;
     }
 
+    private const PERMISSION_MESSAGES = [
+        'permissions.*.in' => 'That is not a section that can be given to an account.',
+    ];
+
+    /** A list of sections that can be given out: Staff Accounts and unknown keys are refused. */
+    private static function permissionRules(): array
+    {
+        return [
+            'permissions' => ['sometimes', 'array'],
+            'permissions.*' => ['string', 'distinct', Rule::in(AdminSections::ASSIGNABLE)],
+        ];
+    }
+
     /** The access fields, validated; a 422 response when neither was sent. */
     private function validatePermissions(Request $request)
     {
         $validated = $request->validate([
             'is_super_admin' => ['sometimes', 'boolean'],
-            'permissions' => ['sometimes', 'array'],
-            'permissions.*' => ['string', 'distinct', Rule::in(AdminSections::ASSIGNABLE)],
-        ], [
-            'permissions.*.in' => 'That is not a section that can be given to an account.',
-        ]);
+            ...self::permissionRules(),
+        ], self::PERMISSION_MESSAGES);
 
         if (! array_key_exists('is_super_admin', $validated) && ! array_key_exists('permissions', $validated)) {
             return response()->json([
