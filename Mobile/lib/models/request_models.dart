@@ -351,8 +351,8 @@ ServiceFormKind formKindForServiceCode(String code) {
       return ServiceFormKind.drill;
     case 'mdrrmo-certification':
       return ServiceFormKind.certification;
-    // power-line-repair and animal-rescue have no guided form of their own and
-    // take the generic one, which is what the keyword matching resolved them
+    // power-line-repair has no guided form of its own and
+    // takes the generic one, which is what the keyword matching resolved it
     // to as well.
     default:
       return ServiceFormKind.generic;
@@ -378,8 +378,6 @@ IconData iconForServiceCode(String code) => badgeForServiceCode(code).icon;
       return (icon: Icons.delete_sweep_rounded, bg: AppColors.amber50, fg: AppColors.amber600);
     case 'relief-goods-distribution':
       return (icon: Icons.inventory_2_rounded, bg: AppColors.green50, fg: AppColors.green700);
-    case 'animal-rescue':
-      return (icon: Icons.pets_rounded, bg: const Color(0xFFEDE7F6), fg: const Color(0xFF6A1B9A));
     case 'power-line-repair':
       return (icon: Icons.bolt_rounded, bg: AppColors.amber50, fg: AppColors.amber600);
     case 'sandbagging':

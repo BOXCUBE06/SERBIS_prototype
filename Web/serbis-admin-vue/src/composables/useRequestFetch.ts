@@ -1,6 +1,8 @@
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import type { Ref } from 'vue'
 import { REFERENCE_TTL_MS, invalidate, useCachedFetch } from '@/composables/useCachedFetch'
+import { pulse, refreshPulse } from '@/composables/usePulse'
+import { pulseDiff } from '@/composables/pulseDiff'
 
 type Row = Record<string, any>
 
@@ -93,7 +95,12 @@ export function useRequestFetch({ isAmbulance, initialLoad, apiError, formData, 
     } catch (error) {
       if (!gone()) {console.error('Failed to fetch service requests:', error)}
     }
+    refreshPulse()
   }
 
-  return { requests, vehicles, residents, services, responders, listAbortController, refreshing, fetchData, fetchRequests, selectRequest }
+  // Requests filed elsewhere (the mobile app, another staff member) since the
+  // list loaded. The page shows a notice; its Show button is fetchRequests.
+  const listUpdate = computed(() => pulseDiff(initialLoad.value ? undefined : pulse.value?.[isAmbulance ? 'ambulance' : 'requests'], requests.value))
+
+  return { requests, vehicles, residents, services, responders, listAbortController, refreshing, fetchData, fetchRequests, selectRequest, listUpdate }
 }

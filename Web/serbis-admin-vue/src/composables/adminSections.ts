@@ -71,3 +71,25 @@ export const ASSIGNABLE_SECTIONS: AdminSection[] = ADMIN_SECTIONS.filter((s) => 
 export function sectionForPath(path: string): string | undefined {
   return ADMIN_SECTIONS.find((s) => s.to === path)?.key
 }
+
+/**
+ * Access templates: a ready-made set of sections a super admin can tick in one
+ * click, when adding an account or setting its access. They only pre-tick the
+ * boxes; the boxes can still be changed before saving, and the server checks
+ * every key as it always does. Not stored anywhere: what is saved is the list.
+ */
+export const ACCESS_TEMPLATES: { key: string; title: string; sections: string[] }[] = [
+  {
+    key: 'communications',
+    title: 'Communications',
+    sections: ['dashboard', 'analytics', 'residents', 'files', 'sms', 'hotlines', 'logs'],
+  },
+  {
+    key: 'operations',
+    title: 'Operations',
+    sections: [
+      'dashboard', 'analytics', 'requests', 'ambulance', 'borrowings', 'vehicles', 'responders',
+      'inventory', 'procurement', 'residents', 'services', 'service_audience', 'service_vehicles', 'logs',
+    ],
+  },
+]

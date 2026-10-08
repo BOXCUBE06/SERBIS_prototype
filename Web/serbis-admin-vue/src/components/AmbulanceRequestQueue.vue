@@ -2,6 +2,8 @@
   <v-container fluid class="dashboard-bg pa-0">
     <div class="d-flex flex-column w-100">
 
+      <ListUpdateNotice :update="listUpdate" @show="fetchRequests" />
+
       <DataTablePage
         :loading="initialLoad"
         :refreshing="refreshing"
@@ -69,6 +71,10 @@
             <StatusPill small :status="outcomeLabel(item.status || 'Pending', item.conduction_requests?.[0]?.no_arrival_reason)" />
             <span v-if="timelineLine(item)" class="text-caption" :class="timelineLine(item).class">{{ timelineLine(item).text }}</span>
           </div>
+        </template>
+
+        <template v-slot:item.created_at="{ item }">
+          <SubmittedCell :at="item.created_at" />
         </template>
 
         <template v-slot:item.scheduled_at="{ item }">
@@ -145,7 +151,19 @@
         </template>
 
         <template v-if="selectedRequest">
-          <v-alert v-if="apiError" type="error" variant="tonal" class="mb-4" density="compact" closable @click:close="apiError = ''">{{ apiError }}</v-alert>
+          <!-- The server's resolve refusal, item by item; any other error stays a plain alert. -->
+          <div v-if="resolveBlockers.length > 0" role="alert" class="dd-blocker">
+            <v-icon color="error" size="22" class="flex-shrink-0" aria-hidden="true">mdi-alert-circle-outline</v-icon>
+            <div class="flex-grow-1">
+              <div class="dd-blocker__title">Can't mark as resolved yet</div>
+              <div class="dd-blocker__body">{{ resolveBlockers.length === 1 ? '1 item is' : `${resolveBlockers.length} items are` }} missing from the trip record:</div>
+              <ul class="dd-blocker__body dd-blocker__list">
+                <li v-for="item in resolveBlockers" :key="item">{{ item }}</li>
+              </ul>
+            </div>
+            <v-btn icon="mdi-close" variant="text" size="small" density="comfortable" class="flex-shrink-0" aria-label="Dismiss" @click="apiError = ''"></v-btn>
+          </div>
+          <v-alert v-else-if="apiError" type="error" variant="tonal" class="mb-4" density="compact" closable @click:close="apiError = ''">{{ apiError }}</v-alert>
 
           <section class="detail-section">
             <h3 class="sect-label">Request</h3>
@@ -173,13 +191,22 @@
 
           <section v-if="selectedRequest.pickup_location || selectedRequest.landmark || selectedRequest.destination" class="detail-section">
             <h3 class="sect-label">Route</h3>
-            <dl class="kv">
-              <dt>Pickup</dt><dd>{{ selectedRequest.pickup_location || selectedRequest.landmark || NOT_RECORDED }}</dd>
-              <template v-if="selectedRequest.landmark && selectedRequest.pickup_location && !isLandmarkRedundant(selectedRequest.landmark, selectedRequest.pickup_location)">
-                <dt>Landmark</dt><dd>{{ selectedRequest.landmark }}</dd>
-              </template>
-              <dt>Destination</dt><dd>{{ selectedRequest.destination || NOT_RECORDED }}</dd>
-            </dl>
+            <div class="dd-route">
+              <span class="dd-route__mark dd-route__mark--start" aria-hidden="true"></span>
+              <div class="dd-route__stop--start">
+                <div class="dd-label">Pickup</div>
+                {{ selectedRequest.pickup_location || selectedRequest.landmark || NOT_RECORDED }}
+                <div
+                  v-if="selectedRequest.landmark && selectedRequest.pickup_location && !isLandmarkRedundant(selectedRequest.landmark, selectedRequest.pickup_location)"
+                  class="text-body-2 text-medium-emphasis"
+                >Landmark: {{ selectedRequest.landmark }}</div>
+              </div>
+              <span class="dd-route__mark dd-route__mark--end" aria-hidden="true"></span>
+              <div>
+                <div class="dd-label">Destination</div>
+                {{ selectedRequest.destination || NOT_RECORDED }}
+              </div>
+            </div>
           </section>
 
           <section v-if="selectedRequest.patient_name" class="detail-section">
@@ -241,8 +268,8 @@
           </section>
 
           <section class="detail-section">
-            <div class="d-flex justify-space-between align-center mb-2">
-              <h3 class="sect-label mb-0">Assignment</h3>
+            <div class="sect-head">
+              <h3 class="sect-label">Assignment</h3>
               <!-- Booked: the link in the heading. Pending has its button in the card. -->
               <v-btn
                 v-if="isBooked"
@@ -258,7 +285,7 @@
               <div class="assign-box">
                 <div class="assign-row">
                   <div class="min-width-0">
-                    <div class="text-caption text-medium-emphasis">Unit</div>
+                    <div class="dd-label">Unit</div>
                     <div :class="{ 'text-medium-emphasis': !assignedUnit }">
                       {{ assignedUnit ? `${vehicleName(assignedUnit)} · ${assignedUnit.type || 'Unit'}` : 'None assigned' }}
                     </div>
@@ -287,7 +314,23 @@
             </dl>
           </section>
 
-          <section class="detail-section">
+          <!-- Responding: what the server checks before it lets the request resolve. -->
+          <section v-if="selectedRequest.status === 'Responding'" class="detail-section">
+            <h3 class="sect-label">Needed to resolve</h3>
+            <div v-for="need in resolveNeeds" :key="need.label" class="dd-need">
+              <v-icon :color="need.value ? 'primary' : 'error'" size="20" aria-hidden="true">{{ need.value ? 'mdi-check-circle-outline' : 'mdi-alert-circle-outline' }}</v-icon>
+              <span class="dd-need__label">{{ need.label }}</span>
+              <span v-if="need.value" class="dd-need__value">{{ need.value }}</span>
+              <span v-else class="dd-missing">Missing</span>
+            </div>
+            <v-btn
+              v-if="respondingTrip"
+              variant="outlined" color="primary-strong" height="40" class="text-none font-weight-bold mt-3"
+              @click="emit('open-trip-record', respondingTrip.conduction_request_id)"
+            >Open trip record</v-btn>
+          </section>
+
+          <section v-else class="detail-section">
             <h3 class="sect-label">Trip record</h3>
             <v-alert v-if="respondingTrip" :type="tripRecordAlertType" variant="tonal" border="start" rounded="lg" density="compact">
               <div class="text-body-2 font-weight-bold">
@@ -476,29 +519,32 @@
             v-if="rescheduleDialog.error"
             type="error" variant="tonal" density="compact" class="mb-4"
           >{{ rescheduleDialog.error }}</v-alert>
+          <label class="dd-field-label" for="reschedule-starts">Starts</label>
           <DateTimePickerField
             :model-value="rescheduleDialog.form.scheduled_at"
             type="datetime-local"
-            label="Starts"
+            id="reschedule-starts"
             variant="outlined"
             density="comfortable"
             class="mb-3"
             :error-messages="rescheduleDialog.errors.scheduled_at"
             @update:model-value="setRescheduleStart"
           ></DateTimePickerField>
+          <label class="dd-field-label" for="reschedule-ends">Ends</label>
           <DateTimePickerField
             v-model="rescheduleDialog.form.scheduled_end"
             type="datetime-local"
-            label="Ends"
+            id="reschedule-ends"
             variant="outlined"
             density="comfortable"
             class="mb-3"
             :error-messages="rescheduleDialog.errors.scheduled_end"
             @update:model-value="rescheduleDialog.errors.scheduled_end = ''"
           ></DateTimePickerField>
+          <label class="dd-field-label" for="reschedule-reason">Reason for the change</label>
           <v-textarea
             v-model="rescheduleDialog.form.remarks"
-            label="Reason for the change"
+            id="reschedule-reason"
             placeholder="The Head of the Family sees this message"
             hint="Required. The Head of the Family sees this and the activity log records it."
             persistent-hint
@@ -728,7 +774,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getToken } from '@/composables/authToken'
-import { outcomeLabel, isBookingOverdue, bookingCountdownLabel, pendingWaitLabel, openWaitDays, waitTone, authHeaders, pluralize } from '@/composables/adminUi'
+import { outcomeLabel, isBookingOverdue, bookingCountdownLabel, openWaitDays, waitTone, authHeaders, pluralize } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
 import AmbulanceScheduleDialog from '@/components/AmbulanceScheduleDialog.vue'
@@ -741,9 +787,12 @@ import '@/components/detail-dialog.css'
 import RequestFiltersBar from '@/components/RequestFiltersBar.vue'
 import ExportMenu from '@/components/ExportMenu.vue'
 import BulkSelectionBar from '@/components/BulkSelectionBar.vue'
-import { requesterName, isWalkIn, requesterInitials, requesterPhone, requesterBarangay, vehicleName, vehicleIcon, getVehicleNameById, useDescriptionLines, useSelection, transactionNo } from '@/composables/requestDisplay'
+import { requesterName, isWalkIn, requesterInitials, requesterPhone, requesterBarangay, requestBarangayName, roleFromBarangay, vehicleName, vehicleIcon, getVehicleNameById, useDescriptionLines, useSelection, transactionNo } from '@/composables/requestDisplay'
 import { useRequestAttachments } from '@/composables/useRequestAttachments'
 import { useRequestFetch, AMBULANCE_SERVICE_CODE, itemId } from '@/composables/useRequestFetch'
+import ListUpdateNotice from '@/components/ListUpdateNotice.vue'
+import SubmittedCell from '@/components/SubmittedCell.vue'
+import { waitNote } from '@/composables/submittedTime'
 import { useFilteredRequestList } from '@/composables/useFilteredRequestList'
 import { useUpdateStatus } from '@/composables/useUpdateStatus'
 import { useResolveDialog } from '@/composables/useResolveDialog'
@@ -865,7 +914,7 @@ const checkWalkInAvailability = async () => {
 const { attachments, lightbox, lightboxAttachment, openLightbox, loadAttachments, releaseAttachments } =
   useRequestAttachments(selectedRequest, { itemId, getHeaders })
 
-const { requests, vehicles, residents, services, listAbortController, refreshing, fetchData, fetchRequests, selectRequest } =
+const { requests, vehicles, residents, services, listAbortController, refreshing, fetchData, fetchRequests, selectRequest, listUpdate } =
   useRequestFetch({ isAmbulance: true, initialLoad, apiError, formData, selectedRequest, loadAttachments })
 
 const reasonDialog = ref(emptyReasonDialog())
@@ -970,6 +1019,30 @@ const NO_TRIP_TEXT = {
   Disapproved: 'Closed before a trip was started.',
   Cancelled: 'Closed before a trip was started.',
 }
+// Each line of the server's refusal, "Cannot resolve — missing arrival time
+// (or a reason it never arrived), a driver." (ServiceRequestController), as the
+// board words it. An unrecognised item is shown as sent.
+const RESOLVE_ITEM_LABELS = {
+  'arrival time (or a reason it never arrived)': 'Arrival time, or the reason it never arrived',
+  'a driver': 'Driver',
+}
+const resolveBlockers = computed(() => {
+  const m = /^Cannot resolve — missing (.+)\.$/.exec(apiError.value || '')
+  if (!m) return []
+  return m[1].split(', ').map((item) => RESOLVE_ITEM_LABELS[item]
+    ?? (item.startsWith('a trip record') ? 'Trip record. Approve the dispatch again to create one' : item.charAt(0).toUpperCase() + item.slice(1)))
+})
+// The same checks, read off the record, so staff see them before trying.
+const resolveNeeds = computed(() => {
+  const t = respondingTrip.value
+  const arrival = t?.arrived_destination_at ? `Arrived ${shortDateTime(t.arrived_destination_at)}` : (t?.no_arrival_reason ? 'Did not arrive' : '')
+  return [
+    ...(t ? [] : [{ label: 'Trip record', value: '' }]),
+    { label: 'Arrival time, or why it never arrived', value: arrival },
+    { label: 'Driver', value: tripDriverNames.value },
+    { label: 'Unit assigned', value: assignedUnit.value ? vehicleName(assignedUnit.value) : '' },
+  ]
+})
 const noTripText = computed(() => NO_TRIP_TEXT[selectedRequest.value?.status] || 'No trip record yet. One is created when you dispatch.')
 
 const isBooked = computed(() => selectedRequest.value?.status === 'Booked')
@@ -980,7 +1053,7 @@ const needsUnitToDispatch = computed(() =>
 const drawerSecondary = computed(() => {
   const r = selectedRequest.value
   if (!r) return ''
-  return isWalkIn(r) ? 'No account' : `Requester · ${requesterBarangay(r)}`
+  return isWalkIn(r) ? 'No account' : roleFromBarangay('Requester', requestBarangayName(r))
 })
 
 // The one line under the status pill in the drawer.
@@ -1003,10 +1076,11 @@ const statusLine = computed(() => {
   return r.resolved_at ? { text: `${status} ${shortDateTime(r.resolved_at)}`, class: null } : none
 })
 
-// The same idea for a list row: the wait while Pending, the countdown while Booked.
+// Only what the Submitted column cannot say: a Pending row left more than two
+// days (amber), or a Booked row's countdown.
 const timelineLine = (item) => {
-  const wait = pendingWaitLabel(item.status, item.created_at)
-  if (wait) return { text: wait, class: WAIT_CLASS[waitTone(openWaitDays(item.status, item.created_at) ?? 0)] }
+  const wait = waitNote(item.status, item.created_at)
+  if (wait) return { text: wait, class: 'text-warning-strong' }
   const eta = bookingCountdownLabel(item.status, item.scheduled_at, item.approved_at)
   return eta ? { text: eta, class: isBookingOverdue(item.status, item.scheduled_at) ? 'text-error' : 'text-medium-emphasis' } : null
 }
@@ -1055,6 +1129,7 @@ const tableHeaders = computed(() => {
     { title: 'Txn no.', key: 'request_id', width: 10, minWidth: '150px' },
     { title: 'Patient', key: 'patient_name', width: 12 },
     { title: 'Requester', key: '_requesterName', width: 16 },
+    { title: 'Submitted', key: 'created_at', width: 12 },
     { title: 'Barangay', key: '_secondary', width: 11 },
     { title: 'Scheduled', key: 'scheduled_at', width: 15 },
     { title: 'Unit', key: '_unit', width: 9, sortable: false },

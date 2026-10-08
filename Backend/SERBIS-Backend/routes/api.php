@@ -17,6 +17,7 @@ use App\Http\Controllers\InfoMaterialController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\PhoneChangeController;
 use App\Http\Controllers\ProcurementReferenceController;
+use App\Http\Controllers\PulseController;
 use App\Http\Controllers\ResidentController;
 use App\Http\Controllers\ResponderController;
 use App\Http\Controllers\ServiceAudienceController;
@@ -201,6 +202,10 @@ Route::middleware(['auth:sanctum', 'is.admin', 'throttle:admin-api'])->group(fun
     });
 
     Route::get('/admin/dashboard', [AnalyticsController::class, 'index'])->middleware('section:dashboard');
+    // What the panel polls to notice a change without refetching the lists.
+    // Open to any section it reports on; the controller returns only those.
+    Route::get('/admin/pulse', PulseController::class)
+        ->middleware('section:dashboard,requests,ambulance,borrowings,residents');
     // The retrospective page. This path existed once against a method that
     // never did and 500'd on every call; it now points at real code. Same
     // admin-only group as the dashboard.

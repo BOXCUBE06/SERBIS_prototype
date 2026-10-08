@@ -25,7 +25,7 @@
       <template v-else>
         <header class="dd-header">
           <div class="d-flex align-center justify-space-between">
-            <div class="sect-label mb-0">{{ eyebrow }}</div>
+            <div class="dd-eyebrow">{{ eyebrow }}</div>
             <div class="d-flex ga-2">
               <slot name="actions" />
               <v-btn icon="mdi-close" variant="tonal" size="36" rounded="lg" aria-label="Close" @click="$emit('update:modelValue', false)"></v-btn>
@@ -100,6 +100,15 @@ const { width } = useDisplay()
   border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.12);
 }
 .dd-name { font-size: 1.17rem; line-height: 28px; font-weight: 600; }
+/* The drawer type above the name ("Service request"). */
+.dd-eyebrow {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(var(--v-theme-primary-strong));
+}
 .dd-body {
   flex: 1 1 auto;
   min-height: 0;

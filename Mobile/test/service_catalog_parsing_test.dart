@@ -137,10 +137,10 @@ void main() {
 
     test('a name that reads like another service does not borrow its form', () {
       // The mirror of the case above: the name says ambulance, the code says
-      // animal rescue, and the code wins.
+      // power line repair, and the code wins.
       final item = ServiceCatalogItem.fromJson(<String, dynamic>{
         'service_id': 9,
-        'code': 'animal-rescue',
+        'code': 'power-line-repair',
         'service_name': 'Animal Ambulance and Medical Transfer',
       });
 

@@ -111,7 +111,7 @@ class DemoSeeder extends Seeder
         ['road-clearing', 'Resolved', 50], ['road-clearing', 'Resolved', 33], ['road-clearing', 'Resolved', 12], ['road-clearing', 'Disapproved', 44], ['road-clearing', 'Cancelled', 20],
         ['debris-removal', 'Resolved', 47], ['debris-removal', 'Resolved', 26], ['debris-removal', 'Resolved', 9], ['debris-removal', 'Cancelled', 15],
         ['sandbagging', 'Resolved', 38], ['sandbagging', 'Resolved', 17], ['sandbagging', 'Resolved', 5], ['sandbagging', 'Disapproved', 24],
-        ['animal-rescue', 'Resolved', 31], ['animal-rescue', 'Resolved', 8],
+        ['sandbagging', 'Resolved', 31], ['debris-removal', 'Resolved', 8],
         ['power-line-repair', 'Resolved', 19], ['power-line-repair', 'Resolved', 4],
         ['drrm-trainings-and-seminars', 'Resolved', 45], ['drrm-trainings-and-seminars', 'Resolved', 30], ['drrm-trainings-and-seminars', 'Disapproved', 21],
         ['drrm-trainings-and-seminars', 'Pending', 2], ['drrm-trainings-and-seminars', 'Booked', 4],
@@ -125,7 +125,6 @@ class DemoSeeder extends Seeder
         'road-clearing' => ['Fallen acacia tree blocking the barangay road after the storm.', 'Landslide debris on the feeder road to the farm lots.'],
         'debris-removal' => ['Fallen branches and roofing sheets piled beside the school gate.', 'Clogged canal debris after heavy rain, needs hauling.'],
         'sandbagging' => ['Sandbags needed along the creek bank before the rainy season.', 'Riverbank section eroding near the purok, needs sandbagging.'],
-        'animal-rescue' => ['Carabao stuck in a muddy irrigation canal.', 'Stray dog trapped in a drainage culvert.'],
         'power-line-repair' => ['Sagging power line over the road after the storm.', 'Line hanging low near the covered court.'],
         'drrm-trainings-and-seminars' => ['Basic DRRM seminar for our members.', 'First aid and basic life support training request.'],
         'simulation-drills-nsed' => ['Earthquake drill (NSED) for our school and barangay.', 'Fire and evacuation simulation drill request.'],
@@ -143,15 +142,16 @@ class DemoSeeder extends Seeder
         'Megaphone' => [1, 2, 'i', ['Clean-up drive', 'Barangay assembly', 'Sports fest']],
         'Rescue Boat' => [1, 1, 'i', ['Flood-response drill', 'Water rescue training']],
         'First Aid Kit' => [2, 4, 'i', ['Sports fest', 'Medical mission', 'School field trip']],
-        'Wheelchair' => [1, 1, 'h', ['Post-surgery recovery at home', 'Elderly relative visiting']],
-        'Crutches (pair)' => [1, 2, 'h', ['Fractured ankle recovery']],
-        'Walker' => [1, 1, 'h', ['Recovering grandparent']],
-        'Hospital Bed' => [1, 1, 'h', ['Bedridden family member']],
-        'Oxygen Tank' => [1, 2, 'h', ['Patient with COPD at home']],
-        'Nebulizer' => [1, 1, 'h', ['Child with asthma']],
+        // Items from EquipmentSeeder's catalogue.
+        'Wheel Chair' => [1, 1, 'h', ['Post-surgery recovery at home', 'Elderly relative visiting']],
+        'Cot Bed' => [1, 4, 'h', ['Family staying at the evacuation center', 'Relatives visiting for the wake']],
+        'Modular Tent' => [1, 2, 'hi', ['Wake (burol)', 'Barangay fiesta']],
+        'Water Purifier' => [1, 1, 'hi', ['Deep well water after the flood']],
+        'Generator Set' => [1, 1, 'i', ['Medical mission', 'Power outage at the barangay hall']],
     ];
 
-    private const NEW_EQUIPMENT = ['Tent (10x10)' => 12, 'Monobloc Chair' => 200, 'Generator (5 kVA)' => 3, 'Megaphone' => 4, 'Rescue Boat' => 2, 'First Aid Kit' => 15];
+    // Extra demo-only items; anything already in EquipmentSeeder is left out (item_name is unique).
+    private const NEW_EQUIPMENT = ['Tent (10x10)' => 12, 'Monobloc Chair' => 200, 'Generator (5 kVA)' => 3, 'Rescue Boat' => 2, 'First Aid Kit' => 15];
 
     private CarbonImmutable $now;
 
@@ -354,7 +354,6 @@ class DemoSeeder extends Seeder
     {
         $ids = DB::table('tbl_services')->pluck('service_id', 'code');
         $audience = DB::table('tbl_service_audience')->get()->groupBy('service_code')->map->pluck('account_type');
-        $rescueTypes = ['animal-rescue' => ['Rescue Vehicle', 'Boat']];
 
         foreach (self::SERVICE_PLAN as [$code, $status, $ago]) {
             $filerId = $this->filer($audience[$code]->all());
@@ -375,7 +374,7 @@ class DemoSeeder extends Seeder
                 'valid_id' => $isProgram ? null : self::PLACEHOLDER,
                 'letter' => $isProgram ? self::PLACEHOLDER : null,
                 'preferred_date' => $pref?->setTimezone(self::TZ)->toDateString(),
-                'landmark' => in_array($code, ['road-clearing', 'debris-removal', 'sandbagging', 'animal-rescue', 'power-line-repair'], true) ? self::LANDMARKS[array_rand(self::LANDMARKS)] : null,
+                'landmark' => in_array($code, ['road-clearing', 'debris-removal', 'sandbagging', 'power-line-repair'], true) ? self::LANDMARKS[array_rand(self::LANDMARKS)] : null,
                 'created_at' => $created, 'updated_at' => $created];
             if ($code === 'relief-goods-distribution') {
                 $req += ['fulfillment_method' => 'Delivery', 'delivery_address' => 'Barangay Hall, '.self::BARANGAYS[$filer['brgy']].', '.self::TOWN];
@@ -393,7 +392,7 @@ class DemoSeeder extends Seeder
                 $resolved = $hasDate ? $pref->setTimezone(self::TZ)->setTime(17, 0)->utc() : $first->addHours(mt_rand(6, 40));
                 $vehicleId = null;
                 if (! $isProgram && $code !== 'mdrrmo-certification') {
-                    $vehicleId = $this->claim($rescueTypes[$code] ?? ['Rescue Vehicle'], $resolved->subHours($code === 'others' ? 10 : 4), $resolved);
+                    $vehicleId = $this->claim(['Rescue Vehicle'], $resolved->subHours($code === 'others' ? 10 : 4), $resolved);
                 }
                 $req += ['processed_by' => $processedBy, 'vehicle_id' => $vehicleId, 'first_responded_at' => $first, 'resolved_at' => $resolved, 'updated_at' => $resolved];
                 $steps = [

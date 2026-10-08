@@ -79,6 +79,8 @@ class AdminAccountTest extends TestCase
         $created = User::where('username', 'grace')->first();
         $this->assertNotNull($created);
         $this->assertTrue(Hash::check('Password123', $created->password));
+        // Typed by the creator, so temporary: replaced at first sign-in, like a reset.
+        $this->assertTrue($created->must_change_password);
 
         // The hash must never be serialised, whatever the client asked for.
         $response->assertJsonMissingPath('password');
@@ -427,6 +429,8 @@ class AdminAccountTest extends TestCase
         $this->assertSame($this->admin->admin_id, (int) $log->admin_id);
         // The log is rendered on the Logs page. A password hash must not be in
         // it, whatever the trait's default ignore list happens to say later.
-        $this->assertStringNotContainsString('password', (string) $log->new_values);
+        // (must_change_password may appear: it is a flag, not a secret.)
+        $this->assertArrayNotHasKey('password', json_decode((string) $log->new_values, true));
+        $this->assertStringNotContainsString($created->password, (string) $log->new_values);
     }
 }

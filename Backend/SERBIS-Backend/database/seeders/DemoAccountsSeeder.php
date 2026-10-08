@@ -65,12 +65,12 @@ class DemoAccountsSeeder extends Seeder
         [[self::AMBULANCE, 'Pending', 2, null], ['road-clearing', 'Pending', 14, null], ['relief-goods-distribution', 'Resolved', 30, null]],
         [[self::AMBULANCE, 'Booked', 1, 3], ['sandbagging', 'Responding', 3, null], ['drrm-trainings-and-seminars', 'Pending', 9, null]],
         [[self::AMBULANCE, 'Responding', 2, 0], ['relief-goods-distribution', 'Disapproved', 40, null], ['power-line-repair', 'Cancelled', 20, null]],
-        [[self::AMBULANCE, 'Resolved', 12, -10], ['debris-removal', 'Pending', 5, null], ['simulation-drills-nsed', 'Resolved', 55, null], ['animal-rescue', 'Responding', 6, null]],
+        [[self::AMBULANCE, 'Resolved', 12, -10], ['debris-removal', 'Pending', 5, null], ['simulation-drills-nsed', 'Resolved', 55, null], ['road-clearing', 'Responding', 6, null]],
         [[self::AMBULANCE, 'Disapproved', 8, -5], [self::AMBULANCE, 'Cancelled', 4, 6], ['relief-goods-distribution', 'Pending', 25, null]],
         [[self::AMBULANCE, 'Booked', 2, 10], ['road-clearing', 'Resolved', 45, null], ['mdrrmo-certification', 'Pending', 18, null]],
         [['drrm-trainings-and-seminars', 'Resolved', 35, null], ['sandbagging', 'Cancelled', 11, null], [self::AMBULANCE, 'Pending', 0, null]],
         [['simulation-drills-nsed', 'Disapproved', 28, null], ['power-line-repair', 'Pending', 7, null], [self::AMBULANCE, 'Resolved', 50, -48]],
-        [['debris-removal', 'Disapproved', 16, null], ['animal-rescue', 'Cancelled', 22, null], [null, 'Pending', 3, null]],
+        [['debris-removal', 'Disapproved', 16, null], ['road-clearing', 'Cancelled', 22, null], [null, 'Pending', 3, null]],
         [['mdrrmo-certification', 'Resolved', 58, null], ['road-clearing', 'Responding', 4, null], [self::AMBULANCE, 'Cancelled', 13, 5]],
     ];
 
@@ -96,7 +96,7 @@ class DemoAccountsSeeder extends Seeder
 
         $barangays = Barangay::whereIn('barangay_name', self::BARANGAYS)->get()->keyBy('barangay_name');
         $services = Service::pluck('service_id', 'code');
-        $ambulances = Vehicle::where('type', 'Ambulance')->orderBy('vehicle_id')->skip(2)->take(2)->get(); // AMB-03, AMB-04
+        $ambulances = Vehicle::where('type', 'Ambulance')->orderBy('vehicle_id')->skip(2)->take(2)->get(); // the third and fourth ambulance
         $rescue = Vehicle::where('type', 'Rescue Vehicle')->orderBy('vehicle_id')->take(2)->get();
         $responders = Responder::orderBy('responder_id')->take(6)->get();
 

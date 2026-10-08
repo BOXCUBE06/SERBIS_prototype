@@ -87,6 +87,11 @@ class AppUser {
   /// same status can file, so this is specific to organizations.
   bool get isAwaitingApproval => isOrganization && status.toLowerCase() == 'inactive';
 
+  /// Any self-registered account MDRRMO has not activated yet. Text blasts go
+  /// only to Active accounts (SmsController::resolveRecipients), so the profile
+  /// says so under the alerts switch.
+  bool get isPendingActivation => status.toLowerCase() == 'inactive';
+
   /// Who this account is, for the top of the home screen: the organization's
   /// name, "Barangay <name>" for a barangay hall, or the person's own name.
   String get accountName {

@@ -27,3 +27,122 @@
   border-top: 1px solid rgba(var(--v-theme-on-surface), 0.12);
   background: rgb(var(--v-theme-surface));
 }
+
+/* Detail drawers (canvas boards "Drawers v2"). Scoped to .detail-drawer so the
+   other readers of .kv and .sect-label (ExportDialog, the detail modals) keep
+   their own look. Light values are the board's; dark falls back to theme text. */
+.detail-drawer {
+  --dd-heading: #0a2620;
+  --dd-ink: rgba(var(--v-theme-on-surface), 0.87);
+  --dd-label: rgba(var(--v-theme-on-surface), 0.62);
+  --dd-blocker-title: #7a1d16;
+  --dd-blocker-body: #5c1611;
+}
+.v-theme--dark.detail-drawer,
+.v-theme--dark .detail-drawer {
+  --dd-heading: rgb(var(--v-theme-on-surface));
+  --dd-blocker-title: rgb(var(--v-theme-error-strong));
+  --dd-blocker-body: rgb(var(--v-theme-on-surface));
+}
+.detail-drawer .sect-label {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--dd-heading);
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.14);
+  margin: 0 0 12px;
+}
+/* A heading with an action beside it (Assignment's Reassign): the rule moves to the row. */
+.detail-drawer .sect-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.14);
+  margin-bottom: 12px;
+}
+.detail-drawer .sect-head .sect-label { padding: 0; border: 0; margin: 0; }
+.detail-drawer .kv {
+  grid-template-columns: 128px 1fr;
+  gap: 0 16px;
+  font-size: 15px;
+  line-height: 22px;
+}
+.detail-drawer .kv > dt,
+.detail-drawer .kv > dd {
+  padding: 9px 0;
+  border-top: 1px solid rgba(var(--v-theme-on-surface), 0.07);
+}
+.detail-drawer .kv > dt:first-of-type,
+.detail-drawer .kv > dt:first-of-type + dd { border-top: 0; }
+.detail-drawer .kv > dt {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+  color: var(--dd-label);
+  padding-top: 10px;
+}
+.detail-drawer .kv > dd { font-weight: 500; color: var(--dd-ink); }
+/* Small labels inside cards (Pickup, Responders, Unit, Linked booking): the row label. */
+.dd-label { font-size: 13px; line-height: 20px; font-weight: 600; color: var(--dd-label, rgba(var(--v-theme-on-surface), 0.62)); }
+/* A form field's label, above the field rather than floating inside it. */
+.dd-field-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+  color: rgba(var(--v-theme-on-surface), 0.75);
+}
+/* Pickup to destination: a filled dot, a line, a ring. */
+.dd-route { display: grid; grid-template-columns: 20px 1fr; gap: 0 12px; font-size: 15px; line-height: 22px; }
+.dd-route__mark { display: flex; flex-direction: column; align-items: center; padding-top: 5px; }
+.dd-route__mark::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  box-sizing: border-box;
+  background: rgb(var(--v-theme-primary));
+}
+.dd-route__mark--start::after { content: ''; flex: 1; width: 2px; margin: 2px 0; background: rgba(var(--v-theme-on-surface), 0.14); }
+.dd-route__mark--end::before { background: none; border: 2px solid rgb(var(--v-theme-primary)); }
+.dd-route__stop--start { padding-bottom: 14px; }
+/* Trip timeline: one row per checkpoint, the time on the right. */
+.dd-timeline-row { display: grid; grid-template-columns: 20px 1fr auto; gap: 12px; align-items: center; padding: 6px 0; font-size: 15px; }
+.dd-timeline-dot { width: 12px; height: 12px; border-radius: 50%; box-sizing: border-box; border: 2px solid rgba(var(--v-theme-on-surface), 0.25); }
+.dd-timeline-dot--done { border: 0; background: rgb(var(--v-theme-primary)); }
+.dd-timeline-dot--warning { border: 0; background: rgb(var(--v-theme-warning)); }
+.dd-timeline-time { font-size: 14px; color: rgba(var(--v-theme-on-surface), 0.6); }
+/* "Can't mark as resolved yet": what the server refused, item by item. */
+.dd-blocker {
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  margin-bottom: 28px;
+  border-radius: 12px;
+  background: rgba(211, 47, 47, 0.08);
+  border: 1px solid rgba(211, 47, 47, 0.28);
+  border-left: 4px solid rgb(var(--v-theme-error));
+}
+.dd-blocker__title { font-size: 15px; line-height: 22px; font-weight: 700; color: var(--dd-blocker-title); }
+.dd-blocker__body { font-size: 14px; line-height: 20px; color: var(--dd-blocker-body); }
+.dd-blocker__list { margin: 6px 0 0; padding-left: 18px; font-weight: 600; }
+.dd-blocker__list li { margin: 2px 0; }
+/* "Needed to resolve": a check or an alert per requirement. */
+.dd-need { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid rgba(var(--v-theme-on-surface), 0.07); }
+.dd-need:first-child { border-top: 0; }
+.dd-need__label { flex: 1; font-size: 15px; line-height: 22px; font-weight: 600; }
+.dd-need__value { font-size: 13px; line-height: 20px; font-weight: 600; color: rgb(var(--v-theme-primary-strong)); text-align: right; }
+.dd-missing {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(211, 47, 47, 0.12);
+  color: rgb(var(--v-theme-error-strong));
+}
+.dd-timeline-note { padding-left: 32px; margin-top: -4px; }

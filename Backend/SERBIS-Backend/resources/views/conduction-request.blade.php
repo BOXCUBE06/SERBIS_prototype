@@ -1,11 +1,12 @@
 {{--
-    MDRRMO Conduction Request Form — printable letterhead.
+    MDRRMO Conduction Request Form — printable, A4 portrait, one page.
 
-    The letterhead is type only. An earlier draft reserved two 28mm boxes for
-    seal images that were never produced, which printed as empty space either
-    side of the heading. The boxes are gone rather than left waiting: the type
-    is centred on the page by text-align, so it sits in the same place it
-    always did and now has the full measure to wrap in.
+    Laid out as label/value grids like the office's paper form. Only fields the
+    system already records are printed; nothing is added for layout's sake.
+
+    Logos live in the admin panel's public/logos/ and are loaded from the
+    page's own origin: the panel opens this HTML as a blob, which inherits the
+    panel's origin. Printing waits until each logo loads or fails.
 --}}
 <!DOCTYPE html>
 <html lang="en">
@@ -13,266 +14,127 @@
     <meta charset="utf-8">
     <title>Conduction Request Form</title>
     <style>
-        /* A4 rather than Letter: the office prints on A4, and a fixed page
-           size keeps every millimetre dimension in this sheet true instead of
-           scaling with the viewport. */
-        @page {
-            size: A4;
-            margin: 18mm 16mm;
-        }
+        @page { size: A4 portrait; margin: 12mm; }
+
+        * { box-sizing: border-box; }
 
         html {
-            /* Screen preview only. @page owns the real printed margins; this
-               is what makes the white sheet read as a sheet on screen. */
-            background: #f4f4f5;
+            background: #fff;
+            /* Gray label cells must print, not be dropped as "background". */
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
         }
 
         body {
-            width: 210mm;
-            min-height: 297mm;
+            width: 186mm; /* A4 width minus the @page margins */
             margin: 0 auto;
-            padding: 18mm 16mm;
-            box-sizing: border-box;
-            background: #fff;
-            /* A serif stack, no webfont: this prints on machines with no
-               network, and a missing webfont falls back silently to something
-               that is not a government letterhead. */
             font-family: "Times New Roman", Times, "Liberation Serif", serif;
+            font-size: 10pt;
+            line-height: 1.25;
             color: #000;
-            /* 12pt base, the size the paper form is typed at. */
-            font-size: 12pt;
-            line-height: 1.35;
+            background: #fff;
         }
 
-        .titles {
-            text-align: center;
+        /* ---- header ---- */
+        .letterhead {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 4mm;
         }
 
-        .titles p {
-            margin: 0;
-        }
+        .logos { display: flex; gap: 2mm; flex: 0 0 44mm; }
+        .logos.right { justify-content: flex-end; }
+        .logos img { height: 20mm; width: auto; }
 
-        .republic,
-        .province {
-            font-size: 12pt;
-        }
+        .titles { flex: 1; text-align: center; }
+        .titles p { margin: 0; }
+        .titles .lgu { font-size: 11pt; }
+        .titles .municipality { font-size: 12pt; font-weight: bold; text-transform: uppercase; }
 
-        .municipality {
-            font-size: 14pt;
-            font-weight: 700;
-            letter-spacing: 0.02em;
-        }
-
-        /* Underlined, as on the paper form. text-decoration rather than a
-           border-bottom so the rule tracks the text's own width when the
-           name wraps at a narrower page. */
         .unit {
-            font-size: 12pt;
+            margin: 2mm 0 0;
+            text-align: center;
+            font-size: 11pt;
             font-style: italic;
             text-decoration: underline;
-            text-underline-offset: 2px;
+            color: #1f4e9c;
         }
 
         .form-title {
-            margin-top: 6mm !important;
-            font-size: 14pt;
-            font-weight: 700;
-            letter-spacing: 0.08em;
-        }
-
-        /* ---- body -------------------------------------------------------
-           11pt, not the 12pt letterhead: the whole record plus the footer has
-           to land on one sheet, and this is the smallest step that does it
-           while staying comfortably readable in print. Anything under 10pt
-           starts to fail for the people signing it. */
-        .body {
-            margin-top: 5mm;
-            font-size: 11pt;
-            line-height: 1.3;
-        }
-
-        .row {
-            display: flex;
-            gap: 5mm;
-            margin-bottom: 2.4mm;
-        }
-
-        .row > * {
-            flex: 1;
-        }
-
-        /* A label sitting on the same baseline as the rule it introduces. The
-           rule is the writable space: it is drawn whether or not there is a
-           value on it, because a field with no rule is a field nobody can
-           complete by hand. */
-        .field {
-            display: flex;
-            align-items: baseline;
-            gap: 2mm;
-        }
-
-        .field .label {
-            flex: none;
-            font-size: 8.5pt;
+            margin: 3mm 0;
+            text-align: center;
+            font-size: 13pt;
+            font-weight: bold;
             text-transform: uppercase;
-            letter-spacing: 0.03em;
-            white-space: nowrap;
+            letter-spacing: 0.06em;
         }
 
-        .field .rule {
-            flex: 1;
-            min-width: 0;
-            border-bottom: 0.4pt solid #000;
-            /* Holds the line open at a writable height when the value is
-               empty. Without it an unfilled rule collapses to the text
-               baseline and there is nowhere to write. */
-            min-height: 4.6mm;
-            padding: 0 1mm;
-            /* A long diagnosis wraps rather than pushing the rule off the
-               page; the row grows and the sheet still holds. */
+        /* ---- label/value grids ---- */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            margin-bottom: 3mm; /* the gap between blocks */
+        }
+
+        th, td {
+            border: 1px solid #000;
+            padding: 1.2mm 1.6mm;
+            vertical-align: top;
             overflow-wrap: anywhere;
         }
 
-        .w-narrow { flex: 0 0 22mm; }
-        .w-half   { flex: 1; }
-
-        .group {
-            margin-bottom: 2.4mm;
+        th {
+            background: #bfbfbf;
+            font-weight: bold;
+            text-align: right;
         }
 
-        .group > .group-label {
-            font-size: 8.5pt;
-            text-transform: uppercase;
-            letter-spacing: 0.03em;
-            margin-bottom: 1.2mm;
-        }
+        td { background: #fff; height: 6.5mm; }
 
-        /* Names go in two columns, so the two blank rows every list is
-           guaranteed cost one line rather than two. */
-        .names {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            column-gap: 5mm;
-            row-gap: 2.4mm;
-        }
+        /* Column headers of the names block read left to right. */
+        .names th { text-align: center; }
+        .names .num { width: 8mm; text-align: center; }
 
-        .name-rule {
-            border-bottom: 0.4pt solid #000;
-            min-height: 4.6mm;
-            padding: 0 1mm;
-        }
+        .others td { height: 14mm; }
 
-        .others .rule {
-            min-height: 7.5mm;
-        }
+        /* ---- signatures ---- */
+        .footer { margin-top: 2mm; page-break-inside: avoid; }
+        .footer p { margin: 0; }
+        .footer .heading { font-weight: bold; }
+        .undertaking { margin-top: 1mm !important; text-align: justify; }
 
-        /* ---- footer ------------------------------------------------------ */
-        .footer {
-            margin-top: 4mm;
-            font-size: 10.5pt;
-            line-height: 1.3;
-        }
-
-        .footer .heading {
-            font-weight: 700;
-            margin: 0;
-        }
-
-        .undertaking {
-            margin: 1.5mm 0 0;
-            text-align: justify;
-        }
-
-        .requester {
-            margin-top: 4.5mm;
+        .signatures {
             display: flex;
-            gap: 8mm;
-            align-items: flex-end;
+            gap: 5mm;
+            margin-top: 6mm;
         }
 
-        .sign-slot {
-            flex: 1;
-        }
-
-        /* The line people actually sign on. Tall enough for a wet signature,
-           which is the only kind this form takes. */
-        .sign-line {
-            border-bottom: 0.4pt solid #000;
-            height: 8mm;
-        }
-
-        .sign-caption {
-            font-size: 8.5pt;
-            text-align: center;
-            margin-top: 1mm;
-        }
-
-        .datetime-slot {
-            flex: 0 0 55mm;
-        }
-
-        .approvals {
-            margin-top: 4.5mm;
-        }
-
-        .approval-label {
-            font-size: 10.5pt;
-            margin: 0 0 3.5mm;
-        }
-
-        .signatories {
-            display: flex;
-            gap: 10mm;
-        }
-
-        .signatory {
-            flex: 1;
-            text-align: center;
-        }
-
-        .signatory .name {
-            font-weight: 700;
-            text-transform: uppercase;
-            border-top: 0.4pt solid #000;
-            padding-top: 1mm;
-            font-size: 10.5pt;
-        }
-
-        .signatory .role {
-            font-size: 8.5pt;
-        }
-
-        /* Keeps the undertaking and the signatures together: a footer split
-           across a page break is a form nobody can sign. */
-        .footer {
-            page-break-inside: avoid;
-        }
-
-        @media print {
-            html {
-                background: none;
-            }
-
-            body {
-                width: auto;
-                min-height: 0;
-                margin: 0;
-                /* @page already applies the margins; repeating them here
-                   would indent the content a second time inside them. */
-                padding: 0;
-            }
-        }
+        .sign { flex: 1; text-align: center; font-size: 9pt; }
+        .sign .caption { text-align: left; margin-bottom: 9mm !important; }
+        .sign .line { border-top: 1px solid #000; padding-top: 1mm; }
+        .sign .name { font-weight: bold; text-transform: uppercase; }
     </style>
 </head>
 <body>
     <header>
-        <div class="titles">
-            <p class="republic">Republic of the Philippines</p>
-            <p class="province">Province of Isabela</p>
-            <p class="municipality">MUNICIPALITY OF ECHAGUE</p>
-            <p class="unit">Echague Rescue Emergency Medical Services</p>
-            <p class="form-title">CONDUCTION REQUEST FORM</p>
+        <div class="letterhead">
+            <div class="logos">
+                <img data-logo="bagong-pilipinas.png" alt="Bagong Pilipinas">
+                <img data-logo="echague-seal.png" alt="Municipality of Echague seal">
+            </div>
+            <div class="titles">
+                <p class="lgu">Republic of the Philippines</p>
+                <p class="lgu">Province of Isabela</p>
+                <p class="municipality">Municipality of Echague</p>
+            </div>
+            <div class="logos right">
+                <img data-logo="echague-rescue.png" alt="Echague Rescue">
+            </div>
         </div>
+        <p class="unit">Echague Rescue Emergency Medical Services</p>
+        <p class="form-title">Conduction Request Form</p>
     </header>
 
     @php
@@ -329,133 +191,63 @@
 
         $drivers    = $trip->people->where('role', 'driver')->pluck('name')->values()->all();
         $passengers = $trip->people->where('role', 'passenger')->pluck('name')->values()->all();
-
-        /**
-         * Pads a name list out to a minimum number of rows. Staff add names by
-         * hand on the printed sheet, so a list shorter than the minimum is
-         * given ruled space rather than ending where the data ends.
-         */
-        $rows = static function (array $names, int $minimum = 2): array {
-            return array_pad($names, max($minimum, count($names)), '');
-        };
     @endphp
 
-    <section class="body">
-        <div class="row">
-            <div class="field">
-                <span class="label">Patient Name</span>
-                <span class="rule">{{ $patientName }}</span>
-            </div>
-            <div class="field w-narrow">
-                <span class="label">Age</span>
-                <span class="rule">{{ $patientAge }}</span>
-            </div>
-        </div>
+    @php
+        // One numbered row per name, at least two, so staff can add by hand.
+        $nameRows = max(2, count($drivers), count($passengers), count($relatives));
+    @endphp
 
-        <div class="row">
-            <div class="field">
-                <span class="label">Patient Address</span>
-                <span class="rule">{{ $patientAddress }}</span>
-            </div>
-        </div>
+    {{-- Block 1: patient and trip --}}
+    <table>
+        <colgroup>
+            <col style="width: 22%"><col style="width: 38%"><col style="width: 16%"><col style="width: 24%">
+        </colgroup>
+        <tr>
+            <th>Patient Name</th><td>{{ $patientName }}</td>
+            <th>Age</th><td>{{ $patientAge }}</td>
+        </tr>
+        <tr>
+            <th>Contact Number</th><td>{{ $patientContact }}</td>
+            <th>Date and Time</th><td>{{ $scheduled }}</td>
+        </tr>
+        <tr><th>Patient Address</th><td colspan="3">{{ $patientAddress }}</td></tr>
+        <tr><th>Medical Diagnosis</th><td colspan="3">{{ $diagnosis }}</td></tr>
+        <tr><th>From</th><td colspan="3">{{ $from }}</td></tr>
+        <tr><th>To</th><td colspan="3">{{ $to }}</td></tr>
+    </table>
 
-        <div class="row">
-            <div class="field">
-                <span class="label">Contact Number</span>
-                <span class="rule">{{ $patientContact }}</span>
-            </div>
-            <div class="field" style="flex: 2;">
-                <span class="label">Medical Diagnosis</span>
-                <span class="rule">{{ $diagnosis }}</span>
-            </div>
-        </div>
+    {{-- Block 2: people, numbered --}}
+    <table class="names">
+        <tr>
+            <th class="num">#</th>
+            <th>Driver's Name/s</th>
+            <th>Name of Authorized Passenger/s</th>
+            <th>Relatives of the Patient</th>
+        </tr>
+        @for ($i = 0; $i < $nameRows; $i++)
+            <tr>
+                <td class="num">{{ $i + 1 }}</td>
+                <td>{{ $drivers[$i] ?? '' }}</td>
+                <td>{{ $passengers[$i] ?? '' }}</td>
+                <td>{{ $relatives[$i] ?? '' }}</td>
+            </tr>
+        @endfor
+    </table>
 
-        <div class="row">
-            <div class="field">
-                <span class="label">From</span>
-                <span class="rule">{{ $from }}</span>
-            </div>
-            <div class="field">
-                <span class="label">To</span>
-                <span class="rule">{{ $to }}</span>
-            </div>
-        </div>
+    {{-- Block 3: trip log --}}
+    <table>
+        <colgroup><col style="width: 45%"><col style="width: 55%"></colgroup>
+        <tr><th>Departure from the Office</th><td>{{ $when($trip->departed_office_at) }}</td></tr>
+        <tr><th>Arrival at Destination</th><td>{{ $when($trip->arrived_destination_at) }}</td></tr>
+        <tr><th>Departure from Destination</th><td>{{ $when($trip->departed_destination_at) }}</td></tr>
+        <tr><th>Arrival back to Office</th><td>{{ $when($trip->returned_office_at) }}</td></tr>
+        <tr><th>Meter Reading before Departure</th><td>{{ $val($trip->odometer_start) }}</td></tr>
+        <tr><th>Meter Reading at Arrival</th><td>{{ $val($trip->odometer_end) }}</td></tr>
+        <tr class="others"><th>Others</th><td>{{ $val($trip->others) }}</td></tr>
+    </table>
 
-        <div class="group">
-            <div class="group-label">Relatives of the Patient</div>
-            <div class="names">
-                @foreach ($rows($relatives) as $name)
-                    <div class="name-rule">{{ $name }}</div>
-                @endforeach
-            </div>
-        </div>
-
-        <div class="row">
-            <div class="field">
-                <span class="label">Date and Time</span>
-                <span class="rule">{{ $scheduled }}</span>
-            </div>
-        </div>
-
-        <div class="group">
-            <div class="group-label">Driver's Name/s</div>
-            <div class="names">
-                @foreach ($rows($drivers) as $name)
-                    <div class="name-rule">{{ $name }}</div>
-                @endforeach
-            </div>
-        </div>
-
-        <div class="group">
-            <div class="group-label">Name of Authorized Passenger/s</div>
-            <div class="names">
-                @foreach ($rows($passengers) as $name)
-                    <div class="name-rule">{{ $name }}</div>
-                @endforeach
-            </div>
-        </div>
-
-        <div class="row">
-            <div class="field">
-                <span class="label">Departure from the Office</span>
-                <span class="rule">{{ $when($trip->departed_office_at) }}</span>
-            </div>
-            <div class="field">
-                <span class="label">Arrival at Destination</span>
-                <span class="rule">{{ $when($trip->arrived_destination_at) }}</span>
-            </div>
-        </div>
-
-        <div class="row">
-            <div class="field">
-                <span class="label">Departure from Destination</span>
-                <span class="rule">{{ $when($trip->departed_destination_at) }}</span>
-            </div>
-            <div class="field">
-                <span class="label">Arrival back to Office</span>
-                <span class="rule">{{ $when($trip->returned_office_at) }}</span>
-            </div>
-        </div>
-
-        <div class="row">
-            <div class="field">
-                <span class="label">Meter Reading before Departure</span>
-                <span class="rule">{{ $val($trip->odometer_start) }}</span>
-            </div>
-            <div class="field">
-                <span class="label">Meter Reading at Arrival</span>
-                <span class="rule">{{ $val($trip->odometer_end) }}</span>
-            </div>
-        </div>
-
-        <div class="row others">
-            <div class="field">
-                <span class="label">Others</span>
-                <span class="rule">{{ $val($trip->others) }}</span>
-            </div>
-        </div>
-    </section>
-
+    {{-- The sign-off this form has always carried, as one row of blocks. --}}
     <footer class="footer">
         <p class="heading">PARA SA PARTIDONG NAGREQUEST:</p>
         <p class="heading">PAGPAPATUNAY:</p>
@@ -465,42 +257,45 @@
             naiintindihan&rdquo;.
         </p>
 
-        <div class="requester">
-            <div class="sign-slot">
-                <div class="sign-line"></div>
-                <div class="sign-caption">Pangalan at lagda ng nag-request</div>
+        <div class="signatures">
+            <div class="sign">
+                <p class="caption">&nbsp;</p>
+                <div class="line">Pangalan at lagda ng nag-request</div>
+                <div>Petsa/oras: ____________</div>
             </div>
-            <div class="datetime-slot field">
-                <span class="label">Petsa/oras:</span>
-                <span class="rule"></span>
+            <div class="sign">
+                <p class="caption">Noted by:</p>
+                <div class="line name">Cyrus A. Angoluan, RN</div>
+                <div>Operations and Warning Officer</div>
             </div>
-        </div>
-
-        <div class="approvals">
-            <p class="approval-label">Noted by:</p>
-            <div class="signatories">
-                <div class="signatory">
-                    <div class="name">Cyrus A. Angoluan, RN</div>
-                    <div class="role">Operations and Warning Officer</div>
-                </div>
-                <div class="signatory"></div>
+            <div class="sign">
+                <p class="caption">Approved by:</p>
+                <div class="line name">Melissa G. Corpuz, RSW</div>
+                <div>Department Head, MDRRMO</div>
             </div>
-        </div>
-
-        <div class="approvals">
-            <p class="approval-label">Approved by:</p>
-            <div class="signatories">
-                <div class="signatory">
-                    <div class="name">Melissa G. Corpuz, RSW</div>
-                    <div class="role">Department Head, MDRRMO</div>
-                </div>
-                <div class="signatory">
-                    <div class="name">Carmelo Lou B. Lim</div>
-                    <div class="role">Rescue Chief</div>
-                </div>
+            <div class="sign">
+                <p class="caption">&nbsp;</p>
+                <div class="line name">Carmelo Lou B. Lim</div>
+                <div>Rescue Chief</div>
             </div>
         </div>
     </footer>
+
+    <script>
+        // Absolute logo URLs from this page's origin, then print once every
+        // logo has loaded or failed. A missing file is hidden, not shown broken.
+        (function () {
+            var imgs = Array.prototype.slice.call(document.querySelectorAll('img[data-logo]'));
+            var base = location.origin && location.origin !== 'null' ? location.origin : '';
+            var waits = imgs.map(function (img) {
+                return new Promise(function (done) {
+                    img.onload = done;
+                    img.onerror = function () { img.style.display = 'none'; done(); };
+                    img.src = base + '/logos/' + img.dataset.logo;
+                });
+            });
+            Promise.all(waits).then(function () { window.print(); });
+        })();
+    </script>
 </body>
-<script>window.print()</script>
 </html>

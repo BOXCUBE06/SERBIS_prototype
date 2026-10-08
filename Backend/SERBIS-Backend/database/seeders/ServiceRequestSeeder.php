@@ -35,7 +35,6 @@ class ServiceRequestSeeder extends Seeder
             'relief-goods-distribution',
             'road-clearing',
             'debris-removal',
-            'animal-rescue',
         ])->pluck('service_id')->all();
 
         if (empty($serviceIds)) {

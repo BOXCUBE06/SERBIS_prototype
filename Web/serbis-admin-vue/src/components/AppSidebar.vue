@@ -49,6 +49,12 @@
                 <v-icon size="20" class="nav-icon">{{ item.icon }}</v-icon>
               </template>
               <v-list-item-title class="nav-label">{{ item.title }}</v-list-item-title>
+              <!-- What is waiting on staff in that section (see waitingCounts).
+                   The server sends a count only to an account holding the
+                   section, so no extra check here. -->
+              <template v-if="(waitingCounts[item.key] ?? 0) > 0" v-slot:append>
+                <span class="nav-count" :aria-label="`${waitingCounts[item.key]} waiting`">{{ waitingCounts[item.key] }}</span>
+              </template>
             </v-list-item>
           </v-list>
         </div>
@@ -94,7 +100,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDisplay } from 'vuetify'
 import { useAuth } from './index'
@@ -102,6 +108,7 @@ import { ADMIN_SECTIONS, SECTION_GROUPS, sectionForPath } from '@/composables/ad
 import logoUrl from '@/assets/logo/serbis-logo.png'
 import { useAppTheme } from '@/composables/useAppTheme'
 import { useCurrentAdmin } from '@/composables/useCurrentAdmin'
+import { pulse, startPulse, stopPulse } from '@/composables/usePulse'
 
 const { isLoggingOut, showLogoutDialog, handleLogout } = useAuth()
 const { theme, toggle } = useAppTheme()
@@ -171,6 +178,18 @@ watch(() => route.path, (path) => {
 }, { immediate: true })
 
 onMounted(() => { loadCurrentAdmin() })
+
+// The sidebar is drawn exactly while someone is signed in, so it owns the poll.
+onMounted(startPulse)
+onUnmounted(stopPulse)
+// Badge per section key: Pending requests and loans, ambulance requests that
+// are Pending or Booked without a unit, accounts awaiting activation.
+const waitingCounts = computed<Record<string, number | undefined>>(() => ({
+  requests: pulse.value?.requests?.waiting,
+  ambulance: pulse.value?.ambulance?.waiting,
+  borrowings: pulse.value?.borrowings?.waiting,
+  residents: pulse.value?.residents?.pending,
+}))
 </script>
 
 <style scoped>
@@ -255,6 +274,18 @@ onMounted(() => { loadCurrentAdmin() })
 .nav-item :deep(.v-list-item__prepend > .v-icon) { margin-inline-end: 12px; opacity: 1; }
 .nav-icon { color: rgba(255, 255, 255, 0.7); }
 .nav-label { font-size: 14px; font-weight: 500; color: rgba(255, 255, 255, 0.84); }
+.nav-count {
+  min-width: 22px;
+  padding: 0 7px;
+  border-radius: 11px;
+  background: #F5A524;
+  color: #2B1A00;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
 .nav-item:hover:not(.active-nav-item) { background-color: rgba(255, 255, 255, 0.08) !important; }
 .active-nav-item { background-color: rgba(52, 195, 154, 0.18) !important; }
 .active-nav-item .nav-label { color: #fff; font-weight: 700; }
