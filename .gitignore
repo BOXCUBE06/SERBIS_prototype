@@ -36,3 +36,5 @@ docs/user-manuals/tools/capture/.state/
 # Manual screenshot capture: scratch images written by contact_sheet.py and the
 # change check (samples/ holds the real upload fixtures and stays tracked).
 docs/user-manuals/tools/capture/*.png
+# Manual screenshot capture: local sign-in helper, holds real phone numbers.
+docs/user-manuals/tools/capture/login-as.cmd

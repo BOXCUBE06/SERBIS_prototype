@@ -7,6 +7,7 @@ use App\Models\Resident;
 use App\Models\SmsBlastCode;
 use App\Models\SmsLog;
 use App\Models\SmsQueueId;
+use App\Services\Fcm;
 use App\Services\Sms\SkySmsGateway;
 use App\Services\Sms\SmsGateway;
 use App\Services\Sms\SmsMessagePolicy;
@@ -24,12 +25,16 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Validation\ValidationException;
 
+use function Illuminate\Support\defer;
+
 class SmsController extends Controller
 {
     use PaginatesLists;
 
     /** Residents per bulk request (the vendor's own cap); a bigger audience goes out as several requests, each recorded on its own. */
     private const BULK_CHUNK = SkySmsGateway::MAX_BULK;
+
+    private const PUSH_TITLE = 'MDRRMO advisory';
 
     public function sendBlast(Request $request, SmsGateway $gateway)
     {
@@ -129,6 +134,7 @@ class SmsController extends Controller
         }
 
         $this->recordBlast($request->user()->admin_id, $groups, $validated['message']);
+        $this->pushAdvisory($groups, $validated['message']);
 
         $count = fn (string $status) => collect($groups)
             ->where('status', $status)
@@ -188,6 +194,31 @@ class SmsController extends Controller
         ], now()->addMinutes(10));
 
         return $response;
+    }
+
+    /**
+     * Pushes the blast to the same people the advisories feed shows it to: every recipient not recorded Failed.
+     * Deferred until the response (and its idempotency record) has gone out, so a slow FCM can never time the
+     * request out after the SMS was billed and invite a second, double-billed send. @param array<int, array{residents: Collection, status: string}> $groups
+     */
+    private function pushAdvisory(array $groups, string $message): void
+    {
+        $residentIds = collect($groups)
+            ->where('status', '!=', Recipient::FAILED)
+            ->flatMap(fn ($group) => $group['residents']->pluck('resident_id'))
+            ->unique();
+
+        if ($residentIds->isEmpty()) {
+            return;
+        }
+
+        defer(function () use ($residentIds, $message) {
+            $fcm = app(Fcm::class);
+
+            foreach ($residentIds as $residentId) {
+                $fcm->notifyResident($residentId, self::PUSH_TITLE, $message, ['type' => 'advisory']);
+            }
+        });
     }
 
     /** @param array<int, string> $phones One bulk request, retried on vendor 429 with Retry-After or a doubling wait. */
