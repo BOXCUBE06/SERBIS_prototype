@@ -4,7 +4,7 @@ description: >
   track non-emergency service requests, and read offline disaster
   preparedness materials in English or Filipino.
 publish_to: 'none'
-version: 1.0.0+2
+version: 1.0.0+3
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -40,9 +40,20 @@ dev_dependencies:
   integration_test:
     sdk: flutter
   flutter_lints: ^3.0.0
+  # Generates the launcher icons from assets/images/serbis_logo.png:
+  # `dart run flutter_launcher_icons`. The output is committed, so this only
+  # runs when the logo changes.
+  flutter_launcher_icons: ^0.14.4
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: assets/images/serbis_logo.png
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/images/serbis_logo.png
 
   # Bundled, not fetched. `google_fonts` downloaded its fonts from
   # fonts.gstatic.com on first use, so a first launch with no signal fell back

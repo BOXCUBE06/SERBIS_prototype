@@ -53,17 +53,7 @@ class AppHeader extends StatelessWidget {
               Expanded(
                 child: Row(
                   children: [
-                    Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: .12),
-                        borderRadius: BorderRadius.circular(AppRadius.md),
-                        border: Border.all(color: Colors.white.withValues(alpha: .14)),
-                      ),
-                      alignment: Alignment.center,
-                      child: const Icon(Icons.shield_outlined, color: Colors.white, size: 19),
-                    ),
+                    const SerbisLogo(size: 38),
                     const SizedBox(width: 11),
                     Flexible(
                       child: Column(
@@ -107,6 +97,27 @@ class AppHeader extends StatelessWidget {
                 ),
             ],
           ),
+    );
+  }
+}
+
+/// The SERBIS mark, clipped to a circle. Decorative: the wordmark beside it
+/// already says the name, so screen readers skip it.
+class SerbisLogo extends StatelessWidget {
+  final double size;
+
+  const SerbisLogo({super.key, required this.size});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipOval(
+      child: Image.asset(
+        'assets/images/serbis_logo.png',
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        excludeFromSemantics: true,
+      ),
     );
   }
 }
@@ -276,7 +287,12 @@ class TabHeaderBar extends StatelessWidget {
       ),
       child: _withBottom(Row(
         children: [
-          if (onBack != null) HeaderButton(icon: Icons.arrow_back_rounded, label: tr(f, 'nav.back'), onTap: onBack!),
+          if (onBack != null)
+            HeaderButton(icon: Icons.arrow_back_rounded, label: tr(f, 'nav.back'), onTap: onBack!)
+          else ...[
+            SerbisLogo(size: 38 - 8 * t),
+            const SizedBox(width: 11),
+          ],
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
