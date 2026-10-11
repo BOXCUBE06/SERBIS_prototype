@@ -1,6 +1,5 @@
 import { fileURLToPath, URL } from 'node:url'
 import Vue from '@vitejs/plugin-vue'
-import Fonts from 'unplugin-fonts/vite'
 import { defineConfig, loadEnv } from 'vite'
 import Vuetify, { transformAssetUrls } from 'vite-plugin-vuetify'
 
@@ -40,17 +39,10 @@ export default defineConfig({
         configFile: 'src/styles/settings.scss',
       },
     }),
-    Fonts({
-      fontsource: {
-        families: [
-          {
-            name: 'Roboto',
-            weights: [100, 300, 400, 500, 700, 900],
-            styles: ['normal', 'italic'],
-          },
-        ],
-      },
-    }),
+    // No unplugin-fonts here: main.ts imports the two fontsource families
+    // itself, and the plugin's Roboto config (never used) also made the build
+    // emit a <link rel="preload"> for every font file in the bundle — all
+    // subsets, woff and woff2, and the four MDI formats — about 28 preloads.
   ],
   define: { 'process.env': {} },
   // Every route is a lazy import and vite-plugin-vuetify injects component
