@@ -14,8 +14,11 @@ ChartJS.defaults.font.family = "'Plus Jakarta Sans Variable', system-ui, sans-se
 // Canvas ignores CSS motion rules, so the token ceiling and reduced motion are mirrored here.
 ChartJS.defaults.animation.duration = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 0 : 320
 
-const hexToRgb = (hex) => {
-  const n = Number.parseInt(String(hex).replace('#', ''), 16)
+// Vuetify generates `on-surface` as the 3-digit '#FFF' on the dark theme; read as
+// 6 digits that is rgb(0, 15, 255), which is the blue chart text. Expand it first.
+export const hexToRgb = (hex) => {
+  const h = String(hex).replace('#', '')
+  const n = Number.parseInt(h.length === 3 ? h.replace(/./g, '$&$&') : h, 16)
   return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`
 }
 
