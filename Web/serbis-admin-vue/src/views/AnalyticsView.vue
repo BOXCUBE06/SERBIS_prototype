@@ -502,7 +502,7 @@ ChartJS.register(Tooltip, Legend, CategoryScale, LinearScale, BarElement)
  * keep theirs and the rest share one grey segment (composables/volumeColors.js).
  *
  * Validated with the data-viz palette validator against THIS app's surfaces
- * (#FFFFFF light, #131B2E dark), not the validator's defaults: 8 slots, both
+ * (#FFFFFF light, #0E1513 dark), not the validator's defaults: 8 slots, both
  * modes, all checks pass on the adjacent pairlist that stacked bars use —
  * worst adjacent CVD ΔE 9.1 light / 8.4 dark against a target of 8.
  *

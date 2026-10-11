@@ -70,8 +70,15 @@ export default createVuetify({
           // same in both themes.
           'primary-strong': '#34C39A',
           secondary: '#0A2620',
-          background: '#0B1220',
-          surface: '#131B2E',
+          // Near-black with a green cast (hue ~160) rather than the navy it was:
+          // the brand green sits on neutrals of its own hue, so primary, the
+          // status tints and the surfaces read as one family. Every foreground
+          // token below clears AA on its own 10% tint over this surface.
+          background: '#050908',
+          surface: '#0E1513',
+          'surface-bright': '#17211D',
+          'surface-light': '#121A17',
+          'surface-variant': '#1B2824',
           success: '#34C39A',
           warning: '#F5A524',
           error: '#F16565',
@@ -81,13 +88,13 @@ export default createVuetify({
           // bright, fully-saturated sky blue sat as vivid full-opacity text on
           // a near-black card and read as glare, not just a tinted background.
           // Desaturated to a muted steel blue at the same lightness band:
-          // still 6.05:1 on the plain surface and 5.05:1 on its own ~12%
-          // tonal tint over #131B2E (VAlert.css's --v-activated-opacity),
+          // still 6.53:1 on the plain surface and 5.69:1 on its own ~10%
+          // tonal tint over #0E1513 (VAlert.css's --v-activated-opacity),
           // clearly above AA with room to spare, and calm enough to sit next
           // to the rest of the dark palette.
           info: '#7C9CC4',
-          // Every dark token already clears AA on its own 10% tint over #131B2E
-          // — success 6.48:1, warning 7.08:1, info 5.05:1, error 4.95:1 — so the
+          // Every dark token already clears AA on its own 10% tint over #0E1513
+          // — success 7.09:1, warning 7.71:1, info 5.69:1, error 5.35:1 — so the
           // strong keys are aliases here. They exist only so the pill CSS can be
           // written once and work in both themes, the same arrangement
           // primary-strong already uses.
