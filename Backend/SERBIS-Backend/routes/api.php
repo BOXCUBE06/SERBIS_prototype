@@ -258,6 +258,9 @@ Route::middleware(['auth:sanctum', 'is.admin', 'throttle:admin-api'])->group(fun
         // and the controller answers a repeat press from what it already stored.
         Route::get('/sms/deliveries', [SmsDeliveryController::class, 'index'])->middleware('throttle:60,1');
         Route::post('/sms/deliveries/{smsLog}/check', [SmsDeliveryController::class, 'check'])->middleware('throttle:20,1');
+        // Who one barangay's message went to and when each status changed;
+        // local database only, read when a barangay row is opened.
+        Route::get('/sms/deliveries/{smsLog}/recipients', [SmsDeliveryController::class, 'recipients'])->middleware('throttle:60,1');
     });
 
     // The fleet list is read by the two boards that dispatch a unit as well as by
