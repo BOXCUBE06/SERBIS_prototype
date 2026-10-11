@@ -1,4 +1,4 @@
-# Deploying SERBIS to Railway + Cloudflare R2
+# Deploying SERBIS to Railway + Supabase Storage
 
 **Status: deployed and live**, at `serbis-api-production.up.railway.app`. No
 `railway.json`/`railway.toml` has been added to the repository — this is
@@ -16,7 +16,7 @@ Target shape:
 |---|---|---|
 | Laravel API | Railway **Docker** web service | same image, same `Dockerfile` |
 | MySQL 8 | Railway **MySQL** plugin, private network | fresh database, no Aiven import |
-| Uploads | **Cloudflare R2**, two buckets | same shape as Supabase — see `config/filesystems.php` |
+| Uploads | **Supabase Storage** (S3-compatible), two buckets | see `config/filesystems.php` |
 | Scheduler | Railway **Cron** service | runs the artisan commands directly, no `schedule:run` |
 | Admin panel | Vercel, unchanged | repointed at the new API — see §8 |
 | API domain | `*.up.railway.app`, TLS automatic | or a custom domain |
@@ -131,16 +131,16 @@ every start regardless of which service triggered it.
 | `QUEUE_CONNECTION` | optional | no | fixed: `database` — inert, nothing queues a job |
 | `UPLOADS_PRIVATE_DISK` | **required** | no | fixed: `s3` |
 | `UPLOADS_PUBLIC_DISK` | **required** | no | fixed: `s3_public` |
-| `AWS_ACCESS_KEY_ID` | **required** | **yes** | R2 API token — see §5 |
-| `AWS_SECRET_ACCESS_KEY` | **required** | **yes** | R2 API token — see §5 |
-| `AWS_DEFAULT_REGION` | **required** | no | fixed: `auto` — R2 has no regions |
-| `AWS_USE_PATH_STYLE_ENDPOINT` | **required** | no | fixed: `true` — R2 addresses buckets by path |
-| `AWS_ENDPOINT` | **required** | no | `https://<account-id>.r2.cloudflarestorage.com` — Cloudflare dashboard, R2 overview |
+| `AWS_ACCESS_KEY_ID` | **required** | **yes** | Supabase Storage S3 access key — see §5 |
+| `AWS_SECRET_ACCESS_KEY` | **required** | **yes** | Supabase Storage S3 access key — see §5 |
+| `AWS_DEFAULT_REGION` | **required** | no | the Supabase project's region, e.g. `ap-southeast-1` — Project Settings -> General; a mismatch fails request signing |
+| `AWS_USE_PATH_STYLE_ENDPOINT` | **required** | no | fixed: `true` — Supabase's S3 gateway addresses buckets by path |
+| `AWS_ENDPOINT` | **required** | no | `https://<project-ref>.storage.supabase.co/storage/v1/s3` — Supabase dashboard, Storage -> S3 Connection |
 | `AWS_BUCKET` | **required** | no | the private bucket's name — see §5 |
 | `AWS_PUBLIC_BUCKET` | **required** | no | the public bucket's name — see §5 |
-| `AWS_PUBLIC_URL` | **required** | no | the public bucket's `r2.dev` domain or a custom domain — see §5 |
+| `AWS_PUBLIC_URL` | **required** | no | the public bucket's URL, `https://<project-ref>.supabase.co/storage/v1/object/public/<bucket>` — see §5 |
 | `AWS_URL` | **leave unset** | — | its absence is what stops anything building a direct link to a government ID scan |
-| `MAIL_MAILER` | optional | no | fixed: `log` — fallback only; **never `ses`**, `config/services.php` reads the same `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` R2 now uses |
+| `MAIL_MAILER` | optional | no | fixed: `log` — fallback only; **never `ses`**, `config/services.php` reads the same `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` Supabase Storage uses |
 | `MAIL_FROM_ADDRESS` | optional | no | placeholder — mail never actually sends with `MAIL_MAILER=log` |
 | `MAIL_FROM_NAME` | optional | no | fixed: `SERBIS` |
 | `SKYSMS_API_KEY` | **required** | **yes** | SkySMS dashboard — a hard deploy blocker, registration OTP has no other channel. Credits, not a subscription: an empty balance answers 402 and stops every send |
@@ -240,10 +240,10 @@ deletes rows for tokens that already stopped being accepted a day earlier.
 Nothing is denied access because this cron is briefly down; dead rows in
 `personal_access_tokens` merely accumulate a little longer.
 
-## 5. Cloudflare R2
+## 5. Supabase Storage (S3-compatible)
 
-Two buckets, one account, one API token covering both — same shape as the
-Supabase buckets this replaces, and for the same reason: `config/filesystems.php`
+Two buckets, one project, one S3 access key covering both — for this reason:
+`config/filesystems.php`
 keeps government ID scans and info materials on separate disks because they
 have opposite access rules, and one bucket under one visibility setting would
 make either the ID scans world-readable or the info materials unreadable.
@@ -256,19 +256,18 @@ make either the ID scans world-readable or the info materials unreadable.
   which is why `AWS_URL` stays unset.
 - **`serbis-info-materials` — public read.** Evacuation guides and
   advisories, opened by residents with no token. Enable **public access on
-  this bucket only** (R2 dashboard -> bucket -> Settings -> Public access —
-  either the bucket's own `r2.dev` domain or a connected custom domain), and
-  set `AWS_PUBLIC_URL` to whichever domain that turns on.
+  this bucket only** (Supabase dashboard -> Storage -> bucket -> mark it a
+  public bucket), and set `AWS_PUBLIC_URL` to
+  `https://<project-ref>.supabase.co/storage/v1/object/public/<bucket>`.
 
-**API token scope:** Cloudflare dashboard -> R2 -> Manage R2 API Tokens ->
-Create API Token. Scope it to **Object Read & Write**, and to **these two
-buckets specifically** — not account-wide. `AWS_ACCESS_KEY_ID` and
-`AWS_SECRET_ACCESS_KEY` are that token's access key pair; both buckets share
-it, same as `AWS_ENDPOINT` and `AWS_DEFAULT_REGION`.
+**S3 access key:** Supabase dashboard -> Storage -> S3 Connection -> New
+access key. `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are that key
+pair; both buckets share it, same as `AWS_ENDPOINT` and `AWS_DEFAULT_REGION`.
+Supabase S3 keys are project-wide and cannot be scoped to individual buckets.
 
 **The S3 driver package is already in `composer.json`** (`b97daef`,
-`league/flysystem-aws-s3-v3`) — nothing to add here, R2 speaks the same S3
-API Supabase did.
+`league/flysystem-aws-s3-v3`) — nothing to add here, Supabase Storage speaks
+the same S3 API.
 
 ## 6. Order, with a gate on each step
 
@@ -292,7 +291,7 @@ assumed.
    Ambulance destinations (Echague District Hospital, Isabela Southern Specialist Hospital Inc., Southern Isabela Medical Center) are seeded create-only (skipped once the table has rows) and are edited in the database until an admin page exists.
 3. **Storage.** Upload a government ID scan through a real resident signup
    (next step covers the signup itself), view it in the admin panel, then
-   request the R2 object URL directly with no token and **confirm it is
+   request the Supabase object URL directly with no token and **confirm it is
    refused**. Test it; do not infer it from the bucket setting. Then confirm
    an info material opens in a browser with no token at all.
 4. **One resident signup, with OTP.** `POST /register` end to end through
