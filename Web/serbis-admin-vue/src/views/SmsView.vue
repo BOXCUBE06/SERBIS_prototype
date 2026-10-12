@@ -23,8 +23,8 @@
     </PageHeader>
 
     <!-- The form is capped: a short form stretched across 1500px gives a
-         message box far wider than an SMS. The history takes the full row
-         beneath it, so its list and its detail panel can stand side by side. -->
+         message box far wider than an SMS. From lg the form is a fixed column
+         and the history fills the rest beside it; below lg they stack. -->
     <div class="blast-layout">
 
         <v-card elevation="0" rounded="xl" class="blast-card blast-card--compose fade-in">
@@ -269,8 +269,7 @@
         </v-card>
 
         <!-- What became of the blasts after SkySMS took them: one row per send,
-             opened in a panel. It sits under the form, full width, so the list
-             and the panel can stand side by side. -->
+             opened in a panel. Beside the form from lg, under it below. -->
         <BlastHistory ref="history" />
     </div>
     </div>
@@ -873,13 +872,16 @@ const rotateBlastCode = async () => {
 .blast-card--compose { display: flex; flex-direction: column; gap: 18px; padding: 24px; max-width: 720px; }
 .blast-pad { padding: 24px; }
 
-/* Two columns that each take at least 380px, else one. */
+/* One column (form, then history); from lg a 400px form beside the history. */
 .blast-layout {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 20px;
   align-items: start;
   width: 100%;
+}
+@media (min-width: 1280px) {
+  .blast-layout { grid-template-columns: 400px minmax(0, 1fr); }
 }
 
 .blast-tile {

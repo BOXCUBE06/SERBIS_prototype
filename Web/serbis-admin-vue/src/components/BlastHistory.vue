@@ -28,7 +28,7 @@
     </div>
     <div v-if="refreshAll.message" class="bh-pad text-error" role="status">{{ refreshAll.message }}</div>
 
-    <div class="bh-body" :class="{ 'bh-body--split': mdAndUp }">
+    <div class="bh-body" :class="{ 'bh-body--split': lgAndUp }">
       <div class="bh-listpane">
         <div class="bh-filters" role="group" aria-label="Filter blasts">
           <button
@@ -75,7 +75,7 @@
 
       <!-- md and up: the panel sits beside the list, so another blast is one
            click away. Below that it opens in a dialog instead. -->
-      <div v-if="mdAndUp" class="bh-detailpane">
+      <div v-if="lgAndUp" class="bh-detailpane">
         <BlastDetail
           v-if="selected"
           :blast="selected"
@@ -92,7 +92,7 @@
     </div>
   </v-card>
 
-  <v-dialog v-if="!mdAndUp" v-model="dialogOpen" max-width="720" :fullscreen="xs" scrollable>
+  <v-dialog v-if="!lgAndUp" v-model="dialogOpen" max-width="720" :fullscreen="xs" scrollable>
     <v-card v-if="selected" rounded="xl" class="bh-dialog">
       <BlastDetail
         :blast="selected"
@@ -106,7 +106,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useDisplay } from 'vuetify'
 import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
@@ -114,7 +114,7 @@ import { pluralize } from '@/composables/adminUi'
 import { formatShort } from '@/composables/blastDelivery'
 import BlastDetail from '@/components/BlastDetail.vue'
 
-const { mdAndUp, xs } = useDisplay()
+const { lgAndUp, xs } = useDisplay()
 
 const getHeaders = () => ({
   'Authorization': `Bearer ${getToken()}`,
@@ -176,6 +176,7 @@ const fetchDeliveries = async () => {
     const data = await res.json()
     if (!res.ok) throw new Error(data.message || 'Failed to load recent blasts')
     deliveries.value.rows = data.data
+    selectNewest()
   } catch (error) {
     deliveries.value.error = error.message
   } finally {
@@ -188,6 +189,16 @@ const fetchDeliveries = async () => {
 const selectedId = ref(null)
 const dialogOpen = ref(false)
 const selected = computed(() => deliveries.value.rows.find(b => b.blast_id === selectedId.value) ?? null)
+
+// Rows come newest first. Fill the inline panel so it is not blank on load;
+// never on small screens, where a selection would open the dialog by itself.
+const selectNewest = () => {
+  const rows = deliveries.value.rows
+  if (!lgAndUp.value || rows.length === 0) return
+  if (rows.some(b => b.blast_id === selectedId.value)) return
+  selectedId.value = rows[0].blast_id
+}
+watch(lgAndUp, selectNewest)
 
 const select = (blast) => {
   selectedId.value = blast.blast_id
@@ -381,9 +392,10 @@ defineExpose({ reload: fetchDeliveries })
 
 <style scoped>
 .bh-card {
-  grid-column: 1 / -1;
   border: 1px solid rgba(var(--v-theme-on-surface), 0.1);
   overflow: hidden;
+  /* Height of the scrolling panes: the viewport less the page chrome. */
+  --bh-pane-h: max(560px, calc(100vh - 220px));
 }
 .bh-pad { padding: 20px 24px; }
 .bh-head {
@@ -398,9 +410,10 @@ defineExpose({ reload: fetchDeliveries })
 .bh-link { margin-left: 8px; background: none; border: 0; font: inherit; font-weight: 700; color: rgb(var(--v-theme-primary-strong)); cursor: pointer; text-decoration: underline; }
 
 .bh-body { display: block; }
-.bh-body--split { display: grid; grid-template-columns: minmax(300px, 400px) minmax(0, 1fr); }
+.bh-body--split { display: grid; grid-template-columns: 340px minmax(0, 1fr); }
 .bh-body--split .bh-listpane { border-right: 1px solid rgba(var(--v-theme-on-surface), 0.08); }
-.bh-detailpane { min-width: 0; max-height: 760px; overflow-y: auto; }
+.bh-listpane { display: flex; flex-direction: column; max-height: var(--bh-pane-h); min-width: 0; }
+.bh-detailpane { min-width: 0; max-height: var(--bh-pane-h); overflow-y: auto; }
 
 .bh-filters { display: flex; flex-wrap: wrap; gap: 8px; padding: 16px 24px 12px; }
 .bh-chip {
@@ -417,7 +430,7 @@ defineExpose({ reload: fetchDeliveries })
 }
 .bh-chip-n { font-variant-numeric: tabular-nums; opacity: 0.7; }
 
-.bh-list { list-style: none; margin: 0; padding: 0; max-height: 700px; overflow-y: auto; }
+.bh-list { list-style: none; margin: 0; padding: 0; flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 .bh-row {
   display: grid;
   gap: 2px;
