@@ -479,8 +479,8 @@ import { BOOKED_COLOR, CANCELLED_COLOR } from '@/composables/adminUi'
 import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
 import { REFERENCE_TTL_MS, useCachedFetch } from '@/composables/useCachedFetch'
-// Side effect only: sets the chart font default, which this page's own charts need too.
-import '@/composables/useChartTheme'
+// Also sets the chart font default as a side effect, which this page's own charts need too.
+import { hexToRgb } from '@/composables/useChartTheme'
 import { foldVolume } from '@/composables/volumeColors.js'
 
 ChartJS.register(Tooltip, Legend, CategoryScale, LinearScale, BarElement)
@@ -670,11 +670,6 @@ const isDark = computed(() => theme.global.current.value.dark)
 const gridColor = computed(() => `rgba(${hexToRgb(themeColors.value['on-surface'])}, 0.10)`)
 const tickColor = computed(() => `rgba(${hexToRgb(themeColors.value['on-surface'])}, 0.70)`)
 const surfaceColor = computed(() => themeColors.value.surface)
-
-function hexToRgb (hex) {
-  const n = Number.parseInt(String(hex).replace('#', ''), 16)
-  return `${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}`
-}
 
 // Empty shapes so the template can read these before the first response lands
 // without a guard on every access.

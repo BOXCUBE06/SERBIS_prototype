@@ -65,19 +65,24 @@ class SmsDeliveryStatusTest extends TestCase
      * @param  list<string>  $phones
      * @param  list<int|string>  $queueIds
      */
-    private function blast(array $phones, array $queueIds = [233895, 233896]): SmsLog
+    private function blast(array $phones, array $queueIds = [233895, 233896], string $message = 'Test blast', ?Barangay $barangay = null): SmsLog
     {
+        $barangay ??= $this->barangay;
+
         $log = SmsLog::create([
             'sender_id' => $this->admin->admin_id,
-            'target_area_id' => $this->barangay->barangay_id,
-            'message_body' => 'Test blast',
+            'target_area_id' => $barangay->barangay_id,
+            'message_body' => $message,
             'status' => Recipient::QUEUED,
         ]);
 
         foreach ($phones as $phone) {
+            $resident = $this->resident($phone);
+            $resident->update(['barangay_id' => $barangay->barangay_id]);
+
             Recipient::create([
                 'sms_log_id' => $log->sms_log_id,
-                'resident_id' => $this->resident($phone)->resident_id,
+                'resident_id' => $resident->resident_id,
                 'status' => Recipient::QUEUED,
             ]);
         }
@@ -134,8 +139,11 @@ class SmsDeliveryStatusTest extends TestCase
 
         $response = $this->actingAs($this->admin)->getJson('/api/sms/deliveries')->assertOk();
 
-        $response->assertJsonPath('data.0.sms_log_id', $log->sms_log_id)
-            ->assertJsonPath('data.0.barangay', 'San Fabian')
+        $response->assertJsonPath('data.0.blast_id', $log->sms_log_id)
+            ->assertJsonPath('data.0.barangay_count', 1)
+            ->assertJsonPath('data.0.recipient_count', 2)
+            ->assertJsonPath('data.0.barangays.0.sms_log_id', $log->sms_log_id)
+            ->assertJsonPath('data.0.barangays.0.barangay', 'San Fabian')
             ->assertJsonPath('data.0.checkable', true)
             ->assertJsonPath('data.0.delivery_checked_at', null)
             ->assertJsonPath('data.0.counts', [
@@ -143,13 +151,41 @@ class SmsDeliveryStatusTest extends TestCase
             ]);
     }
 
-    public function test_the_list_caps_at_ten_rows(): void
+    public function test_the_list_caps_at_ten_blasts(): void
     {
         foreach (range(1, 12) as $i) {
-            $this->blast([], []);
+            $this->blast([], [], "Blast {$i}");
         }
 
         $this->assertCount(10, $this->actingAs($this->admin)->getJson('/api/sms/deliveries')->assertOk()->json('data'));
+    }
+
+    public function test_one_send_to_many_barangays_is_one_blast_with_a_row_per_barangay(): void
+    {
+        $other = Barangay::create(['barangay_name' => 'Angoluan']);
+
+        $this->blast(['09171111111', '09172222222'], [1, 2], 'Heavy rain tonight', $this->barangay);
+        $this->blast(['09173333333'], [3], 'Heavy rain tonight', $other);
+
+        $data = $this->actingAs($this->admin)->getJson('/api/sms/deliveries')->assertOk()->json('data');
+
+        $this->assertCount(1, $data);
+        $this->assertSame(2, $data[0]['barangay_count']);
+        $this->assertSame(3, $data[0]['recipient_count']);
+        $this->assertSame(3, $data[0]['counts']['queued']);
+        // Barangays are listed alphabetically, each with its own counts.
+        $this->assertSame(['Angoluan', 'San Fabian'], array_column($data[0]['barangays'], 'barangay'));
+        $this->assertSame(1, $data[0]['barangays'][0]['counts']['queued']);
+        $this->assertSame(2, $data[0]['barangays'][1]['counts']['queued']);
+    }
+
+    public function test_the_same_text_sent_again_later_is_a_separate_blast(): void
+    {
+        $first = $this->blast(['09171111111'], [1], 'Heavy rain tonight');
+        $first->forceFill(['created_at' => now()->subMinutes(30)])->saveQuietly();
+        $this->blast(['09172222222'], [2], 'Heavy rain tonight');
+
+        $this->assertCount(2, $this->actingAs($this->admin)->getJson('/api/sms/deliveries')->assertOk()->json('data'));
     }
 
     public function test_a_blast_without_queue_ids_is_marked_not_checkable(): void

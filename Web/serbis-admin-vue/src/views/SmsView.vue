@@ -22,10 +22,9 @@
       </template>
     </PageHeader>
 
-    <!-- Form left, history right from 1360px; one column below that. The
-         other admin pages fill the width, but a short form stretched across
-         1500px gives a message box far wider than an SMS, so the form column is
-         capped and the history, which is the data worth reading, takes the rest. -->
+    <!-- The form is capped: a short form stretched across 1500px gives a
+         message box far wider than an SMS. From lg the form is a fixed column
+         and the history fills the rest beside it; below lg they stack. -->
     <div class="blast-layout">
 
         <v-card elevation="0" rounded="xl" class="blast-card blast-card--compose fade-in">
@@ -269,79 +268,9 @@
           </v-card-text>
         </v-card>
 
-        <!-- What became of the blasts after SkySMS took them. Below the form
-             rather than in a tab or a collapsed panel: this is the thing to
-             watch after pressing Send, so it should not be hidden or take a
-             click to reach. No auto-refresh — SkySMS's rate limit is shared with
-             every send, and a stuck message will not resolve faster for being
-             polled. -->
-        <v-card elevation="0" rounded="xl" class="blast-card fade-in">
-          <div class="blast-pad blast-history-head d-flex align-start gap-4">
-            <div>
-              <h2 class="blast-title">Recent blasts</h2>
-              <p class="blast-sub">
-                Queued means SkySMS accepted it and billed the credits. A message is delivered only when it shows Sent.
-              </p>
-            </div>
-            <v-btn
-              variant="flat" height="40" class="outline-btn text-none ml-auto flex-shrink-0"
-              prepend-icon="mdi-refresh"
-              :disabled="refreshAll.running"
-              @click="refreshAllDeliveries"
-            >{{ refreshAll.running && refreshAll.total ? `Checking ${refreshAll.done} of ${refreshAll.total}` : 'Refresh all' }}</v-btn>
-          </div>
-          <div v-if="refreshAll.message" class="blast-pad text-error" role="status">{{ refreshAll.message }}</div>
-
-          <v-card-text class="pa-0">
-            <div v-if="deliveries.error" class="blast-pad text-error" role="alert">{{ deliveries.error }}</div>
-            <div v-else-if="!deliveries.rows.length && !deliveries.loading" class="blast-pad text-medium-emphasis">
-              No blasts have been sent yet.
-            </div>
-
-            <div
-              v-for="row in deliveries.rows" :key="row.sms_log_id"
-              class="blast-row delivery-row"
-            >
-              <div class="delivery-main">
-                <div class="delivery-line"><b>{{ row.barangay }}</b> <span class="delivery-muted">· {{ formatWhen(row.created_at) }} · {{ row.sender }}</span></div>
-                <p class="delivery-text">{{ row.message }}</p>
-
-                <!-- The four states SkySMS documents are always drawn, zero
-                     included and outlined, so a missing chip never reads as "not
-                     tracked". Unconfirmed and Other appear only when there is
-                     one: they are not delivery states, they are things to look at. -->
-                <div class="d-flex flex-wrap gap-2 mt-2-5">
-                  <StatusPill
-                    v-for="state in visibleStates(row)" :key="state.key"
-                    :status="state.pill"
-                    :outline="row.counts[state.key] === 0"
-                    :label="`${row.counts[state.key]} ${state.label}`"
-                  />
-                </div>
-
-                <div class="delivery-checked">
-                  <template v-if="row.delivery_checked_at">Checked {{ formatWhen(row.delivery_checked_at) }}</template>
-                  <template v-else>Not checked yet. The numbers above are what was recorded when it was sent.</template>
-                  <span v-if="notes[row.sms_log_id]" role="status"> {{ notes[row.sms_log_id] }}</span>
-                </div>
-              </div>
-
-              <v-tooltip :disabled="row.checkable" location="top" text="No SkySMS message ids were stored for this blast, so its delivery can't be checked.">
-                <template #activator="{ props: tip }">
-                  <span v-bind="tip" class="blast-check flex-shrink-0">
-                    <v-btn
-                      variant="flat" height="36" class="check-btn text-none"
-                      prepend-icon="mdi-refresh"
-                      :disabled="!row.checkable"
-                      :loading="!!checking[row.sms_log_id]"
-                      @click="checkDelivery(row)"
-                    >Check status</v-btn>
-                  </span>
-                </template>
-              </v-tooltip>
-            </div>
-          </v-card-text>
-        </v-card>
+        <!-- What became of the blasts after SkySMS took them: one row per send,
+             opened in a panel. Beside the form from lg, under it below. -->
+        <BlastHistory ref="history" />
     </div>
     </div>
 
@@ -388,7 +317,8 @@ import { API_BASE } from '@/config/api'
 import { pluralize } from '@/composables/adminUi'
 import PageHeader from '@/components/PageHeader.vue'
 import NoticeBanner from '@/components/NoticeBanner.vue'
-import StatusPill from '@/components/StatusPill.vue'
+import BlastHistory from '@/components/BlastHistory.vue'
+import { formatWhen } from '@/composables/blastDelivery'
 import EditDialog from '@/components/EditDialog.vue'
 
 const message = ref('')
@@ -715,106 +645,12 @@ const fetchBalance = async () => {
   }
 }
 
-// Recent blasts and what SkySMS says became of them. Pending and Queued are
-// not delivery: the API keeps them apart from Sent, and so does this list.
-const deliveries = ref({ rows: [], loading: false, error: '' })
-const checking = ref({})
-const notes = ref({})
-
-// `pill` is the StatusPill accent each count is tinted with.
-const DELIVERY_STATES = [
-  { key: 'queued', label: 'Queued', pill: 'Queued', always: true },
-  { key: 'pending', label: 'Pending', pill: 'Pending', always: true },
-  { key: 'sent', label: 'Sent', pill: 'Sent', always: true },
-  { key: 'failed', label: 'Failed', pill: 'Failed', always: true },
-  { key: 'unconfirmed', label: 'Unconfirmed', pill: 'Pending', always: false },
-  { key: 'other', label: 'Other status', pill: 'Pending', always: false },
-]
-
-const visibleStates = (row) =>
-  DELIVERY_STATES.filter(state => state.always || row.counts[state.key] > 0)
-
-// "Sep 21, 2026, 6:11 AM"
-const formatWhen = (value) => (value
-  ? new Date(value).toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })
-  : '')
-
-const fetchDeliveries = async () => {
-  deliveries.value.loading = true
-  deliveries.value.error = ''
-
-  try {
-    const res = await fetch(`${API_BASE}/sms/deliveries`, { headers: getHeaders() })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.message || 'Failed to load recent blasts')
-    deliveries.value.rows = data.data
-  } catch (error) {
-    deliveries.value.error = error.message
-  } finally {
-    deliveries.value.loading = false
-  }
-}
-
-const checkDelivery = async (row) => {
-  checking.value = { ...checking.value, [row.sms_log_id]: true }
-  notes.value = { ...notes.value, [row.sms_log_id]: '' }
-
-  try {
-    const res = await fetch(`${API_BASE}/sms/deliveries/${row.sms_log_id}/check`, {
-      method: 'POST',
-      headers: getHeaders(),
-    })
-    const data = await res.json()
-    if (!res.ok) throw new Error(data.message || 'Failed to check the status')
-
-    const index = deliveries.value.rows.findIndex(r => r.sms_log_id === row.sms_log_id)
-    if (index !== -1) deliveries.value.rows[index] = data.data
-
-    let note = data.message || ''
-    if (data.checked && data.not_found > 0) {
-      note = `${data.not_found} recipient(s) are not in SkySMS's list yet, so they still show what was recorded at send.`
-    }
-    notes.value = { ...notes.value, [row.sms_log_id]: note }
-    return data.checked
-  } catch (error) {
-    notes.value = { ...notes.value, [row.sms_log_id]: error.message }
-    return false
-  } finally {
-    checking.value = { ...checking.value, [row.sms_log_id]: false }
-  }
-}
-
-// Refresh all: reload the list, then check every blast that still has Queued or
-// Pending messages (Sent and Failed are final), a few at a time. The per-row
-// call is the same one the Check status button makes.
-const CHECK_CONCURRENCY = 3
-const refreshAll = ref({ running: false, done: 0, total: 0, message: '' })
-const stillChanging = (row) => row.checkable && (row.counts.queued > 0 || row.counts.pending > 0)
-
-const refreshAllDeliveries = async () => {
-  refreshAll.value = { running: true, done: 0, total: 0, message: '' }
-  await fetchDeliveries()
-
-  const queue = deliveries.value.rows.filter((row) => stillChanging(row))
-  refreshAll.value.total = queue.length
-  let failed = 0
-
-  const worker = async () => {
-    for (let row = queue.shift(); row; row = queue.shift()) {
-      if (!(await checkDelivery(row))) failed++
-      refreshAll.value.done++
-    }
-  }
-  await Promise.all(Array.from({ length: CHECK_CONCURRENCY }, worker))
-
-  refreshAll.value.running = false
-  if (failed) refreshAll.value.message = `${failed} ${failed === 1 ? 'blast' : 'blasts'} could not be checked`
-}
+// Recent blasts live in BlastHistory; it is reloaded here after a send.
+const history = ref(null)
 
 onMounted(() => {
   fetchBarangays()
   fetchBalance()
-  fetchDeliveries()
 })
 
 const sendSmsBlast = async () => {
@@ -904,7 +740,7 @@ const confirmSend = async () => {
           message: `${data.queued} messages queued at SkySMS and billed. Delivery is not confirmed yet — use Check status under Recent blasts.`
         }
 
-    fetchDeliveries()
+    history.value?.reload()
 
     message.value = ''
     selectedTemplate.value = null
@@ -1033,18 +869,19 @@ const rotateBlastCode = async () => {
   overflow: hidden;
   min-width: 0;
 }
-.blast-card--compose { display: flex; flex-direction: column; gap: 18px; padding: 24px; }
+.blast-card--compose { display: flex; flex-direction: column; gap: 18px; padding: 24px; max-width: 720px; }
 .blast-pad { padding: 24px; }
-.blast-history-head { border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08); }
-.blast-row { padding: 18px 24px; }
 
-/* Two columns that each take at least 380px, else one. */
+/* One column (form, then history); from lg a 400px form beside the history. */
 .blast-layout {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 20px;
   align-items: start;
   width: 100%;
+}
+@media (min-width: 1280px) {
+  .blast-layout { grid-template-columns: 400px minmax(0, 1fr); }
 }
 
 .blast-tile {
@@ -1150,27 +987,6 @@ const rotateBlastCode = async () => {
 .check-btn { padding: 0 14px; border-radius: 10px; font-size: 13px; }
 .outline-btn :deep(.v-icon--start),
 .check-btn :deep(.v-icon--start) { margin-inline-end: 8px; font-size: 16px; }
-
-/* History rows: the blast's lines on the left, Check status on the right. */
-.delivery-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  border-bottom: 1px solid rgba(var(--v-theme-on-surface), 0.08);
-}
-.delivery-main { min-width: 0; }
-.delivery-line,
-.delivery-text { font-size: 14px; line-height: 20px; }
-.delivery-text { margin: 4px 0 0; }
-.delivery-muted { color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)); }
-.mt-2-5 { margin-top: 10px; }
-.delivery-checked {
-  margin-top: 10px;
-  font-size: 12px;
-  line-height: 16px;
-  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
-}
 
 @media (max-width: 599px) {
   .blast-check, .blast-check :deep(.v-btn) { width: 100%; }

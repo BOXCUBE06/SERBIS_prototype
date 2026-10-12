@@ -13,8 +13,10 @@
       <!-- Left Side -->
       <div class="brand-panel">
         <img
-          src="@/assets/mdrrmo_logo.jpg"
+          src="@/assets/mdrrmo_logo-256.jpg"
           alt="MDRRMO Echague logo"
+          width="128"
+          height="128"
           class="brand-seal"
         />
         <div class="brand-text">

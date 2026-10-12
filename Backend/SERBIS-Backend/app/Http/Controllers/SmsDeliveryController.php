@@ -6,8 +6,11 @@ use App\Models\Recipient;
 use App\Models\SmsLog;
 use App\Services\Sms\SmsGateway;
 use App\Support\PhoneNumber;
+use App\Traits\PaginatesLists;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\Rule;
 
 /**
  * What became of a blast after SkySMS accepted it.
@@ -20,7 +23,19 @@ use Illuminate\Support\Collection;
  */
 class SmsDeliveryController extends Controller
 {
+    use PaginatesLists;
+
+    /** Every status a recipient can hold, as ?status= accepts them. */
+    private const STATUSES = [Recipient::QUEUED, Recipient::PENDING, Recipient::SENT, Recipient::FAILED, Recipient::UNCONFIRMED, Recipient::OTHER];
+
+    /** Blasts shown. A blast is one send, however many barangays it reached. */
     private const RECENT = 10;
+
+    /** Barangay rows read to find those blasts: a send to every barangay is 60-odd rows. */
+    private const WINDOW = 400;
+
+    /** Rows of one send are written within a second or two; a repeat of the same text minutes later is a new blast. */
+    private const SAME_BLAST_SECONDS = 120;
 
     /** 100 messages a page. Past this the admin is looking at a window too big to read from a button. */
     private const MAX_PAGES = 10;
@@ -29,8 +44,10 @@ class SmsDeliveryController extends Controller
     private const RECHECK_SECONDS = 20;
 
     /**
-     * The ten most recent blast rows with the counts as last recorded. No vendor
-     * call: this is what the page shows on load.
+     * The ten most recent blasts, each with its barangays and the counts as last
+     * recorded. No vendor call: this is what the page shows on load. Recipients
+     * are not listed here (see recipients()): a send to a whole municipality
+     * would put thousands of names in a list nobody opens.
      */
     public function index(): JsonResponse
     {
@@ -39,14 +56,89 @@ class SmsDeliveryController extends Controller
             ->withCount('queueIds')
             ->latest()
             ->orderByDesc('sms_log_id')
-            ->limit(self::RECENT)
+            ->limit(self::WINDOW)
             ->get();
 
         $counts = $this->countsFor($logs->modelKeys());
 
         return response()->json([
-            'data' => $logs->map(fn (SmsLog $log) => $this->present($log, $counts[$log->getKey()] ?? [])),
+            'data' => $this->groupIntoBlasts($logs)
+                ->take(self::RECENT)
+                ->map(fn (Collection $blast) => $this->presentBlast($blast, $counts))
+                ->values(),
         ]);
+    }
+
+    /**
+     * Who one barangay's message went to, one page at a time: name, masked
+     * number, status and when that status last changed. Read when a barangay
+     * is opened, not on the list load, because a send to a whole municipality
+     * is thousands of residents.
+     *
+     * ?status= narrows to one status, ?search= matches a name or a number
+     * (typed as 0917…, 63917… or +63917…), ?page= and ?per_page= page it.
+     * The number is masked to its first and last four digits: the panel needs
+     * to tell residents apart, not to read the number back.
+     */
+    public function recipients(Request $request, SmsLog $smsLog): JsonResponse
+    {
+        $filters = $request->validate([
+            'status' => ['nullable', Rule::in(self::STATUSES)],
+            'search' => ['nullable', 'string', 'max:100'],
+        ]);
+
+        $query = Recipient::query()
+            ->join('tbl_residents', 'tbl_residents.resident_id', '=', 'tbl_recipients.resident_id')
+            ->where('tbl_recipients.sms_log_id', $smsLog->getKey())
+            ->select(['tbl_recipients.recipient_id', 'tbl_recipients.resident_id', 'tbl_recipients.status', 'tbl_recipients.created_at', 'tbl_recipients.updated_at'])
+            ->with('resident:resident_id,first_name,last_name,phone_number')
+            ->orderBy('tbl_residents.last_name')
+            ->orderBy('tbl_residents.first_name')
+            ->orderBy('tbl_recipients.recipient_id');
+
+        if (! empty($filters['status'])) {
+            $query->where('tbl_recipients.status', $filters['status']);
+        }
+
+        if (($term = trim((string) ($filters['search'] ?? ''))) !== '') {
+            $like = '%'.addcslashes($term, '%_\\').'%';
+            $number = PhoneNumber::normalize($term);
+
+            $query->where(function ($q) use ($like, $number) {
+                $q->where('tbl_residents.first_name', 'like', $like)
+                    ->orWhere('tbl_residents.last_name', 'like', $like)
+                    ->orWhereRaw("CONCAT(tbl_residents.first_name, ' ', tbl_residents.last_name) LIKE ?", [$like])
+                    ->orWhere('tbl_residents.phone_number', 'like', $like);
+
+                if ($number !== '') {
+                    $q->orWhere('tbl_residents.phone_number', $number);
+                }
+            });
+        }
+
+        $page = $query->paginate($this->resolvePerPage($request));
+
+        return response()->json([
+            'data' => $page->getCollection()->map(fn (Recipient $r) => [
+                'recipient_id' => $r->getKey(),
+                'name' => trim(($r->resident?->first_name ?? '').' '.($r->resident?->last_name ?? '')) ?: 'Unknown resident',
+                'phone' => $this->maskPhone((string) $r->resident?->phone_number),
+                'status' => $r->status,
+                'queued_at' => $r->created_at,
+                'updated_at' => $r->updated_at,
+            ])->values(),
+            'meta' => $this->paginationMeta($page),
+        ]);
+    }
+
+    /** 0917 ••• 4821: the first and last four digits, nothing between. A value too short to mask meaningfully is hidden whole. */
+    private function maskPhone(string $number): string
+    {
+        $digits = preg_replace('/D/', '', PhoneNumber::display($number)) ?? '';
+
+        return strlen($digits) >= 8
+            ? substr($digits, 0, 4).' ••• '.substr($digits, -4)
+            : '••••';
     }
 
     /**
@@ -157,8 +249,11 @@ class SmsDeliveryController extends Controller
             $byStatus[Recipient::fromVendor($byPhone[$phone]['status'] ?? null)][] = $recipient->getKey();
         }
 
+        // Only a recipient whose status actually changes is written: updated_at
+        // is what the panel shows as "when it changed", so a re-check that finds
+        // the same status must not move it.
         foreach ($byStatus as $status => $ids) {
-            Recipient::whereIn('recipient_id', $ids)->update(['status' => $status]);
+            Recipient::whereIn('recipient_id', $ids)->where('status', '!=', $status)->update(['status' => $status]);
         }
 
         $counts = $this->countsFor([$log->getKey()])[$log->getKey()] ?? [];
@@ -209,6 +304,79 @@ class SmsDeliveryController extends Controller
             });
 
         return $counts;
+    }
+
+    /**
+     * The barangay rows of one send, newest send first. A send writes one row
+     * per barangay (SmsController::recordBlast), all within a second or two with
+     * the same sender and text, so those three together are what makes rows one
+     * blast. The same text sent again minutes later stays a separate blast.
+     *
+     * @param  Collection<int, SmsLog>  $logs  newest first
+     * @return Collection<int, Collection<int, SmsLog>>
+     */
+    private function groupIntoBlasts(Collection $logs): Collection
+    {
+        $blasts = [];
+
+        foreach ($logs as $log) {
+            $home = null;
+
+            foreach ($blasts as $i => $blast) {
+                $first = $blast->first();
+
+                if ($first->sender_id === $log->sender_id
+                    && $first->message_body === $log->message_body
+                    && abs($first->created_at->diffInSeconds($log->created_at, false)) <= self::SAME_BLAST_SECONDS) {
+                    $home = $i;
+                    break;
+                }
+            }
+
+            if ($home === null) {
+                $blasts[] = collect([$log]);
+            } else {
+                $blasts[$home]->push($log);
+            }
+        }
+
+        return collect($blasts);
+    }
+
+    /**
+     * One send as the panel draws it: totals for the whole send, then each
+     * barangay's own counts. Totals are sums of the barangay rows, so they can
+     * never disagree with the rows beneath them.
+     *
+     * @param  Collection<int, SmsLog>  $blast
+     * @param  array<int, array<string, int>>  $counts
+     */
+    private function presentBlast(Collection $blast, array $counts): array
+    {
+        $rows = $blast
+            ->map(fn (SmsLog $log) => $this->present($log, $counts[$log->getKey()] ?? []))
+            ->sortBy(fn (array $row) => mb_strtolower($row['barangay']))
+            ->values();
+
+        $first = $blast->first();
+        $totals = [];
+
+        foreach (array_keys($rows->first()['counts']) as $state) {
+            $totals[$state] = $rows->sum(fn (array $row) => $row['counts'][$state]);
+        }
+
+        return [
+            'blast_id' => $first->getKey(),
+            'created_at' => $blast->min('created_at'),
+            'sender' => $rows->first()['sender'],
+            'message' => $first->message_body,
+            'barangay_count' => $rows->count(),
+            'recipient_count' => array_sum($totals),
+            'counts' => $totals,
+            'checkable' => $rows->contains('checkable', true),
+            'delivery_checked_at' => $rows->pluck('delivery_checked_at')->filter()->max(),
+            'barangays' => $rows,
+        ];
     }
 
     /**
