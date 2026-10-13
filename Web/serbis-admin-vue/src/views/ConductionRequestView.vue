@@ -854,6 +854,9 @@ const showNewTrips = async () => {
   await fetchData()
   refreshPulse()
 }
+// Nothing open: swap the list by itself; otherwise the notice stays.
+watch(() => tripUpdate.value.changed && !createDialog.value.open && !detail.value.open && !tripLog.value.open,
+  (go) => { if (go) {showNewTrips()} })
 
 const rowProps = ({ item }) => ({
   tabindex: 0,

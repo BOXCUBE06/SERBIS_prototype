@@ -915,7 +915,11 @@ const { attachments, lightbox, lightboxAttachment, openLightbox, loadAttachments
   useRequestAttachments(selectedRequest, { itemId, getHeaders })
 
 const { requests, vehicles, residents, services, listAbortController, refreshing, fetchData, fetchRequests, selectRequest, listUpdate } =
-  useRequestFetch({ isAmbulance: true, initialLoad, apiError, formData, selectedRequest, loadAttachments })
+  useRequestFetch({
+    isAmbulance: true, initialLoad, apiError, formData, selectedRequest, loadAttachments,
+    isIdle: () => !selectedRequest.value && !createDialog.value.open && !reasonDialog.value.open
+      && !resolveDialog.value.open && !rescheduleDialog.value.open && !lightbox.value.open,
+  })
 
 const reasonDialog = ref(emptyReasonDialog())
 
