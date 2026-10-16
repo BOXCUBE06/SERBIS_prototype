@@ -110,6 +110,7 @@
          refuses a change): the app names services from its own translations, and
          the category drives dispatch and vehicle mapping. -->
     <EditDialog
+      ref="editRef"
       v-model="modal.show"
       title="Edit service"
       confirm-label="Save changes"
@@ -117,6 +118,7 @@
       :note="modal.addedOn ? `Added ${modal.addedOn}` : ''"
       :fields="editFields"
       :form="form"
+      :field-errors="editErrors"
       :error="modal.error"
       :loading="modal.loading"
       @save="saveService"
@@ -169,6 +171,7 @@ import FilterSelect from '@/components/FilterSelect.vue'
 import EditDialog from '@/components/EditDialog.vue'
 import RowActions from '@/components/RowActions.vue'
 import { pluralize } from '@/composables/adminUi'
+import { splitServerErrors } from '@/composables/useFormErrors'
 import { can } from '@/composables/useCurrentAdmin'
 import { nextSteps } from '@/composables/serviceAdd.js'
 
@@ -213,6 +216,8 @@ const initialLoad = ref(true)
 const apiError = ref('')
 
 const modal = ref({ show: false, loading: false, error: '', targetId: null, addedOn: '' })
+const editRef = ref(null)
+const editErrors = ref({})
 const form = ref({ service_name: '', service_name_fil: '', description: '', category: 'relief' })
 const togglingId = ref(null)
 const disableDialog = ref({ show: false, item: null })
@@ -295,12 +300,16 @@ const editFields = [
 
 const openEdit = (item) => {
   form.value = { service_name: item.service_name || '', service_name_fil: item.service_name_fil || '', description: item.description || '', category: item.category || 'relief' }
+  editErrors.value = {}
   modal.value = { show: true, loading: false, error: '', targetId: idOf(item), addedOn: formatDate(item.created_at) }
 }
 
 const saveService = async () => {
+  const { valid } = await editRef.value.validate()
+  if (!valid) return
   modal.value.loading = true
   modal.value.error = ''
+  editErrors.value = {}
   // Name and category are fixed once a service exists.
   const payload = { service_name_fil: form.value.service_name_fil.trim() || null, description: form.value.description.trim() || null }
   try {
@@ -311,8 +320,10 @@ const saveService = async () => {
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
-      const msg = data.errors ? Object.values(data.errors).flat().join(' ') : (data.message || 'Save failed')
-      throw new Error(msg)
+      // A 422 lands on its fields; only messages that match none go in the banner.
+      const { matched, rest } = splitServerErrors(data.errors, editFields.map((f) => f.key))
+      editErrors.value = matched
+      throw new Error(rest.join(' ') || (Object.keys(matched).length > 0 ? 'Check the highlighted fields.' : data.message || 'Save failed'))
     }
     await reload()
     modal.value.show = false

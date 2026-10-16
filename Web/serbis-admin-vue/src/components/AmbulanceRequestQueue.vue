@@ -578,8 +578,10 @@
           <span class="text-h6 font-weight-bold">Log Service Request</span>
           <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close" @click="createDialog.open = false"></v-btn>
         </v-card-title>
+        <!-- Pinned above the scrolling body, so a message that matches no field is never scrolled out of sight. -->
+        <v-alert v-if="createDialog.error" type="error" variant="tonal" density="compact" class="mx-6 mt-4 mb-0" role="alert">{{ createDialog.error }}</v-alert>
         <v-card-text class="pa-6" style="max-height: 70vh;">
-          <v-alert v-if="createDialog.error" type="error" variant="tonal" density="compact" class="mb-4">{{ createDialog.error }}</v-alert>
+          <v-form ref="logForm" validate-on="blur">
 
           <v-btn-toggle
             v-model="createDialog.requesterType"
@@ -596,6 +598,7 @@
           <v-autocomplete
             v-if="createDialog.requesterType === 'resident'"
             v-model="createDialog.form.resident_id"
+            :error-messages="logErrors.resident_id"
             :items="residentOptions"
             label="Head of the Family"
             placeholder="Search by name"
@@ -610,6 +613,7 @@
               <v-col cols="12" sm="6">
                 <v-text-field
                   v-model="createDialog.form.walk_in_first_name"
+                  :error-messages="logErrors.walk_in_first_name"
                   label="First name"
                   placeholder="e.g. Juan"
                   variant="outlined"
@@ -621,6 +625,7 @@
               <v-col cols="12" sm="6">
                 <v-text-field
                   v-model="createDialog.form.walk_in_last_name"
+                  :error-messages="logErrors.walk_in_last_name"
                   label="Last name"
                   placeholder="e.g. Dela Cruz"
                   variant="outlined"
@@ -632,6 +637,7 @@
             </v-row>
             <v-text-field
               v-model="createDialog.form.walk_in_contact_number"
+              :error-messages="logErrors.walk_in_contact_number"
               label="Contact number"
               placeholder="e.g. 09171234567"
               variant="outlined"
@@ -645,6 +651,7 @@
             <v-col cols="12" sm="8">
               <v-text-field
                 v-model="createDialog.form.patient_name"
+                :error-messages="logErrors.patient_name"
                 label="Patient name" placeholder="e.g. Maria Santos" variant="outlined" density="comfortable" class="mb-2"
                 :rules="[required]"
               ></v-text-field>
@@ -652,12 +659,14 @@
             <v-col cols="6" sm="4">
               <v-text-field
                 v-model="createDialog.form.patient_age"
+                :error-messages="logErrors.patient_age"
                 label="Age" placeholder="e.g. 54" type="number" min="0" max="150" variant="outlined" density="comfortable" class="mb-2"
               ></v-text-field>
             </v-col>
           </v-row>
           <v-text-field
             v-model="createDialog.form.patient_address"
+            :error-messages="logErrors.patient_address"
             label="Patient address" placeholder="e.g. Purok 2, San Fabian" variant="outlined" density="comfortable" class="mb-2"
             :rules="[required]"
           ></v-text-field>
@@ -665,6 +674,7 @@
             <v-col cols="12" sm="6">
               <v-text-field
                 v-model="createDialog.form.pickup_location"
+                :error-messages="logErrors.pickup_location"
                 label="Pickup location" placeholder="e.g. Barangay Hall, San Fabian" variant="outlined" density="comfortable" class="mb-2"
                 :rules="[required]"
               ></v-text-field>
@@ -672,6 +682,7 @@
             <v-col cols="12" sm="6">
               <v-text-field
                 v-model="createDialog.form.destination"
+                :error-messages="logErrors.destination"
                 label="Destination" placeholder="e.g. Echague District Hospital" variant="outlined" density="comfortable" class="mb-2"
                 :rules="[required]"
               ></v-text-field>
@@ -679,6 +690,7 @@
           </v-row>
           <v-textarea
             v-model="createDialog.form.condition_notes"
+            :error-messages="logErrors.condition_notes"
             label="Condition" placeholder="e.g. Chest pains since morning, conscious and breathing" variant="outlined" density="comfortable" rows="2" class="mb-2"
             :rules="[required]"
           ></v-textarea>
@@ -701,7 +713,9 @@
                 placeholder="e.g. Ana Santos"
                 variant="outlined"
                 density="compact"
-                hide-details
+                :rules="idx === 0 ? [relativeNeeded] : []"
+                :error-messages="logErrors[`patient_relatives.${idx}`] ?? (idx === 0 ? logErrors.patient_relatives : undefined)"
+                hide-details="auto"
               ></v-text-field>
               <v-btn
                 icon="mdi-close"
@@ -726,9 +740,11 @@
           <template v-if="createDialog.scheduleForLater">
             <DateTimePickerField
               v-model="createDialog.form.scheduled_at"
+              :error-messages="logErrors.scheduled_at"
               type="datetime-local"
               :min="minScheduleValue"
               label="Scheduled time"
+              :rules="[scheduleNeeded]"
               hint="At least 1 hour from now — for anything sooner, dispatch now instead."
               persistent-hint
               variant="outlined"
@@ -752,9 +768,11 @@
                 : 'No ambulance free for this window — try a different time.' }}
             </div>
           </template>
+          </v-form>
         </v-card-text>
         <v-card-actions class="pa-6 pt-0 d-flex justify-end gap-3 border-t">
-          <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" height="44" @click="createDialog.open = false">Cancel</v-btn>
+          <span v-if="logInvalid > 0" class="form-attention" role="alert">{{ logInvalid }} {{ logInvalid === 1 ? 'field needs' : 'fields need' }} attention</span>
+                    <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" height="44" @click="createDialog.open = false">Cancel</v-btn>
           <v-btn
             color="secondary"
             variant="flat"
@@ -784,6 +802,7 @@ import PersonCell from '@/components/PersonCell.vue'
 import DetailDrawer from '@/components/DetailDrawer.vue'
 import PickerDrawer from '@/components/PickerDrawer.vue'
 import '@/components/detail-dialog.css'
+import { useFormErrors } from '@/composables/useFormErrors'
 import RequestFiltersBar from '@/components/RequestFiltersBar.vue'
 import ExportMenu from '@/components/ExportMenu.vue'
 import BulkSelectionBar from '@/components/BulkSelectionBar.vue'
@@ -814,7 +833,7 @@ const itemsPerPage = ref(10)
 
 const ambulanceServiceId = computed(() => services.value.find(s => s.code === AMBULANCE_SERVICE_CODE)?.service_id ?? null)
 
-const filters = reactive({ status: 'All', barangay: 'All', unit: 'All' })
+const filters = reactive({ status: 'All', barangay: [], unit: 'All' })
 // The unit picker opens inside the drawer, replacing its body.
 const picker = reactive({ open: false })
 const selectedRequest = ref(null)
@@ -915,7 +934,11 @@ const { attachments, lightbox, lightboxAttachment, openLightbox, loadAttachments
   useRequestAttachments(selectedRequest, { itemId, getHeaders })
 
 const { requests, vehicles, residents, services, listAbortController, refreshing, fetchData, fetchRequests, selectRequest, listUpdate } =
-  useRequestFetch({ isAmbulance: true, initialLoad, apiError, formData, selectedRequest, loadAttachments })
+  useRequestFetch({
+    isAmbulance: true, initialLoad, apiError, formData, selectedRequest, loadAttachments,
+    isIdle: () => !selectedRequest.value && !createDialog.value.open && !reasonDialog.value.open
+      && !resolveDialog.value.open && !rescheduleDialog.value.open && !lightbox.value.open,
+  })
 
 const reasonDialog = ref(emptyReasonDialog())
 
@@ -1363,43 +1386,26 @@ const submitReschedule = async () => {
 const scheduleOpen = ref(false)
 const openDayView = () => { scheduleOpen.value = true }
 
+// Scroll/focus the first invalid field, and put the server's 422 on its fields.
+const logForm = ref(null)
+const { serverErrors: logErrors, invalidCount: logInvalid, validate: validateLog, applyServerErrors: applyLogErrors, reset: resetLog } =
+  useFormErrors(logForm, () => createDialog.value.form)
+watch(() => createDialog.value.open, (open) => { if (open) resetLog() })
+const LOG_FIELDS = [...Object.keys(emptyCreateForm()), 'patient_relatives.*']
+// Rules for what the old submit checked by hand.
+const relativeNeeded = () =>
+  createDialog.value.form.patient_relatives.some((name) => (name || '').trim()) || 'Name at least one relative or companion'
+const scheduleNeeded = (v) => !!v || 'Pick a date and time, or turn off scheduling to dispatch now'
+
 const submitWalkIn = async () => {
   const form = createDialog.value.form
   const isResident = createDialog.value.requesterType === 'resident'
 
-  if (isResident && !form.resident_id) {
-    createDialog.value.error = 'Pick a Head of the Family'
-    return
-  }
-  if (!isResident) {
-    if (!form.walk_in_first_name.trim() || !form.walk_in_last_name.trim() || !form.walk_in_contact_number.trim()) {
-      createDialog.value.error = 'Name and contact number are required for someone with no account'
-      return
-    }
-    if (phoneFormat(form.walk_in_contact_number) !== true) {
-      createDialog.value.error = 'Enter a valid contact number (e.g. 09171234567)'
-      return
-    }
-    if (nameFormat(form.walk_in_first_name) !== true || nameFormat(form.walk_in_last_name) !== true) {
-      createDialog.value.error = 'Names may only contain letters'
-      return
-    }
-  }
+  const { valid } = await validateLog()
+  if (!valid) return
+  // No field for the service: it is fixed for this dialog.
   if (!form.service_id) {
     createDialog.value.error = 'Pick a service'
-    return
-  }
-  if (!form.patient_name.trim() || !form.patient_address.trim() || !form.pickup_location.trim()
-      || !form.destination.trim() || !form.condition_notes.trim()) {
-    createDialog.value.error = 'Patient name, address, pickup, destination and condition are required'
-    return
-  }
-  if (!form.patient_relatives.some(name => name.trim())) {
-    createDialog.value.error = 'Name at least one relative or companion going with the patient'
-    return
-  }
-  if (createDialog.value.scheduleForLater && !form.scheduled_at) {
-    createDialog.value.error = 'Pick a date and time, or turn off scheduling to dispatch now'
     return
   }
 
@@ -1435,8 +1441,10 @@ const submitWalkIn = async () => {
     })
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}))
-      const firstError = errData.errors ? Object.values(errData.errors)[0]?.[0] : null
-      throw new Error(firstError || errData.message || 'Failed to file the request')
+      // A 422 lands on its fields; only a message that matches none goes in the banner.
+      // The server calls the walk-in's full name walk_in_name; the form splits it in two.
+      const rest = await applyLogErrors(errData.errors, LOG_FIELDS, { walk_in_name: 'walk_in_first_name' })
+      throw new Error(rest[0] || (errData.errors ? 'Check the highlighted fields.' : errData.message || 'Failed to file the request'))
     }
     createDialog.value.open = false
     await fetchRequests()

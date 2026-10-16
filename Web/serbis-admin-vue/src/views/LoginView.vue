@@ -80,7 +80,7 @@
           <!-- Password step. Unchanged apart from handleLogin now branching
                into the MFA step on a 403/mfa_required instead of always
                storing a token — see script setup. -->
-          <v-form v-if="step === 'password'" @submit.prevent="handleLogin" class="w-100">
+          <v-form v-if="step === 'password'" validate-on="blur" @submit.prevent="handleLogin" class="w-100">
 
             <div class="form-fields">
               <div>
@@ -149,7 +149,7 @@
                setToken for the mfa_required branch — so the router guard
                needs no changes: this whole page still looks unauthenticated
                to it until handleMfaSubmit succeeds. -->
-          <v-form v-else @submit.prevent="handleMfaSubmit" class="w-100">
+          <v-form v-else validate-on="blur" @submit.prevent="handleMfaSubmit" class="w-100">
             <!-- The QR only ever appears once per admin — see the code
                  comment on enrollment in AuthController::adminLogin. A second
                  login after enrollment sticks skips straight to the plain

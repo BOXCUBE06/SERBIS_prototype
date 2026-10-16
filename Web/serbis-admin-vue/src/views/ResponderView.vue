@@ -94,7 +94,6 @@
       :confirm-label="formDialog.editing ? 'Save' : 'Add responder'"
       :fields="formFields"
       :form="form"
-      :field-errors="fieldErrors"
       :error="formDialog.error"
       :loading="formDialog.loading"
       :avatar="formDialog.editing ? initials(form.name) : undefined"
@@ -175,22 +174,13 @@ const formFields = [
 
 const initials = (name) => (name || '').trim().split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join('').toUpperCase() || '?'
 
-const fieldErrors = ref({})
-const clearFieldErrors = () => { fieldErrors.value = {} }
-
-// Laravel answers `{errors: {field: [msg]}}` — same split as VehiclesView.
+// Laravel answers `{errors: {field: [msg]}}`: known fields get their message on
+// the input, anything else comes back for the banner.
 const applyServerErrors = async (res) => {
   const data = await res.json().catch(() => ({}))
   if (data.errors && typeof data.errors === 'object') {
-    const mapped = {}
-    const leftovers = []
-    for (const [key, messages] of Object.entries(data.errors)) {
-      const text = Array.isArray(messages) ? messages.join(' ') : String(messages)
-      if (key in form.value) mapped[key] = text
-      else leftovers.push(text)
-    }
-    fieldErrors.value = mapped
-    return leftovers.length > 0 ? leftovers.join(' ') : 'Please correct the highlighted fields.'
+    const rest = await formRef.value.applyServerErrors(data.errors, Object.keys(form.value))
+    return rest.length > 0 ? rest.join(' ') : 'Please correct the highlighted fields.'
   }
   return data.message || 'Save failed'
 }
@@ -279,7 +269,6 @@ const executeStatusChange = async () => {
 const openAdd = () => {
   form.value = { name: '', position: '', contact_no: '', status: 'available', photo_url: null }
   formDialog.value = { show: true, editing: false, loading: false, error: '' }
-  clearFieldErrors()
   formRef.value?.resetValidation()
 }
 const openEdit = (responder) => {
@@ -292,13 +281,11 @@ const openEdit = (responder) => {
     photo_url: responder.photo_url,
   }
   formDialog.value = { show: true, editing: true, loading: false, error: '' }
-  clearFieldErrors()
   formRef.value?.resetValidation()
 }
 
 const saveResponder = async () => {
   formDialog.value.error = ''
-  clearFieldErrors()
 
   const { valid } = await formRef.value.validate()
   if (!valid) {

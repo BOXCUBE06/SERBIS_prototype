@@ -11,6 +11,7 @@ import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
 import '../widgets/form_inputs.dart';
+import '../widgets/form_submit.dart';
 import '../widgets/borrow_request_widgets.dart';
 import '../widgets/feedback.dart';
 import '../widgets/form_section.dart';
@@ -1007,6 +1008,7 @@ class _BorrowSheetState extends State<_BorrowSheet> {
         _otherItemError = missingItem ? _t('Name the item you need.') : null;
         _addressError = missingAddress ? _t('Where should MDRRMO deliver it?') : null;
       });
+      revealFirstError(context);
       return;
     }
 
@@ -1029,10 +1031,22 @@ class _BorrowSheetState extends State<_BorrowSheet> {
     if (!mounted) return;
 
     if (result == null) {
+      // A field the server rejected is marked under its input; only a message
+      // that fits none is the banner.
+      final rejected = widget.appState.takeFieldErrors();
+      final purposeError = rejected['purpose'];
+      final itemError = _uncatalogued ? rejected['other_equipment_text'] : null;
+      final addressError = _delivery ? rejected['delivery_address'] : null;
+      final marked = purposeError != null || itemError != null || addressError != null;
+      final message = widget.appState.takeError();
       setState(() {
         _submitting = false;
-        _error = widget.appState.takeError() ?? _t('Something went wrong. Please try again.');
+        _purposeError = purposeError;
+        _otherItemError = itemError;
+        _addressError = addressError;
+        _error = marked ? null : message ?? _t('Something went wrong. Please try again.');
       });
+      if (marked) revealFirstError(context);
       return;
     }
 

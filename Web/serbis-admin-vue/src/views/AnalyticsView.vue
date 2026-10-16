@@ -56,27 +56,15 @@
         />
       </template>
 
-      <v-select
+      <BarangayFilter
         v-model="barangayIds"
         :items="barangayOptions"
         item-title="label"
         item-value="value"
-        aria-label="Barangay"
-        placeholder="All barangays"
-        persistent-placeholder
-        multiple
-        density="compact"
-        variant="outlined"
-        hide-details
-        class="filter-bar__select filter-select"
-      >
-        <!-- One line of plain text, drawn once: the name, or a count, so the field stays single-select height. -->
-        <template #selection="{ index }">
-          <span v-if="index === 0" class="filter-text" :title="selectedNames(barangayIds, barangayOptions).join(', ')">{{ selectedText(barangayIds, barangayOptions, 'barangays') }}</span>
-        </template>
-      </v-select>
+        class="filter-bar__select"
+      />
 
-      <v-select
+      <v-autocomplete
         v-model="serviceIds"
         :items="serviceOptions"
         item-title="label"
@@ -94,7 +82,7 @@
         <template #selection="{ index }">
           <span v-if="index === 0" class="filter-text" :title="selectedNames(serviceIds, serviceOptions).join(', ')">{{ selectedText(serviceIds, serviceOptions, 'services') }}</span>
         </template>
-      </v-select>
+      </v-autocomplete>
 
       <v-btn
         v-if="hasFilters"
@@ -469,6 +457,7 @@ import {
   Chart as ChartJS, Tooltip, Legend, CategoryScale, LinearScale, BarElement,
 } from 'chart.js'
 import { Bar } from 'vue-chartjs'
+import BarangayFilter from '@/components/BarangayFilter.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import AnalyticsSection from '@/components/AnalyticsSection.vue'
 import ChartDataTable from '@/components/ChartDataTable.vue'
@@ -556,13 +545,9 @@ const barangayOptions = computed(() => [
 const serviceOptions = computed(() => services.value.map(s => ({ label: s.service_name, value: s.service_id })))
 
 const selectedNames = (ids, options) => ids.map(id => options.find(o => o.value === id)?.label).filter(Boolean)
-/** The name when one is selected, else a count; walk-ins are appended, never counted. */
-const selectedText = (ids, options, noun) => {
-  const real = ids.filter(id => id !== WALK_IN)
-  const base = real.length === 1 ? (selectedNames(real, options)[0] ?? '') : `${real.length} ${noun}`
-  if (!ids.includes(WALK_IN)) return base
-  return real.length === 0 ? 'Walk-ins' : `${base} + walk-ins`
-}
+/** The name when one is selected, else a count. */
+const selectedText = (ids, options, noun) =>
+  ids.length === 1 ? (selectedNames(ids, options)[0] ?? '') : `${ids.length} ${noun}`
 
 const awaitingCustomRange = computed(() =>
   preset.value === 'custom' && !(customFrom.value && customTo.value)

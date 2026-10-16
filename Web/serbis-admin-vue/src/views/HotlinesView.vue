@@ -69,7 +69,6 @@
       :width="520"
       :fields="hotlineFields"
       :form="form"
-      :field-errors="fieldErrors"
       :error="formDialog.error"
       :loading="formDialog.loading"
       @save="save"
@@ -187,12 +186,10 @@ const move = async (index, step) => {
 const formRef = ref(null)
 const formDialog = ref({ show: false, editing: null, loading: false, error: '' })
 const form = ref(null)
-const fieldErrors = ref({})
 const blankForm = () => ({ label: '', label_fil: '', numbers: [{ label: '', number: '' }] })
 
 const openAdd = () => {
   form.value = blankForm()
-  fieldErrors.value = {}
   formDialog.value = { show: true, editing: null, loading: false, error: '' }
 }
 
@@ -202,7 +199,6 @@ const openEdit = (hotline) => {
     label_fil: hotline.label_fil || '',
     numbers: hotline.numbers.map((n) => ({ label: n.label || '', number: n.number })),
   }
-  fieldErrors.value = {}
   formDialog.value = { show: true, editing: hotline, loading: false, error: '' }
 }
 
@@ -216,7 +212,6 @@ const save = async () => {
 
   formDialog.value.loading = true
   formDialog.value.error = ''
-  fieldErrors.value = {}
   try {
     const res = await fetch(editing ? `${API_BASE}/hotlines/${editing.hotline_id}` : `${API_BASE}/hotlines`, {
       method: editing ? 'PUT' : 'POST',
@@ -225,8 +220,9 @@ const save = async () => {
     })
     const body = await res.json().catch(() => ({}))
     if (res.status === 422) {
-      fieldErrors.value = body.errors || {}
-      formDialog.value.error = 'Check the highlighted fields.'
+      // On the fields, numbers.N.label / .number included; a message that fits none goes in the banner.
+      const rest = await formRef.value.applyServerErrors(body.errors, hotlineFields.flatMap((f) => [f.key, `${f.key}.*`]))
+      formDialog.value.error = rest.length > 0 ? rest.join(' ') : 'Check the highlighted fields.'
       return
     }
     if (!res.ok) throw new Error(body.message || 'Could not save the hotline.')

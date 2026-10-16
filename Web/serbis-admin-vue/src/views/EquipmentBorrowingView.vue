@@ -103,8 +103,8 @@
       </template>
 
       <template v-slot:filters>
-        <v-select v-model="itemFilter" :items="itemOptions" prefix="Equipment" aria-label="Equipment" variant="outlined" density="compact" hide-details rounded="lg" class="filter-bar__select"></v-select>
-        <v-select v-model="barangayFilter" :items="barangayOptions" prefix="Barangay" aria-label="Barangay" variant="outlined" density="compact" hide-details rounded="lg" class="filter-bar__select"></v-select>
+        <v-autocomplete v-model="itemFilter" :items="itemOptions" prefix="Equipment" aria-label="Equipment" no-data-text="No equipment matches" variant="outlined" density="compact" hide-details rounded="lg" class="filter-bar__select"></v-autocomplete>
+        <BarangayFilter v-model="barangayFilter" :items="barangayOptions" class="filter-bar__select" />
       </template>
 
       <template v-slot:item.resident="{ item }">
@@ -240,8 +240,8 @@
       </template>
 
       <template v-slot:filters>
-        <v-select v-model="itemFilter" :items="itemOptions" prefix="Equipment" aria-label="Equipment" variant="outlined" density="compact" hide-details rounded="lg" class="filter-bar__select"></v-select>
-        <v-select v-model="barangayFilter" :items="barangayOptions" prefix="Barangay" aria-label="Barangay" variant="outlined" density="compact" hide-details rounded="lg" class="filter-bar__select"></v-select>
+        <v-autocomplete v-model="itemFilter" :items="itemOptions" prefix="Equipment" aria-label="Equipment" no-data-text="No equipment matches" variant="outlined" density="compact" hide-details rounded="lg" class="filter-bar__select"></v-autocomplete>
+        <BarangayFilter v-model="barangayFilter" :items="barangayOptions" class="filter-bar__select" />
       </template>
 
       <template v-slot:item.status="{ item }">
@@ -655,12 +655,13 @@
 <script setup>
 import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { initials as computeInitials, pluralize } from '@/composables/adminUi'
+import { initials as computeInitials, namesLabel, pluralize } from '@/composables/adminUi'
 import { getToken } from '@/composables/authToken'
 import { displayPhone } from '@/composables/phoneNumber'
 import { useBorrowingsList } from '@/composables/borrowingsList'
 import { API_BASE } from '@/config/api'
 import { REFERENCE_TTL_MS, invalidate, useCachedFetch } from '@/composables/useCachedFetch'
+import BarangayFilter from '@/components/BarangayFilter.vue'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
@@ -691,7 +692,6 @@ const columns = BORROWING_STATUSES
 // The "no filter" sentinel for each select. Named rather than repeated as a
 // string literal: it is compared in four places and rendered in one.
 const ALL_ITEMS = 'All items'
-const ALL_BARANGAYS = 'All barangays'
 const ALL_STATUS = 'All'
 const NOT_RECORDED = 'Not recorded'
 const ALL_OUTCOMES = 'All'
@@ -703,7 +703,8 @@ const { rows: borrowings, loadError, initialLoad, reloading, load } = useBorrowi
 const activeTab = ref('board')
 const search = ref('')
 const itemFilter = ref(ALL_ITEMS)
-const barangayFilter = ref(ALL_BARANGAYS)
+// [] = every barangay.
+const barangayFilter = ref([])
 // 'Overdue' joins the three real statuses as a fourth, mutually-exclusive
 // segment (see activeStatusTabs) — no longer a separate toggle a pipeline
 // stage could be combined with.
@@ -814,14 +815,12 @@ const itemOptions = computed(() => [
     .slice()
     .sort((a, b) => a.localeCompare(b)),
 ])
-const barangayOptions = computed(() => [
-  ALL_BARANGAYS,
-  ...[...barangayMaster.value]
+const barangayOptions = computed(() =>
+  barangayMaster.value
     .map((b) => b.barangay_name)
     .filter(Boolean)
-    .slice()
     .sort((a, b) => a.localeCompare(b)),
-])
+)
 
 // `clearable` writes null, not '', so the guard is not decorative.
 const matchesSearch = (b) => {
@@ -843,8 +842,8 @@ const matchesItem = (b) =>
   itemFilter.value === ALL_ITEMS || b.equipment?.item_name === itemFilter.value
 
 const matchesBarangay = (b) =>
-  barangayFilter.value === ALL_BARANGAYS ||
-  b.resident?.barangay?.barangay_name === barangayFilter.value
+  barangayFilter.value.length === 0 ||
+  barangayFilter.value.includes(b.resident?.barangay?.barangay_name)
 
 // The three filters shared by both tabs and both segmented controls' own
 // counts. Status/outcome are not among them — each segment needs the count
@@ -936,7 +935,7 @@ const SORT_CAPTION = 'Sorted by: overdue on top, then status, then oldest'
 const activeFilters = computed(() => {
   const out = []
   if (itemFilter.value !== ALL_ITEMS) out.push({ key: 'item', label: `Equipment: ${itemFilter.value}` })
-  if (barangayFilter.value !== ALL_BARANGAYS) out.push({ key: 'barangay', label: `Barangay: ${barangayFilter.value}` })
+  if (barangayFilter.value.length > 0) out.push({ key: 'barangay', label: `Barangay: ${namesLabel(barangayFilter.value)}` })
   if (activeTab.value === 'board') {
     if (statusFilter.value !== ALL_STATUS) out.push({ key: 'status', label: `Status: ${statusFilter.value}` })
   } else if (outcomeFilter.value !== ALL_OUTCOMES) {
@@ -947,14 +946,14 @@ const activeFilters = computed(() => {
 
 const clearFilter = (key) => {
   if (key === 'item') itemFilter.value = ALL_ITEMS
-  else if (key === 'barangay') barangayFilter.value = ALL_BARANGAYS
+  else if (key === 'barangay') barangayFilter.value = []
   else if (key === 'status') statusFilter.value = ALL_STATUS
   else if (key === 'outcome') outcomeFilter.value = ALL_OUTCOMES
 }
 
 const clearAllFilters = () => {
   itemFilter.value = ALL_ITEMS
-  barangayFilter.value = ALL_BARANGAYS
+  barangayFilter.value = []
   statusFilter.value = ALL_STATUS
   outcomeFilter.value = ALL_OUTCOMES
 }

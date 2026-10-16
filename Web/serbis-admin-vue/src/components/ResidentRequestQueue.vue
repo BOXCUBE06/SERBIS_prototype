@@ -421,8 +421,10 @@
           <span class="text-h6 font-weight-bold">Log Service Request</span>
           <v-btn icon="mdi-close" variant="tonal" rounded="circle" size="small" aria-label="Close" @click="createDialog.open = false"></v-btn>
         </v-card-title>
+        <!-- Pinned above the scrolling body, so a message that matches no field is never scrolled out of sight. -->
+        <v-alert v-if="createDialog.error" type="error" variant="tonal" density="compact" class="mx-6 mt-4 mb-0" role="alert">{{ createDialog.error }}</v-alert>
         <v-card-text class="pa-6" style="max-height: 70vh;">
-          <v-alert v-if="createDialog.error" type="error" variant="tonal" density="compact" class="mb-4">{{ createDialog.error }}</v-alert>
+          <v-form ref="logForm" validate-on="blur">
 
           <v-btn-toggle
             v-model="createDialog.requesterType"
@@ -439,6 +441,7 @@
           <v-autocomplete
             v-if="createDialog.requesterType === 'resident'"
             v-model="createDialog.form.resident_id"
+            :error-messages="logErrors.resident_id"
             :items="residentOptions"
             label="Head of the Family"
             placeholder="Search by name"
@@ -453,6 +456,7 @@
               <v-col cols="12" sm="6">
                 <v-text-field
                   v-model="createDialog.form.walk_in_first_name"
+                  :error-messages="logErrors.walk_in_first_name"
                   label="First name"
                   placeholder="e.g. Juan"
                   variant="outlined"
@@ -464,6 +468,7 @@
               <v-col cols="12" sm="6">
                 <v-text-field
                   v-model="createDialog.form.walk_in_last_name"
+                  :error-messages="logErrors.walk_in_last_name"
                   label="Last name"
                   placeholder="e.g. Dela Cruz"
                   variant="outlined"
@@ -475,6 +480,7 @@
             </v-row>
             <v-text-field
               v-model="createDialog.form.walk_in_contact_number"
+              :error-messages="logErrors.walk_in_contact_number"
               label="Contact number"
               placeholder="e.g. 09171234567"
               variant="outlined"
@@ -484,18 +490,21 @@
             ></v-text-field>
           </template>
 
-          <v-select
+          <v-autocomplete
             v-model="createDialog.form.service_id"
+            :error-messages="logErrors.service_id"
             :items="serviceOptions"
             label="Service"
+            no-data-text="No service matches"
             variant="outlined"
             density="comfortable"
             class="mb-2"
             :rules="[required]"
-          ></v-select>
+          ></v-autocomplete>
 
           <v-textarea
             v-model="createDialog.form.description"
+            :error-messages="logErrors.description"
             label="Description"
             placeholder="e.g. Fallen tree blocking the road at Purok 3"
             variant="outlined"
@@ -504,9 +513,11 @@
             class="mb-2"
             :rules="[required]"
           ></v-textarea>
+          </v-form>
         </v-card-text>
         <v-card-actions class="pa-6 pt-0 d-flex justify-end gap-3 border-t">
-          <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" height="44" @click="createDialog.open = false">Cancel</v-btn>
+          <span v-if="logInvalid > 0" class="form-attention" role="alert">{{ logInvalid }} {{ logInvalid === 1 ? 'field needs' : 'fields need' }} attention</span>
+                    <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" height="44" @click="createDialog.open = false">Cancel</v-btn>
           <v-btn
             color="secondary"
             variant="flat"
@@ -535,6 +546,7 @@ import DetailDrawer from '@/components/DetailDrawer.vue'
 import PickerDrawer from '@/components/PickerDrawer.vue'
 import '@/components/detail-dialog.css'
 import RequestFiltersBar from '@/components/RequestFiltersBar.vue'
+import { useFormErrors } from '@/composables/useFormErrors'
 import ExportMenu from '@/components/ExportMenu.vue'
 import BulkSelectionBar from '@/components/BulkSelectionBar.vue'
 import { requesterName, requesterAccountType, isWalkIn, requesterInitials, requesterPhone, requesterBarangay, requestBarangayName, roleFromBarangay, vehicleName, vehicleIcon, getVehicleNameById, useDescriptionLines, useSelection, transactionNo } from '@/composables/requestDisplay'
@@ -566,7 +578,7 @@ const itemsPerPage = ref(10)
 const isProgramRequest = (r) => r?.service?.category === 'programs'
 
 // The tabs own `status`; there is no separate Status select.
-const filters = reactive({ status: 'All', barangay: 'All', unit: 'All' })
+const filters = reactive({ status: 'All', barangay: [], unit: 'All' })
 const responderModal = ref({ loading: false, error: '', selectedIds: new Set() })
 // The picker opens inside the drawer, replacing its body.
 const picker = reactive({ open: false, tab: 'responders' })
@@ -611,7 +623,10 @@ const { attachments, lightbox, lightboxAttachment, openLightbox, loadAttachments
   useRequestAttachments(selectedRequest, { itemId, getHeaders })
 
 const { requests, vehicles, residents, services, responders, listAbortController, refreshing, fetchData, fetchRequests, selectRequest, listUpdate } =
-  useRequestFetch({ isAmbulance: false, initialLoad, apiError, formData, selectedRequest, loadAttachments })
+  useRequestFetch({
+    isAmbulance: false, initialLoad, apiError, formData, selectedRequest, loadAttachments,
+    isIdle: () => !selectedRequest.value && !createDialog.value.open && !reasonDialog.value.open && !resolveDialog.value.open,
+  })
 
 const reasonDialog = ref(emptyReasonDialog())
 
@@ -936,36 +951,19 @@ const elapsed = (from, to = Date.now()) => {
 
 const getSelectedVehicleName = () => getVehicleNameById(vehicles.value, formData.value.vehicle_id)
 
+// Scroll/focus the first invalid field, and put the server's 422 on its fields.
+const logForm = ref(null)
+const { serverErrors: logErrors, invalidCount: logInvalid, validate: validateLog, applyServerErrors: applyLogErrors, reset: resetLog } =
+  useFormErrors(logForm, () => createDialog.value.form)
+watch(() => createDialog.value.open, (open) => { if (open) resetLog() })
+const LOG_FIELDS = Object.keys(emptyCreateForm())
+
 const submitWalkIn = async () => {
   const form = createDialog.value.form
   const isResident = createDialog.value.requesterType === 'resident'
 
-  if (isResident && !form.resident_id) {
-    createDialog.value.error = 'Pick a Head of the Family'
-    return
-  }
-  if (!isResident) {
-    if (!form.walk_in_first_name.trim() || !form.walk_in_last_name.trim() || !form.walk_in_contact_number.trim()) {
-      createDialog.value.error = 'Name and contact number are required for someone with no account'
-      return
-    }
-    if (phoneFormat(form.walk_in_contact_number) !== true) {
-      createDialog.value.error = 'Enter a valid contact number (e.g. 09171234567)'
-      return
-    }
-    if (nameFormat(form.walk_in_first_name) !== true || nameFormat(form.walk_in_last_name) !== true) {
-      createDialog.value.error = 'Names may only contain letters'
-      return
-    }
-  }
-  if (!form.service_id) {
-    createDialog.value.error = 'Pick a service'
-    return
-  }
-  if (!form.description.trim()) {
-    createDialog.value.error = 'Description is required'
-    return
-  }
+  const { valid } = await validateLog()
+  if (!valid) return
 
   createDialog.value.loading = true
   createDialog.value.error = ''
@@ -987,8 +985,10 @@ const submitWalkIn = async () => {
     })
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}))
-      const firstError = errData.errors ? Object.values(errData.errors)[0]?.[0] : null
-      throw new Error(firstError || errData.message || 'Failed to file the request')
+      // A 422 lands on its fields; only a message that matches none goes in the banner.
+      // The server calls the walk-in's full name walk_in_name; the form splits it in two.
+      const rest = await applyLogErrors(errData.errors, LOG_FIELDS, { walk_in_name: 'walk_in_first_name' })
+      throw new Error(rest[0] || (errData.errors ? 'Check the highlighted fields.' : errData.message || 'Failed to file the request'))
     }
     createDialog.value.open = false
     await fetchRequests()

@@ -9,6 +9,7 @@ import '../../state/account_store.dart';
 import '../../state/app_log.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/auth_layout.dart';
+import '../../widgets/form_submit.dart';
 import '../../widgets/shared_widgets.dart';
 
 
@@ -62,6 +63,9 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passCtrl   = TextEditingController();
   bool    _loading   = false;
   String? _formError;
+  // The server's per-field rejection, shown under the input it names.
+  String? _phoneError;
+  String? _passError;
 
   /// Set when the server refuses the account itself rather than the
   /// credentials. Kept apart from [_formError] because the two need opposite
@@ -92,8 +96,12 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _submit() async {
-    setState(() => _formError = null);
-    if (!_formKey.currentState!.validate()) return;
+    setState(() {
+      _formError = null;
+      _phoneError = null;
+      _passError = null;
+    });
+    if (!submitForm(_formKey)) return;
 
     setState(() => _loading = true);
 
@@ -144,7 +152,14 @@ class _LoginScreenState extends State<LoginScreen> {
       // "could not send the text" sentence when there was no way to deliver a
       // code. Already logged by ApiService with its status; the number is
       // deliberately not added here.
-      setState(() => _formError = e.message);
+      final phoneError = e.fieldErrors['phone_number'];
+      final passError = e.fieldErrors['password'];
+      setState(() {
+        _phoneError = phoneError;
+        _passError = passError;
+        _formError = phoneError == null && passError == null ? e.message : null;
+      });
+      revealFirstError(_formKey.currentContext);
     } catch (error) {
       // Anything that is not an ApiException got past the HTTP layer's own
       // normalisation, so nothing has logged it yet.
@@ -162,6 +177,7 @@ class _LoginScreenState extends State<LoginScreen> {
       header: const AppHeader(),
       child: Form(
         key: _formKey,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -190,6 +206,8 @@ class _LoginScreenState extends State<LoginScreen> {
               label: 'Mobile number',
               hint: '09XXXXXXXXX',
               controller: _phoneCtrl,
+              errorText: _phoneError,
+              onChanged: (_) { if (_phoneError != null) setState(() => _phoneError = null); },
               keyboard: TextInputType.phone,
               prefixIcon: Icons.phone_outlined,
               maxLength: PhoneNumber.maxLength,
@@ -209,6 +227,8 @@ class _LoginScreenState extends State<LoginScreen> {
               label: 'Password',
               hint: '',
               controller: _passCtrl,
+              errorText: _passError,
+              onChanged: (_) { if (_passError != null) setState(() => _passError = null); },
               obscure: true,
               prefixIcon: Icons.lock_outline_rounded,
               validator: (v) => (v ?? '').isEmpty ? 'Enter your password' : null,

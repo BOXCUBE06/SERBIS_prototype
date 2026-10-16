@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { Ref } from 'vue'
 import { REFERENCE_TTL_MS, invalidate, useCachedFetch } from '@/composables/useCachedFetch'
 import { pulse, refreshPulse } from '@/composables/usePulse'
@@ -21,9 +21,11 @@ interface Options {
   formData: Ref<Row>
   selectedRequest: Ref<Row | null>
   loadAttachments: (item: Row) => void
+  /** No drawer or dialog open: the list may be swapped without the notice. */
+  isIdle?: () => boolean
 }
 
-export function useRequestFetch({ isAmbulance, initialLoad, apiError, formData, selectedRequest, loadAttachments }: Options) {
+export function useRequestFetch({ isAmbulance, initialLoad, apiError, formData, selectedRequest, loadAttachments, isIdle }: Options) {
   const requests = ref<Row[]>([])
   const vehicles = ref<Row[]>([])
   const residents = ref<Row[]>([])
@@ -101,6 +103,13 @@ export function useRequestFetch({ isAmbulance, initialLoad, apiError, formData, 
   // Requests filed elsewhere (the mobile app, another staff member) since the
   // list loaded. The page shows a notice; its Show button is fetchRequests.
   const listUpdate = computed(() => pulseDiff(initialLoad.value ? undefined : pulse.value?.[isAmbulance ? 'ambulance' : 'requests'], requests.value))
+
+  // Idle page: refetch by itself (also when it turns idle with a change pending).
+  // Busy page: the notice stays. `changed &&` short-circuits, so isIdle is never
+  // called before the caller has declared the refs it reads.
+  if (isIdle) {
+    watch(() => listUpdate.value.changed && isIdle(), (go) => { if (go) {fetchRequests()} })
+  }
 
   return { requests, vehicles, residents, services, responders, listAbortController, refreshing, fetchData, fetchRequests, selectRequest, listUpdate }
 }

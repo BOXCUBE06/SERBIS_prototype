@@ -321,6 +321,7 @@ class ServiceRequestController extends Controller
                 ->where('resident_id', $residentId)
                 ->orderByDesc('created_at')
                 ->orderByDesc('request_id')
+                ->limit(self::RESIDENT_LIST_LIMIT)
                 ->get()
                 ->makeHidden('internal_notes');
 

@@ -1,12 +1,12 @@
 /**
- * The panel's one poll: `GET /admin/pulse` every 30 seconds while the tab is
+ * The panel's one poll: `GET /admin/pulse` every 15 seconds while the tab is
  * visible, and once on returning to it. It reports a `{count, latest}` per list
  * (and the pending-account count), never the lists themselves; pages compare it
  * against their rows (pulseDiff) and offer a refresh instead of swapping rows
  * under the cursor. The server returns only the kinds the account's sections
  * cover. Started by the sidebar, so it runs exactly while someone is signed in.
  *
- * ponytail: 30s poll, move to push (Reverb/SSE) if staff need changes instantly.
+ * ponytail: 15s poll, move to push (Reverb/SSE) if staff need changes instantly.
  */
 import { ref } from 'vue'
 import { getToken } from '@/composables/authToken'
@@ -24,7 +24,7 @@ export interface Pulse {
   residents?: PulseStamp & { pending: number; pending_organizations: number }
 }
 
-const PULSE_MS = 30_000
+const PULSE_MS = 15_000
 
 export const pulse = ref<Pulse | null>(null)
 

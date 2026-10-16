@@ -16,6 +16,7 @@ import '../theme/app_theme.dart';
 import '../widgets/barangay_field.dart';
 import '../widgets/borrow_request_widgets.dart' show mdrrmoNumber;
 import '../widgets/form_inputs.dart';
+import '../widgets/form_submit.dart';
 import '../widgets/request_summary.dart' show SummaryCard;
 import '../widgets/shared_widgets.dart';
 import 'change_phone_sheet.dart';
@@ -1052,6 +1053,7 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
         ..addAll(errors);
     });
 
+    if (errors.isNotEmpty) revealFirstError(context);
     return errors.isEmpty;
   }
 
@@ -1119,7 +1121,14 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
       // The server's message is shown as-is: a 422 here is a real rejection
       // the resident has to act on, and the field-level checks above cannot
       // know about it.
-      setState(() => _formError = e.message);
+      final firstError = e.fieldErrors['first_name'];
+      final lastError = e.fieldErrors['last_name'];
+      setState(() {
+        if (firstError != null) _errors['first'] = firstError;
+        if (lastError != null) _errors['last'] = lastError;
+        _formError = firstError == null && lastError == null ? e.message : null;
+      });
+      revealFirstError(context);
     } finally {
       if (mounted) setState(() => _saving = false);
     }

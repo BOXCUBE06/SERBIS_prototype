@@ -63,17 +63,9 @@
       >
         <template v-slot:filters>
           <FilterSelect v-model="filters.status" :items="RESIDENT_STATUS_FILTER_ITEMS" label="Status" />
-          <!-- Replaces a row of 60+ barangay tabs that scrolled sideways. An
-               autocomplete so 60+ names can be typed for, styled and defaulted
-               ("All") like the Status select beside it. -->
-          <v-autocomplete
-            v-model="filters.barangay"
-            :items="barangayItems"
-            prefix="Barangay"
-            aria-label="Filter by barangay"
-            variant="outlined" density="compact" hide-details rounded="lg"
-            class="filter-bar__select"
-          ></v-autocomplete>
+          <!-- Replaces a row of 60+ barangay tabs that scrolled sideways. Typable,
+               and several can be picked; none picked shows them all. -->
+          <BarangayFilter v-model="filters.barangay" :items="barangayItems" aria-label="Filter by barangay" />
         </template>
 
         <!-- Bulk actions. Present only while rows are ticked, so the table is not
@@ -206,7 +198,6 @@
       :confirm-label="modal.isEditing ? 'Save changes' : 'Create account'"
       :fields="accountFields"
       :form="formData"
-      :field-errors="fieldErrors"
       :error="modalError"
       :loading="loading"
       :width="600"
@@ -259,14 +250,14 @@
         </div>
       </template>
 
-      <template v-slot:field-street_address>
+      <template v-slot:field-street_address="{ error }">
         <!-- Keyed on the dialog: the picker reads its value once, and this
              form is reused for every resident. -->
         <PurokSelect
           compact
           :key="`${modal.isOpen}-${modal.targetId ?? 'new'}`"
           v-model="formData.street_address"
-          :error-messages="fieldErrors.street_address"
+          :error-messages="error"
         />
       </template>
 
@@ -437,7 +428,7 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { authHeaders } from '@/composables/adminUi'
+import { authHeaders, namesLabel } from '@/composables/adminUi'
 import {
   accountInitials,
   barangayOf,
@@ -471,6 +462,7 @@ import DataTablePage from '@/components/DataTablePage.vue'
 import PersonCell from '@/components/PersonCell.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import FilterSelect from '@/components/FilterSelect.vue'
+import BarangayFilter from '@/components/BarangayFilter.vue'
 import EditDialog from '@/components/EditDialog.vue'
 import RowActions from '@/components/RowActions.vue'
 import ListUpdateNotice from '@/components/ListUpdateNotice.vue'
@@ -499,7 +491,7 @@ const selectedResident = ref(null)
 // link here that way. Only a value the filter offers is taken.
 const route = useRoute()
 const linkedStatus = RESIDENT_STATUS_FILTER_ITEMS.some((i) => i.value === route.query.status) ? route.query.status : 'All'
-const filters = ref({ status: linkedStatus, barangay: 'All', type: 'All' })
+const filters = ref({ status: linkedStatus, barangay: [], type: 'All' })
 
 // Sorting is client-side: GET /residents returns every account in one response,
 // so the server has nothing to add. Each header sorts on what its cell prints
@@ -550,7 +542,7 @@ const formData = ref({
 
 const isHead = computed(() => formData.value.account_type === ACCOUNT_TYPE.head)
 const isOrganization = computed(() => formData.value.account_type === ACCOUNT_TYPE.organization)
-const barangayItems = computed(() => ['All', ...barangays.value.map((b) => b.barangay_name)])
+const barangayItems = computed(() => barangays.value.map((b) => b.barangay_name))
 const editingAccount = computed(() =>
   modal.value.isEditing ? residents.value.find((r) => idOf(r) === modal.value.targetId) : null,
 )
@@ -591,7 +583,7 @@ const accountFields = computed(() => [
         hint: 'At least 8 characters, with upper and lower case and a number.',
         rules: [requiredRule('Password'), passwordRule], autocomplete: 'new-password',
       }]),
-  { key: 'barangay_id', label: 'Barangay', required: true, half: true, items: barangays.value, itemTitle: 'barangay_name', itemValue: 'barangay_id', rules: [requiredRule('Barangay')] },
+  { key: 'barangay_id', label: 'Barangay', required: true, half: true, items: barangays.value, itemTitle: 'barangay_name', itemValue: 'barangay_id', searchable: true, rules: [requiredRule('Barangay')] },
   { key: 'street_address', label: 'Street / Purok (optional)', half: true, slot: true },
   { key: 'status', label: 'Account status', options: [{ title: 'Active', value: RESIDENT_STATUS.active }, { title: 'Deactivated', value: RESIDENT_STATUS.deactivated }] },
 ])
@@ -642,7 +634,7 @@ const getHeaders = () => ({ Authorization: `Bearer ${getToken()}`, 'Content-Type
 const residentsBeforeType = computed(() => {
   let result = residents.value
   if (filters.value.status !== 'All') result = result.filter((r) => r.status === filters.value.status)
-  if (filters.value.barangay !== 'All') result = result.filter((r) => barangayOf(r) === filters.value.barangay)
+  if (filters.value.barangay.length > 0) result = result.filter((r) => filters.value.barangay.includes(barangayOf(r)))
   // Trimmed: a leading space is trivially common when pasting from a list, and
   // it used to return zero rows with no explanation.
   const q = (search.value || '').trim().toLowerCase()
@@ -693,9 +685,9 @@ const typeTabs = computed(() => ACCOUNT_TYPE_FILTER_ITEMS.map((t) => ({
 // Type is the tabs, so it is not a chip here.
 const activeFilters = computed(() => [
   ...(filters.value.status === 'All' ? [] : [{ key: 'status', label: `Status: ${residentStatusLabel(filters.value.status)}` }]),
-  ...(filters.value.barangay === 'All' ? [] : [{ key: 'barangay', label: `Barangay: ${filters.value.barangay}` }]),
+  ...(filters.value.barangay.length > 0 ? [{ key: 'barangay', label: `Barangay: ${namesLabel(filters.value.barangay)}` }] : []),
 ])
-const clearFilter = (key) => { filters.value[key] = 'All' }
+const clearFilter = (key) => { filters.value[key] = key === 'barangay' ? [] : 'All' }
 watch([search, filters], () => { page.value = 1 }, { deep: true })
 
 // The row's Activate / Deactivate as RowActions' extra action.
@@ -732,7 +724,7 @@ watch(filteredAndSortedResidents, (rows) => {
 // "Clear all" in the filter row: search, status and barangay. The type tab stays.
 const clearFilters = () => {
   search.value = ''
-  filters.value = { ...filters.value, status: 'All', barangay: 'All' }
+  filters.value = { ...filters.value, status: 'All', barangay: [] }
 }
 
 // True when the open profile is not in the list behind it — filter to one
@@ -856,7 +848,6 @@ const loadAll = async () => {
 
 const openAddModal = () => {
   modalError.value = ''
-  clearFieldErrors()
   formData.value = {
     first_name: '', middle_name: '', last_name: '', phone_number: '',
     password: '', barangay_id: null, street_address: '',
@@ -873,7 +864,6 @@ const openAddModal = () => {
 const openExistingEditModal = (item) => {
   modalError.value = ''
   photoError.value = ''
-  clearFieldErrors()
   formData.value = {
     first_name: item.first_name,
     middle_name: item.middle_name,
@@ -958,27 +948,14 @@ const passwordRule = (v) =>
   !v || (v.length >= 8 && /[a-z]/.test(v) && /[A-Z]/.test(v) && /\d/.test(v)) ||
   'At least 8 characters, with upper and lower case and a number.'
 
-// Server-side errors, keyed by field, so a 422 lands on the input it belongs
-// to instead of being concatenated into a blob above the form.
-const fieldErrors = ref({})
-
-const clearFieldErrors = () => { fieldErrors.value = {} }
-
-// Laravel answers `{errors: {field: [msg]}}`. Split it: known fields go to
-// their input, anything unrecognised stays in the summary alert so nothing is
-// silently swallowed.
+// Laravel answers `{errors: {field: [msg]}}`. Known fields get their message on
+// the input (the dialog scrolls to the first); anything unrecognised stays in
+// the summary alert so nothing is silently swallowed.
 const applyServerErrors = async (res) => {
   const data = await res.json().catch(() => ({}))
   if (data.errors && typeof data.errors === 'object') {
-    const mapped = {}
-    const leftovers = []
-    for (const [key, messages] of Object.entries(data.errors)) {
-      const text = Array.isArray(messages) ? messages.join(' ') : String(messages)
-      if (key in formData.value) mapped[key] = text
-      else leftovers.push(text)
-    }
-    fieldErrors.value = mapped
-    return leftovers.length > 0 ? leftovers.join(' ') : 'Please correct the highlighted fields.'
+    const rest = await form.value.applyServerErrors(data.errors, Object.keys(formData.value))
+    return rest.length > 0 ? rest.join(' ') : 'Please correct the highlighted fields.'
   }
   return data.message || 'Request failed'
 }
@@ -989,7 +966,7 @@ const applyServerErrors = async (res) => {
 // either path surfaced as "errorFrom is not defined" rather than the server's
 // reason.
 //
-// Deliberately NOT applyServerErrors: that one populates fieldErrors for inputs
+// Deliberately NOT applyServerErrors: that one puts messages on inputs
 // that are on screen, and neither caller has any. The message here is
 // load-bearing rather than decorative — destroy() answers 422 with "Cannot
 // delete — N service request(s) still reference this resident", which is the
@@ -1003,7 +980,6 @@ const errorFrom = async (res) => {
 
 const saveUser = async () => {
   modalError.value = ''
-  clearFieldErrors()
 
   // Validate before spending a round trip. Vuetify focuses the first invalid
   // field itself once the rules are attached.

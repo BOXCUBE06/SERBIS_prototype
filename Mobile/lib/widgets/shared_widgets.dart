@@ -797,6 +797,11 @@ class AuthTextField extends StatefulWidget {
   final TextInputType keyboard;
   final bool obscure;
   final String? Function(String?)? validator;
+
+  /// A server-side rejection of this field, shown under it like a validator's
+  /// message. Set it from the 422's field errors, clear it in [onChanged].
+  final String? errorText;
+  final ValueChanged<String>? onChanged;
   final IconData? prefixIcon;
   final int? maxLength;
   final List<TextInputFormatter>? inputFormatters;
@@ -809,6 +814,8 @@ class AuthTextField extends StatefulWidget {
     this.keyboard = TextInputType.text,
     this.obscure = false,
     this.validator,
+    this.errorText,
+    this.onChanged,
     this.prefixIcon,
     this.maxLength,
     this.inputFormatters,
@@ -835,6 +842,8 @@ class _AuthTextFieldState extends State<AuthTextField> {
             keyboardType: widget.keyboard,
             obscureText: _hidden,
             validator: widget.validator,
+            forceErrorText: widget.errorText,
+            onChanged: widget.onChanged,
             maxLength: widget.maxLength,
             inputFormatters: widget.inputFormatters,
             style: AppText.body(size: AppTextSize.bodyLg),

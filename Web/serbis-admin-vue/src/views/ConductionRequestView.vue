@@ -93,7 +93,7 @@
           @click:row="(_e, { item }) => openDetail(item)"
         >
           <template v-slot:filters>
-            <v-select v-model="vehicleFilter" :items="vehicleFilterOptions" prefix="Unit" aria-label="Unit" variant="outlined" density="compact" hide-details rounded="lg" class="filter-bar__select"></v-select>
+            <v-autocomplete v-model="vehicleFilter" :items="vehicleFilterOptions" prefix="Unit" aria-label="Unit" no-data-text="No unit matches" variant="outlined" density="compact" hide-details rounded="lg" class="filter-bar__select"></v-autocomplete>
             <v-select v-model="departedRange" :items="DEPARTED_RANGES" prefix="Departed" aria-label="Departed" variant="outlined" density="compact" hide-details rounded="lg" class="filter-bar__select"></v-select>
           </template>
 
@@ -155,7 +155,7 @@
     >
       <v-alert v-if="apiError" type="error" variant="tonal" density="compact" class="mb-4">{{ apiError }}</v-alert>
 
-      <v-form ref="createForm">
+      <v-form ref="createForm" validate-on="blur">
         <!-- C6: the one way this form ever links to a booking, whether
              reached by typing here or by the Dispatch button (which just
              pre-selects this same field — see openCreate). Left empty on
@@ -191,23 +191,23 @@
           <v-row density="compact">
             <v-col cols="12" sm="8">
               <label class="dd-field-label" for="trip-new-name">Name</label>
-              <v-text-field v-model="createDialog.form.patient_name" id="trip-new-name" placeholder="Juan Dela Cruz" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+              <v-text-field v-model="createDialog.form.patient_name" :error-messages="createErrors.patient_name" id="trip-new-name" placeholder="Juan Dela Cruz" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
             </v-col>
             <v-col cols="6" sm="4">
               <label class="dd-field-label" for="trip-new-age">Age</label>
-              <v-text-field v-model="createDialog.form.patient_age" id="trip-new-age" placeholder="45" type="number" min="0" max="150" variant="outlined" density="comfortable"></v-text-field>
+              <v-text-field v-model="createDialog.form.patient_age" :error-messages="createErrors.patient_age" id="trip-new-age" placeholder="45" type="number" min="0" max="150" variant="outlined" density="comfortable"></v-text-field>
             </v-col>
             <v-col cols="12">
               <label class="dd-field-label" for="trip-new-address">Address</label>
-              <v-text-field v-model="createDialog.form.patient_address" id="trip-new-address" placeholder="Purok 3, San Isidro" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+              <v-text-field v-model="createDialog.form.patient_address" :error-messages="createErrors.patient_address" id="trip-new-address" placeholder="Purok 3, San Isidro" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
             </v-col>
             <v-col cols="12">
               <label class="dd-field-label" for="trip-new-contact-number">Contact number</label>
-              <v-text-field v-model="createDialog.form.patient_contact_number" id="trip-new-contact-number" placeholder="09171234567" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+              <v-text-field v-model="createDialog.form.patient_contact_number" :error-messages="createErrors.patient_contact_number" id="trip-new-contact-number" placeholder="09171234567" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
             </v-col>
             <v-col cols="12">
               <label class="dd-field-label" for="trip-new-medical-diagnosis">Medical diagnosis</label>
-              <v-textarea v-model="createDialog.form.medical_diagnosis" id="trip-new-medical-diagnosis" placeholder="Suspected stroke" variant="outlined" density="comfortable" rows="2" :rules="[required]"></v-textarea>
+              <v-textarea v-model="createDialog.form.medical_diagnosis" :error-messages="createErrors.medical_diagnosis" id="trip-new-medical-diagnosis" placeholder="Suspected stroke" variant="outlined" density="comfortable" rows="2" :rules="[required]"></v-textarea>
             </v-col>
           </v-row>
         </section>
@@ -217,11 +217,11 @@
           <v-row density="compact">
             <v-col cols="12" sm="6">
               <label class="dd-field-label" for="trip-new-from">From</label>
-              <v-text-field v-model="createDialog.form.origin" id="trip-new-from" placeholder="San Isidro" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+              <v-text-field v-model="createDialog.form.origin" :error-messages="createErrors.origin" id="trip-new-from" placeholder="San Isidro" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
             </v-col>
             <v-col cols="12" sm="6">
               <label class="dd-field-label" for="trip-new-to">To</label>
-              <v-text-field v-model="createDialog.form.destination" id="trip-new-to" placeholder="Echague District Hospital" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+              <v-text-field v-model="createDialog.form.destination" :error-messages="createErrors.destination" id="trip-new-to" placeholder="Echague District Hospital" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
             </v-col>
             <v-col v-if="vehiclesError" cols="12">
               <v-alert type="warning" variant="tonal" border="start" density="compact">
@@ -245,15 +245,17 @@
             </v-col>
             <v-col v-else cols="12">
               <label class="dd-field-label" for="trip-new-fleet-unit">Fleet unit</label>
-              <v-select
+              <v-autocomplete
                 v-model="createDialog.form.vehicle_id"
+                :error-messages="createErrors.vehicle_id"
                 :items="vehicleOptions"
                 id="trip-new-fleet-unit"
+                no-data-text="No unit matches"
                 variant="outlined"
                 density="comfortable"
                 clearable
                 @update:model-value="onSelectFleetVehicle"
-              ></v-select>
+              ></v-autocomplete>
             </v-col>
             <!-- Fallback only, shown while no fleet unit is picked above —
                  see the comment on onSelectFleetVehicle. Not the default:
@@ -263,6 +265,7 @@
               <label class="dd-field-label" for="trip-new-other-vehicle-not-in-the-fleet">Other vehicle (not in the fleet)</label>
               <v-text-field
                 v-model="createDialog.form.vehicle"
+                :error-messages="createErrors.vehicle"
                 id="trip-new-other-vehicle-not-in-the-fleet"
                 placeholder="Alicia MDRRMO Ambulance"
                 variant="outlined"
@@ -281,6 +284,7 @@
                 <v-autocomplete
                   v-if="group.field === 'drivers'"
                   v-model="createDialog.form[group.field][idx]"
+                  :error-messages="crewError(group.field, idx)"
                   :items="driverOptionsFor(createDialog.form[group.field][idx])"
                   item-title="title"
                   item-value="value"
@@ -288,7 +292,7 @@
                   placeholder="Select a responder"
                   variant="outlined"
                   density="compact"
-                  hide-details
+                  hide-details="auto"
                   clearable
                   class="flex-grow-1"
                 >
@@ -299,18 +303,21 @@
                 <ResponderCombobox
                   v-else-if="group.field === 'authorized_passengers'"
                   v-model="createDialog.form[group.field][idx]"
+                  :error-messages="crewError(group.field, idx)"
                   :items="passengerOptionsFor(createDialog.form.drivers)"
+                  hide-details="auto"
                   :id="`trip-new-${group.field}-${idx}`"
                   class="flex-grow-1"
                 />
                 <v-text-field
                   v-else
                   v-model="createDialog.form[group.field][idx]"
+                  :error-messages="crewError(group.field, idx)"
                   :id="`trip-new-${group.field}-${idx}`"
                   placeholder="Full name"
                   variant="outlined"
                   density="compact"
-                  hide-details
+                  hide-details="auto"
                   class="flex-grow-1"
                 ></v-text-field>
                 <v-btn
@@ -337,6 +344,7 @@
       </v-form>
 
       <template #footer>
+        <span v-if="createInvalid > 0" class="form-attention" role="alert">{{ createInvalid }} {{ createInvalid === 1 ? 'field needs' : 'fields need' }} attention</span>
         <v-spacer></v-spacer>
         <v-btn variant="outlined" color="primary" class="text-none font-weight-bold" height="40" @click="createDialog.open = false">Cancel</v-btn>
         <v-btn color="primary" variant="flat" class="text-none font-weight-bold" height="40" :loading="loading" @click="submitCreate">
@@ -638,6 +646,7 @@ import StatusPill from '@/components/StatusPill.vue'
 import PersonCell from '@/components/PersonCell.vue'
 import DetailDrawer from '@/components/DetailDrawer.vue'
 import '@/components/detail-dialog.css'
+import { useFormErrors } from '@/composables/useFormErrors'
 import ExportMenu from '@/components/ExportMenu.vue'
 import ListUpdateNotice from '@/components/ListUpdateNotice.vue'
 import { pulse, refreshPulse } from '@/composables/usePulse'
@@ -681,6 +690,8 @@ const personnelGroups = [
 // An empty driver slot is null, not '' — v-autocomplete treats '' as a picked
 // value. The other two fields are free-text and keep ''.
 const blankPerson = (field) => (field === 'drivers' ? null : '')
+// A crew row's server error: its own indexed key (drivers.0), or the list's (drivers) on the first row.
+const crewError = (field, idx) => createErrors.value[`${field}.${idx}`] ?? (idx === 0 ? createErrors.value[field] : undefined)
 
 const required = (v) => (v !== null && v !== undefined && String(v).trim() !== '') || 'Required'
 
@@ -854,6 +865,9 @@ const showNewTrips = async () => {
   await fetchData()
   refreshPulse()
 }
+// Nothing open: swap the list by itself; otherwise the notice stays.
+watch(() => tripUpdate.value.changed && !createDialog.value.open && !detail.value.open && !tripLog.value.open,
+  (go) => { if (go) {showNewTrips()} })
 
 const rowProps = ({ item }) => ({
   tabindex: 0,
@@ -1134,8 +1148,15 @@ const printTrip = async (record) => {
 const addPerson = (field) => { createDialog.value.form[field].push(blankPerson(field)) }
 const removePerson = (field, idx) => { createDialog.value.form[field].splice(idx, 1) }
 
+// Scroll/focus the first invalid field, and put the server's 422 on its fields.
+const { serverErrors: createErrors, invalidCount: createInvalid, validate: validateCreate, applyServerErrors: applyCreateErrors, reset: resetCreate } =
+  useFormErrors(createForm, () => createDialog.value.form)
+watch(() => createDialog.value.open, (open) => { if (open) resetCreate() })
+// The crew lists come back as drivers.0, authorized_passengers.1, ...
+const CREATE_FIELDS = [...Object.keys(emptyCreateForm()), 'drivers.*', 'authorized_passengers.*', 'patient_relatives.*']
+
 const submitCreate = async () => {
-  const { valid } = await createForm.value.validate()
+  const { valid } = await validateCreate()
   if (!valid) return
 
   loading.value = true
@@ -1150,8 +1171,9 @@ const submitCreate = async () => {
       const errData = await res.json().catch(() => ({}))
       // 409 (unit busy / already on a trip): the server's message, unchanged.
       if (res.status === 409) throw new Error(errData.message || 'This unit is not available.')
-      const firstError = errData.errors ? Object.values(errData.errors)[0]?.[0] : null
-      throw new Error(firstError || errData.message || 'Failed to file the request')
+      // A 422 lands on its fields; only a message that matches none goes in the banner.
+      const rest = await applyCreateErrors(errData.errors, CREATE_FIELDS)
+      throw new Error(rest[0] || (errData.errors ? 'Check the highlighted fields.' : errData.message || 'Failed to file the request'))
     }
     invalidateTrips()
     await fetchData()

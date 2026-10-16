@@ -35,6 +35,13 @@ use Illuminate\Http\Request;
 trait ScopesToOwner
 {
     /**
+     * How many of a resident's own rows their list endpoints return, newest
+     * first. Applied by the endpoint inside its resident branch only: the same
+     * routes feed the admin panel, whose lists must stay whole.
+     */
+    public const RESIDENT_LIST_LIMIT = 50;
+
+    /**
      * Scopes $query to the caller's own rows when they are a resident, and
      * vets them as active staff when they are not. Returns null to proceed, or
      * the response to send instead.

@@ -7,7 +7,7 @@
   ResDialog canvas board's.
 
   Each field is `{ key, label, required, placeholder, items, itemTitle,
-  itemValue, type, min, max, half, third, hint, rules, autocomplete, options,
+  itemValue, searchable (typable list), type, min, max, half, third, hint, rules, autocomplete, options,
   slot, note }`. `half` and `third` put two or three fields on a row; `hint`
   is the muted line under the control; `note` swaps the input for a muted line
   (Equipment's "Available starts equal to total"). `type: 'password'` adds the
@@ -15,7 +15,7 @@
   `slot` leaves the control to the caller's `field-<key>` slot. `rules`
   replaces the built-in required rule (the label still gets its asterisk).
   Values live in the caller's `form`; `fieldErrors` is the server's per-field
-  422 messages. The caller's save still runs its own checks: `validate()` and
+  422 messages, or call `applyServerErrors(errors, keys)` on the dialog's ref. The caller's save still runs its own checks: `validate()` and
   `resetValidation()` are exposed for that.
 
   Slots: `avatar-actions` replaces the Change photo input, `before-<key>`
@@ -34,6 +34,7 @@
 
       <v-alert v-if="error" type="error" variant="tonal" density="compact" rounded="lg" role="alert">{{ error }}</v-alert>
 
+      <div class="edit-dialog__body">
       <template v-if="avatar !== undefined">
         <div class="d-flex align-center ga-3">
           <v-avatar size="52" color="primary" variant="tonal">
@@ -59,7 +60,7 @@
         <p v-if="avatarNote" class="edit-dialog__avatar-note">{{ avatarNote }}</p>
       </template>
 
-      <v-form ref="formRef" class="edit-dialog__fields" @keydown.enter="onEnter">
+      <v-form ref="formRef" class="edit-dialog__fields" validate-on="blur" @keydown.enter="onEnter">
         <template v-for="f in fields" :key="f.key">
           <div v-if="f.note" class="edit-dialog__note" :class="{ 'edit-dialog__half': f.half }">
             <v-icon size="16" class="mr-1">mdi-sync</v-icon>{{ f.note }}
@@ -81,7 +82,7 @@
                 v-model="n.label"
                 placeholder="Carrier / line"
                 aria-label="Carrier or line"
-                :error-messages="fieldErrors[`${f.key}.${i}.label`]"
+                :error-messages="serverErrors[`${f.key}.${i}.label`]"
                 variant="outlined" density="compact" rounded="lg" hide-details="auto"
                 class="edit-dialog__carrier"
               ></v-text-field>
@@ -93,7 +94,7 @@
                 :inputmode="f.inputmode"
                 :maxlength="f.maxlength"
                 :rules="rulesFor(f)"
-                :error-messages="fieldErrors[`${f.key}.${i}.number`]"
+                :error-messages="serverErrors[`${f.key}.${i}.number`]"
                 variant="outlined" density="compact" rounded="lg" hide-details="auto"
               ></v-text-field>
               <!-- At least one number: the first row cannot be removed. -->
@@ -109,7 +110,7 @@
           >
             <span v-if="f.label" class="edit-dialog__label">{{ f.label }}{{ f.required ? ' *' : '' }}</span>
             <slot :name="`before-${f.key}`" />
-            <slot v-if="f.slot" :name="`field-${f.key}`" :field="f" />
+            <slot v-if="f.slot" :name="`field-${f.key}`" :field="f" :error="serverErrors[f.key]" />
             <v-radio-group
               v-else-if="f.options"
               :model-value="form[f.key]"
@@ -120,6 +121,19 @@
             >
               <v-radio v-for="o in f.options" :key="o.value" :label="o.title" :value="o.value"></v-radio>
             </v-radio-group>
+            <v-autocomplete
+              v-else-if="f.items && f.searchable"
+              :model-value="form[f.key]"
+              @update:model-value="set(f, $event)"
+              :items="f.items"
+              :item-title="f.itemTitle"
+              :item-value="f.itemValue"
+              :rules="rulesFor(f)"
+              :error-messages="serverErrors[f.key]"
+              :aria-label="f.label"
+              no-data-text="No match"
+              variant="outlined" density="compact" rounded="lg" hide-details="auto"
+            ></v-autocomplete>
             <v-select
               v-else-if="f.items"
               :model-value="form[f.key]"
@@ -128,7 +142,7 @@
               :item-title="f.itemTitle"
               :item-value="f.itemValue"
               :rules="rulesFor(f)"
-              :error-messages="fieldErrors[f.key]"
+              :error-messages="serverErrors[f.key]"
               :aria-label="f.label"
               variant="outlined" density="compact" rounded="lg" hide-details="auto"
             ></v-select>
@@ -138,7 +152,7 @@
               @update:model-value="set(f, $event)"
               :placeholder="f.placeholder"
               :rules="rulesFor(f)"
-              :error-messages="fieldErrors[f.key]"
+              :error-messages="serverErrors[f.key]"
               :aria-label="f.label"
               rows="3" auto-grow
               variant="outlined" density="compact" rounded="lg" hide-details="auto"
@@ -156,7 +170,7 @@
               :maxlength="f.maxlength"
               :inputmode="f.inputmode"
               :rules="rulesFor(f)"
-              :error-messages="fieldErrors[f.key]"
+              :error-messages="serverErrors[f.key]"
               :aria-label="f.label"
               variant="outlined" density="compact" rounded="lg" hide-details="auto"
               @click:append-inner="shown[f.key] = !shown[f.key]"
@@ -165,8 +179,10 @@
           </component>
         </template>
       </v-form>
+      </div>
 
-      <div class="d-flex justify-end ga-3">
+      <div class="edit-dialog__footer">
+        <span v-if="invalidCount > 0" class="form-attention" role="alert">{{ invalidCount }} {{ invalidCount === 1 ? 'field needs' : 'fields need' }} attention</span>
         <v-btn variant="flat" rounded="lg" height="40" class="edit-dialog__btn edit-dialog__cancel" :disabled="loading" @click="$emit('update:modelValue', false)">Cancel</v-btn>
         <v-btn
           color="primary" variant="flat" rounded="lg" height="40"
@@ -184,8 +200,9 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { reactive, ref, watch } from 'vue'
 import { useSaveFeedback } from '@/composables/useSaveFeedback'
+import { focusFirstError, useFormErrors } from '@/composables/useFormErrors'
 
 interface Field {
   key: string
@@ -195,6 +212,7 @@ interface Field {
   items?: unknown[]
   itemTitle?: string | ((item: any) => string)
   itemValue?: string
+  searchable?: boolean
   type?: string
   min?: number
   max?: number
@@ -255,6 +273,17 @@ const emit = defineEmits<{
 const { shown: dialogShown, phase } = useSaveFeedback(() => props.modelValue, () => props.loading, () => props.error)
 
 const formRef = ref<any>(null)
+// Scroll/focus the first invalid field on save, and count what is wrong.
+// Editing a field clears that field's server message and no other.
+const { validate, invalidCount, reset, serverErrors, setErrors, applyServerErrors } = useFormErrors(formRef, () => props.form)
+// The caller's `fieldErrors` prop is adopted the same way (blank messages mean no error), and its
+// first field is brought into view. `applyServerErrors`, exposed below, is the other way in.
+watch(() => props.fieldErrors, (errors) => {
+  const messages = Object.fromEntries(Object.entries(errors ?? {}).filter(([, text]) => (Array.isArray(text) ? text.length > 0 : text)))
+  setErrors(messages)
+  if (Object.keys(messages).length > 0) focusFirstError(formRef.value?.$el)
+}, { deep: true, immediate: true })
+watch(() => props.modelValue, (open) => { if (open) reset() })
 const picked = ref(null)
 const shown = reactive<Record<string, boolean>>({})
 
@@ -286,8 +315,10 @@ const onPhoto = (file: any) => {
 }
 
 defineExpose({
-  validate: () => formRef.value.validate(),
-  resetValidation: () => formRef.value?.resetValidation(),
+  validate,
+  /** A 422's `errors` onto the fields (see useFormErrors); returns the messages that fit none. */
+  applyServerErrors,
+  resetValidation: () => { reset(); formRef.value?.resetValidation() },
 })
 </script>
 
@@ -296,6 +327,9 @@ defineExpose({
   display: flex;
   flex-direction: column;
   gap: 20px;
+  /* The title and footer stay put; only .edit-dialog__body scrolls. */
+  overflow: hidden !important;
+  max-height: calc(100dvh - 48px);
   padding: 28px 32px 32px;
   box-shadow: 0 28px 64px rgba(2, 20, 16, 0.32) !important;
 }
@@ -312,6 +346,18 @@ defineExpose({
   line-height: 16px;
   color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
 }
+.edit-dialog__body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  /* Room for the focus ring and the field shadow, which the scroll area would clip. */
+  margin: 0 -8px;
+  padding: 4px 8px;
+}
+.edit-dialog__footer { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
 .edit-dialog__note-line { font-size: 14px; line-height: 20px; }
 .edit-dialog__text { width: 100%; margin: 0; font-size: 14px; line-height: 20px; color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity)); }
 .edit-dialog__text--strong { color: rgb(var(--v-theme-on-surface)); }

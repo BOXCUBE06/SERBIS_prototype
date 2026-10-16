@@ -5,23 +5,26 @@
   tab strip above, so there is no Status select.
 -->
 <template>
-  <v-select
+  <BarangayFilter
     :model-value="barangay"
     @update:model-value="$emit('update:barangay', $event)"
     :items="barangayOptions"
-    v-bind="field('Barangay')"
-  ></v-select>
-  <v-select
+    :class="compact ? 'filter-bar__select' : 'filter-field'"
+  />
+  <v-autocomplete
     :model-value="unit"
     @update:model-value="$emit('update:unit', $event)"
     :items="unitOptions"
+    no-data-text="No unit matches"
     v-bind="field('Unit')"
-  ></v-select>
+  ></v-autocomplete>
 </template>
 
 <script setup>
+import BarangayFilter from '@/components/BarangayFilter.vue'
+
 const props = defineProps({
-  barangay: { type: String, required: true },
+  barangay: { type: Array, required: true },
   unit: { type: String, required: true },
   barangayOptions: { type: Array, required: true },
   unitOptions: { type: Array, required: true },

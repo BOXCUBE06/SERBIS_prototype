@@ -162,6 +162,16 @@ class AppState extends ChangeNotifier {
   /// so a dead network and an empty list looked identical.
   String? lastError;
 
+  /// The field-by-field messages of the last failure, for the form that caused
+  /// it to mark its inputs. Read-and-clear, like [takeError].
+  Map<String, String> lastFieldErrors = const {};
+
+  Map<String, String> takeFieldErrors() {
+    final errors = lastFieldErrors;
+    lastFieldErrors = const {};
+    return errors;
+  }
+
   /// Read-and-clear, so one failure produces exactly one snackbar.
   String? takeError() {
     final error = lastError;
@@ -205,6 +215,7 @@ class AppState extends ChangeNotifier {
     lastError = error is ApiException
         ? error.message
         : 'Something went wrong. Please try again.';
+    lastFieldErrors = error is ApiException ? error.fieldErrors : const {};
     notifyListeners();
   }
 
