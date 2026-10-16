@@ -814,7 +814,7 @@ const itemsPerPage = ref(10)
 
 const ambulanceServiceId = computed(() => services.value.find(s => s.code === AMBULANCE_SERVICE_CODE)?.service_id ?? null)
 
-const filters = reactive({ status: 'All', barangay: 'All', unit: 'All' })
+const filters = reactive({ status: 'All', barangay: [], unit: 'All' })
 // The unit picker opens inside the drawer, replacing its body.
 const picker = reactive({ open: false })
 const selectedRequest = ref(null)

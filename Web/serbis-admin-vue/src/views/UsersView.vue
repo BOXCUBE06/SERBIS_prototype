@@ -63,17 +63,9 @@
       >
         <template v-slot:filters>
           <FilterSelect v-model="filters.status" :items="RESIDENT_STATUS_FILTER_ITEMS" label="Status" />
-          <!-- Replaces a row of 60+ barangay tabs that scrolled sideways. An
-               autocomplete so 60+ names can be typed for, styled and defaulted
-               ("All") like the Status select beside it. -->
-          <v-autocomplete
-            v-model="filters.barangay"
-            :items="barangayItems"
-            prefix="Barangay"
-            aria-label="Filter by barangay"
-            variant="outlined" density="compact" hide-details rounded="lg"
-            class="filter-bar__select"
-          ></v-autocomplete>
+          <!-- Replaces a row of 60+ barangay tabs that scrolled sideways. Typable,
+               and several can be picked; none picked shows them all. -->
+          <BarangayFilter v-model="filters.barangay" :items="barangayItems" aria-label="Filter by barangay" />
         </template>
 
         <!-- Bulk actions. Present only while rows are ticked, so the table is not
@@ -437,7 +429,7 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { authHeaders } from '@/composables/adminUi'
+import { authHeaders, namesLabel } from '@/composables/adminUi'
 import {
   accountInitials,
   barangayOf,
@@ -471,6 +463,7 @@ import DataTablePage from '@/components/DataTablePage.vue'
 import PersonCell from '@/components/PersonCell.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import FilterSelect from '@/components/FilterSelect.vue'
+import BarangayFilter from '@/components/BarangayFilter.vue'
 import EditDialog from '@/components/EditDialog.vue'
 import RowActions from '@/components/RowActions.vue'
 import ListUpdateNotice from '@/components/ListUpdateNotice.vue'
@@ -499,7 +492,7 @@ const selectedResident = ref(null)
 // link here that way. Only a value the filter offers is taken.
 const route = useRoute()
 const linkedStatus = RESIDENT_STATUS_FILTER_ITEMS.some((i) => i.value === route.query.status) ? route.query.status : 'All'
-const filters = ref({ status: linkedStatus, barangay: 'All', type: 'All' })
+const filters = ref({ status: linkedStatus, barangay: [], type: 'All' })
 
 // Sorting is client-side: GET /residents returns every account in one response,
 // so the server has nothing to add. Each header sorts on what its cell prints
@@ -550,7 +543,7 @@ const formData = ref({
 
 const isHead = computed(() => formData.value.account_type === ACCOUNT_TYPE.head)
 const isOrganization = computed(() => formData.value.account_type === ACCOUNT_TYPE.organization)
-const barangayItems = computed(() => ['All', ...barangays.value.map((b) => b.barangay_name)])
+const barangayItems = computed(() => barangays.value.map((b) => b.barangay_name))
 const editingAccount = computed(() =>
   modal.value.isEditing ? residents.value.find((r) => idOf(r) === modal.value.targetId) : null,
 )
@@ -591,7 +584,7 @@ const accountFields = computed(() => [
         hint: 'At least 8 characters, with upper and lower case and a number.',
         rules: [requiredRule('Password'), passwordRule], autocomplete: 'new-password',
       }]),
-  { key: 'barangay_id', label: 'Barangay', required: true, half: true, items: barangays.value, itemTitle: 'barangay_name', itemValue: 'barangay_id', rules: [requiredRule('Barangay')] },
+  { key: 'barangay_id', label: 'Barangay', required: true, half: true, items: barangays.value, itemTitle: 'barangay_name', itemValue: 'barangay_id', searchable: true, rules: [requiredRule('Barangay')] },
   { key: 'street_address', label: 'Street / Purok (optional)', half: true, slot: true },
   { key: 'status', label: 'Account status', options: [{ title: 'Active', value: RESIDENT_STATUS.active }, { title: 'Deactivated', value: RESIDENT_STATUS.deactivated }] },
 ])
@@ -642,7 +635,7 @@ const getHeaders = () => ({ Authorization: `Bearer ${getToken()}`, 'Content-Type
 const residentsBeforeType = computed(() => {
   let result = residents.value
   if (filters.value.status !== 'All') result = result.filter((r) => r.status === filters.value.status)
-  if (filters.value.barangay !== 'All') result = result.filter((r) => barangayOf(r) === filters.value.barangay)
+  if (filters.value.barangay.length > 0) result = result.filter((r) => filters.value.barangay.includes(barangayOf(r)))
   // Trimmed: a leading space is trivially common when pasting from a list, and
   // it used to return zero rows with no explanation.
   const q = (search.value || '').trim().toLowerCase()
@@ -693,9 +686,9 @@ const typeTabs = computed(() => ACCOUNT_TYPE_FILTER_ITEMS.map((t) => ({
 // Type is the tabs, so it is not a chip here.
 const activeFilters = computed(() => [
   ...(filters.value.status === 'All' ? [] : [{ key: 'status', label: `Status: ${residentStatusLabel(filters.value.status)}` }]),
-  ...(filters.value.barangay === 'All' ? [] : [{ key: 'barangay', label: `Barangay: ${filters.value.barangay}` }]),
+  ...(filters.value.barangay.length > 0 ? [{ key: 'barangay', label: `Barangay: ${namesLabel(filters.value.barangay)}` }] : []),
 ])
-const clearFilter = (key) => { filters.value[key] = 'All' }
+const clearFilter = (key) => { filters.value[key] = key === 'barangay' ? [] : 'All' }
 watch([search, filters], () => { page.value = 1 }, { deep: true })
 
 // The row's Activate / Deactivate as RowActions' extra action.
@@ -732,7 +725,7 @@ watch(filteredAndSortedResidents, (rows) => {
 // "Clear all" in the filter row: search, status and barangay. The type tab stays.
 const clearFilters = () => {
   search.value = ''
-  filters.value = { ...filters.value, status: 'All', barangay: 'All' }
+  filters.value = { ...filters.value, status: 'All', barangay: [] }
 }
 
 // True when the open profile is not in the list behind it — filter to one

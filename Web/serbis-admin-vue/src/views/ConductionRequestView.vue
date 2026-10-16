@@ -93,7 +93,7 @@
           @click:row="(_e, { item }) => openDetail(item)"
         >
           <template v-slot:filters>
-            <v-select v-model="vehicleFilter" :items="vehicleFilterOptions" prefix="Unit" aria-label="Unit" variant="outlined" density="compact" hide-details rounded="lg" class="filter-bar__select"></v-select>
+            <v-autocomplete v-model="vehicleFilter" :items="vehicleFilterOptions" prefix="Unit" aria-label="Unit" no-data-text="No unit matches" variant="outlined" density="compact" hide-details rounded="lg" class="filter-bar__select"></v-autocomplete>
             <v-select v-model="departedRange" :items="DEPARTED_RANGES" prefix="Departed" aria-label="Departed" variant="outlined" density="compact" hide-details rounded="lg" class="filter-bar__select"></v-select>
           </template>
 
@@ -245,15 +245,16 @@
             </v-col>
             <v-col v-else cols="12">
               <label class="dd-field-label" for="trip-new-fleet-unit">Fleet unit</label>
-              <v-select
+              <v-autocomplete
                 v-model="createDialog.form.vehicle_id"
                 :items="vehicleOptions"
                 id="trip-new-fleet-unit"
+                no-data-text="No unit matches"
                 variant="outlined"
                 density="comfortable"
                 clearable
                 @update:model-value="onSelectFleetVehicle"
-              ></v-select>
+              ></v-autocomplete>
             </v-col>
             <!-- Fallback only, shown while no fleet unit is picked above —
                  see the comment on onSelectFleetVehicle. Not the default:

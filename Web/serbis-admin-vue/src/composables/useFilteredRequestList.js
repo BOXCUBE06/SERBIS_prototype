@@ -2,6 +2,7 @@ import { computed, ref } from 'vue'
 import { API_BASE } from '@/config/api'
 import { requestBarangayName } from '@/composables/requestDisplay'
 import { matchesTransaction } from '@/composables/transactionSearch'
+import { namesLabel } from '@/composables/adminUi'
 
 export function useFilteredRequestList(requests, filters, search, { requesterName, secondaryFn, decorate }) {
   // The full list, so a barangay with no requests yet is still pickable. The
@@ -14,7 +15,7 @@ export function useFilteredRequestList(requests, filters, search, { requesterNam
 
   const barangayOptions = computed(() => {
     const names = new Set([...allBarangays.value, ...requests.value.map(r => requestBarangayName(r)).filter(Boolean)])
-    return ['All', ...Array.from(names).sort()]
+    return Array.from(names).sort()
   })
 
   // A tab wins; on All, the Status select (statusPick, Resident queue only) applies.
@@ -36,7 +37,8 @@ export function useFilteredRequestList(requests, filters, search, { requesterNam
     return requests.value.filter(r => {
       if (currentStatus !== 'All' && (r.status || 'Pending') !== currentStatus) {return false}
 
-      if (filters.barangay !== 'All' && requestBarangayName(r) !== filters.barangay) {return false}
+      // [] = every barangay.
+      if (filters.barangay.length > 0 && !filters.barangay.includes(requestBarangayName(r))) {return false}
 
       if (filters.unit !== 'All') {
         const unit = r.vehicle?.unit_identifier || ''
@@ -75,7 +77,7 @@ export function useFilteredRequestList(requests, filters, search, { requesterNam
   const activeFilters = computed(() => {
     const out = []
     if (activeStatus.value !== 'All') {out.push({ key: 'status', label: `Status: ${activeStatus.value}` })}
-    if (filters.barangay !== 'All') {out.push({ key: 'barangay', label: `Barangay: ${filters.barangay}` })}
+    if (filters.barangay.length > 0) {out.push({ key: 'barangay', label: `Barangay: ${namesLabel(filters.barangay)}` })}
     if (filters.unit !== 'All') {out.push({ key: 'unit', label: `Unit: ${filters.unit}` })}
     return out
   })
@@ -83,7 +85,7 @@ export function useFilteredRequestList(requests, filters, search, { requesterNam
   const clearFilter = (key) => {
     switch (key) {
       case 'status': { filters.status = 'All'; filters.statusPick = 'All'; break }
-      case 'barangay': { filters.barangay = 'All'; break }
+      case 'barangay': { filters.barangay = []; break }
       case 'unit': { filters.unit = 'All'; break }
     }
   }
@@ -91,7 +93,7 @@ export function useFilteredRequestList(requests, filters, search, { requesterNam
   const clearAllFilters = () => {
     filters.status = 'All'
     filters.statusPick = 'All'
-    filters.barangay = 'All'
+    filters.barangay = []
     filters.unit = 'All'
   }
 

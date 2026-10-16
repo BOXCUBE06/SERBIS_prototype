@@ -73,31 +73,20 @@
                 <!-- The chips collapse to the first few and a count; the full
                      list is the dropdown, and each shown chip still removes
                      its barangay. -->
-                <v-select
+                <BarangayFilter
                   v-model="selectedBarangays"
                   :items="barangays"
                   item-title="barangay_name"
                   item-value="barangay_id"
                   :loading="barangaysLoading"
-                  multiple
+                  :max-chips="3"
                   placeholder="Select one or more barangays"
-                  variant="outlined"
-                  density="compact"
                   hide-details="auto"
-                  rounded="lg"
                   color="primary"
                   class="blast-audience"
                   :rules="[v => (v && v.length > 0) || 'Select at least one barangay to target.']"
                   :error-messages="fieldErrors.barangays"
                 >
-                  <template #selection="{ item, index }">
-                    <v-chip
-                      v-if="index < AUDIENCE_CHIPS" size="small" closable class="audience-chip"
-                      @click:close="selectedBarangays = selectedBarangays.filter((id) => id !== item.value)"
-                      @mousedown.stop
-                    >{{ item.title || barangayNameOf(selectedBarangays[index]) }}</v-chip>
-                    <v-chip v-else-if="index === AUDIENCE_CHIPS" size="small" class="audience-chip audience-chip--more">+{{ selectedBarangays.length - AUDIENCE_CHIPS }} more</v-chip>
-                  </template>
                   <!-- The old duplicate panel had a Select All and the rewrite
                        that swapped a hardcoded list for real GET /barangays rows
                        dropped it. Deliberately NOT the old implementation: that
@@ -119,7 +108,7 @@
                     </v-list-item>
                     <v-divider class="mt-2"></v-divider>
                   </template>
-                </v-select>
+                </BarangayFilter>
                 <div class="blast-caption">{{ selectedBarangays.length }} of {{ barangays.length }} barangays selected</div>
               </div>
 
@@ -315,6 +304,7 @@ import { getToken } from '@/composables/authToken'
 import { describeSms, findLink, nameCharacter, toGsmSafe } from '@/composables/smsSegments'
 import { API_BASE } from '@/config/api'
 import { pluralize } from '@/composables/adminUi'
+import BarangayFilter from '@/components/BarangayFilter.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import NoticeBanner from '@/components/NoticeBanner.vue'
 import BlastHistory from '@/components/BlastHistory.vue'
@@ -338,11 +328,6 @@ const alert = ref({
 // cleared on cancel, on a successful send, and on any failure that closes it.
 const confirmDialog = ref({ open: false, summary: '', cost: '', code: '' })
 
-// The target field shows this many barangays as chips, then "+N more".
-const AUDIENCE_CHIPS = 3
-// The chip's label from the selected id, not from the slot's item: the selection
-// slot's item shape differs between Vuetify versions, the model and the list do not.
-const barangayNameOf = (id) => barangays.value.find((b) => b.barangay_id === id)?.barangay_name ?? ''
 
 // What the confirm dialog says: who it reaches, what it spends, then the code
 // the server checks before it sends anything (the code is masked, as on the board).
@@ -922,19 +907,6 @@ const rotateBlastCode = async () => {
 }
 .blast-label-actions button:disabled { opacity: 0.45; cursor: default; }
 .blast-audience :deep(.v-field__input) { min-height: 44px; padding: 6px 10px; gap: 6px; }
-.audience-chip {
-  height: 28px !important;
-  padding: 0 8px 0 12px;
-  border-radius: 999px;
-  background: rgba(var(--v-theme-on-surface), 0.06);
-  font-size: 13px;
-}
-.audience-chip--more {
-  padding: 0 12px;
-  background: rgba(var(--v-theme-primary), 0.14);
-  color: rgb(var(--v-theme-primary-strong));
-  font-weight: 700;
-}
 .blast-caption {
   margin-top: 6px;
   font-size: 12px;

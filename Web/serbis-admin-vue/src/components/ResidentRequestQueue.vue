@@ -484,15 +484,16 @@
             ></v-text-field>
           </template>
 
-          <v-select
+          <v-autocomplete
             v-model="createDialog.form.service_id"
             :items="serviceOptions"
             label="Service"
+            no-data-text="No service matches"
             variant="outlined"
             density="comfortable"
             class="mb-2"
             :rules="[required]"
-          ></v-select>
+          ></v-autocomplete>
 
           <v-textarea
             v-model="createDialog.form.description"
@@ -566,7 +567,7 @@ const itemsPerPage = ref(10)
 const isProgramRequest = (r) => r?.service?.category === 'programs'
 
 // The tabs own `status`; there is no separate Status select.
-const filters = reactive({ status: 'All', barangay: 'All', unit: 'All' })
+const filters = reactive({ status: 'All', barangay: [], unit: 'All' })
 const responderModal = ref({ loading: false, error: '', selectedIds: new Set() })
 // The picker opens inside the drawer, replacing its body.
 const picker = reactive({ open: false, tab: 'responders' })

@@ -76,6 +76,12 @@ export function pluralize(count: number, singular: string): string {
   return `${count} ${singular}${count === 1 ? '' : 's'}`
 }
 
+/** "A, B +3": the first `max` names, then a count of the rest. For filter chips. */
+export function namesLabel(names: string[], max = 2): string {
+  const shown = names.slice(0, max).join(', ')
+  return names.length > max ? `${shown} +${names.length - max}` : shown
+}
+
 /**
  * Date only. Returns an em dash rather than "Invalid Date" for a null or
  * unparseable value, because these land directly in table cells.

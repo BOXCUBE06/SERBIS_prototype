@@ -58,7 +58,7 @@ class AnalyticsController extends Controller
             'preset' => ['nullable', 'string', 'in:'.implode(',', AnalyticsReport::PRESETS)],
             'from' => ['nullable', 'date_format:Y-m-d'],
             'to' => ['nullable', 'date_format:Y-m-d'],
-            'barangay_id' => ['nullable', 'array', 'max:10'],
+            'barangay_id' => ['nullable', 'array'],
             'barangay_id.*' => ['integer', 'exists:tbl_barangay,barangay_id'],
             'service_id' => ['nullable', 'array', 'max:10'],
             'service_id.*' => ['integer', 'exists:tbl_services,service_id'],

@@ -7,7 +7,7 @@
   ResDialog canvas board's.
 
   Each field is `{ key, label, required, placeholder, items, itemTitle,
-  itemValue, type, min, max, half, third, hint, rules, autocomplete, options,
+  itemValue, searchable (typable list), type, min, max, half, third, hint, rules, autocomplete, options,
   slot, note }`. `half` and `third` put two or three fields on a row; `hint`
   is the muted line under the control; `note` swaps the input for a muted line
   (Equipment's "Available starts equal to total"). `type: 'password'` adds the
@@ -120,6 +120,19 @@
             >
               <v-radio v-for="o in f.options" :key="o.value" :label="o.title" :value="o.value"></v-radio>
             </v-radio-group>
+            <v-autocomplete
+              v-else-if="f.items && f.searchable"
+              :model-value="form[f.key]"
+              @update:model-value="set(f, $event)"
+              :items="f.items"
+              :item-title="f.itemTitle"
+              :item-value="f.itemValue"
+              :rules="rulesFor(f)"
+              :error-messages="fieldErrors[f.key]"
+              :aria-label="f.label"
+              no-data-text="No match"
+              variant="outlined" density="compact" rounded="lg" hide-details="auto"
+            ></v-autocomplete>
             <v-select
               v-else-if="f.items"
               :model-value="form[f.key]"
@@ -195,6 +208,7 @@ interface Field {
   items?: unknown[]
   itemTitle?: string | ((item: any) => string)
   itemValue?: string
+  searchable?: boolean
   type?: string
   min?: number
   max?: number
