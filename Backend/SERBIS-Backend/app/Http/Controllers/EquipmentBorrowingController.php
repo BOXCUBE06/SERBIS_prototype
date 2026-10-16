@@ -78,6 +78,11 @@ class EquipmentBorrowingController extends Controller
             return $refusal;
         }
 
+        // A resident gets their latest RESIDENT_LIST_LIMIT rows; staff get every row (the board and the dashboard count over all of them).
+        if ($request->user() instanceof Resident) {
+            $query->orderByDesc('borrow_id')->limit(self::RESIDENT_LIST_LIMIT);
+        }
+
         return response()->json($query->get());
     }
 
