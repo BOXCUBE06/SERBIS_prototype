@@ -70,11 +70,13 @@
 
     <!-- Add / Edit -->
     <EditDialog
+      ref="editRef"
       v-model="modal.show"
       :title="modal.editing ? 'Edit equipment' : 'Add equipment'"
       :confirm-label="modal.editing ? 'Save' : 'Add'"
       :fields="formFields"
       :form="form"
+      :field-errors="fieldErrors"
       :error="modal.error"
       :loading="modal.loading"
       @save="saveEquipment"
@@ -104,6 +106,7 @@ import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
 import { invalidate, useCachedFetch } from '@/composables/useCachedFetch'
 import { pluralize } from '@/composables/adminUi'
+import { splitServerErrors } from '@/composables/useFormErrors'
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
 import PersonCell from '@/components/PersonCell.vue'
@@ -123,13 +126,15 @@ const apiError = ref('')
 
 const modal = ref({ show: false, editing: false, loading: false, error: '', targetId: null })
 const form = ref({ item_name: '', total_quantity: 1, available_quantity: 1, status: 'Available' })
+const editRef = ref(null)
+const fieldErrors = ref({})
 const deleteDialog = ref({ show: false, item: null, loading: false })
 const snackbar = ref({ show: false, text: '', color: 'success' })
 
 // Total and Available sit side by side; on add, Available is just a note (it mirrors total).
 const formFields = computed(() => [
   { key: 'item_name', label: 'Item name', required: true, placeholder: 'Folding stretcher' },
-  { key: 'total_quantity', label: 'Total owned', required: true, placeholder: '12', type: 'number', min: 1, half: true },
+  { key: 'total_quantity', label: 'Total owned', required: true, placeholder: '12', type: 'number', min: 1, half: true, rules: [(v) => Number(v) >= 1 || 'Total owned must be at least 1.'] },
   modal.value.editing
     ? { key: 'available_quantity', label: 'Available now', required: true, placeholder: '9', type: 'number', min: 0, max: form.value.total_quantity, half: true }
     : { key: 'available_quantity', note: 'Available starts equal to total', half: true },
@@ -216,6 +221,7 @@ const reload = () => { invalidate('/equipments'); return fetchEquipments(true) }
 
 const openAdd = () => {
   form.value = { item_name: '', total_quantity: 1, available_quantity: 1, status: 'Available' }
+  fieldErrors.value = {}
   modal.value = { show: true, editing: false, loading: false, error: '', targetId: null }
 }
 const openEdit = (item) => {
@@ -225,16 +231,16 @@ const openEdit = (item) => {
     available_quantity: item.available_quantity,
     status: item.status,
   }
+  fieldErrors.value = {}
   modal.value = { show: true, editing: true, loading: false, error: '', targetId: item.equipment_id || item.id }
 }
 
 const saveEquipment = async () => {
-  if (!form.value.item_name.trim() || !form.value.total_quantity) {
-    modal.value.error = 'Item name and total owned are required.'
-    return
-  }
+  const { valid } = await editRef.value.validate()
+  if (!valid) return
   modal.value.loading = true
   modal.value.error = ''
+  fieldErrors.value = {}
   const editing = modal.value.editing
   // On add, available mirrors total (the auto-sync rule); on edit it is explicit.
   const payload = {
@@ -251,8 +257,10 @@ const saveEquipment = async () => {
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok) {
-      const msg = data.errors ? Object.values(data.errors).flat().join(' ') : (data.message || 'Save failed')
-      throw new Error(msg)
+      // A 422 lands on its fields; only messages that match none go in the banner.
+      const { matched, rest } = splitServerErrors(data.errors, formFields.value.map((f) => f.key))
+      fieldErrors.value = matched
+      throw new Error(rest.join(' ') || (Object.keys(matched).length > 0 ? 'Check the highlighted fields.' : data.message || 'Save failed'))
     }
     await reload()
     modal.value.show = false

@@ -13,6 +13,7 @@ import '../theme/app_theme.dart';
 import '../widgets/ambulance_steps.dart';
 import '../widgets/feedback.dart' show FormErrorSummary;
 import '../widgets/form_inputs.dart';
+import '../widgets/form_submit.dart';
 import '../widgets/form_section.dart';
 import '../widgets/form_steps.dart';
 import '../widgets/service_form_fields.dart';
@@ -211,13 +212,17 @@ class ServiceRequestFormState extends State<ServiceRequestForm> {
     return result.files.first;
   }
 
-  /// Shows [errors] under their fields and scrolls the first one into view.
+  /// The server's valid_id / letter rejections, as this form's own error keys.
+  Map<String, String> _rejectedFields(Map<String, String> server) => {
+        if (server.containsKey('valid_id')) 'validId': server['valid_id']!,
+        if (server.containsKey('letter')) 'letter': server['letter']!,
+      };
+
+  /// Shows [errors] under their fields and brings the first one to the middle
+  /// of the screen, focused.
   void _refuse(Map<String, String> errors, GlobalKey field) {
     setState(() => _errors = errors);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final target = field.currentContext;
-      if (target != null) Scrollable.ensureVisible(target, duration: const Duration(milliseconds: 200));
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => revealField(field.currentContext));
   }
 
   Future<void> _submit() async {
@@ -357,6 +362,14 @@ class ServiceRequestFormState extends State<ServiceRequestForm> {
       final unavailable = widget.appState.unavailableServiceId;
       if (unavailable != null && unavailable == service.id) {
         widget.onServiceUnavailable?.call();
+        return;
+      }
+      // A field the server rejected is marked where it is, not only in the retry banner.
+      final rejected = service.formKind == ServiceFormKind.ambulance
+          ? const <String, String>{}
+          : _rejectedFields(widget.appState.takeFieldErrors());
+      if (rejected.isNotEmpty) {
+        _refuse(rejected, rejected.containsKey('letter') ? _letterKey : _idKey);
         return;
       }
       setState(() => _submitFailed = true);
@@ -670,6 +683,7 @@ class ServiceRequestFormState extends State<ServiceRequestForm> {
     final errors = _stepErrors(f);
     if (errors.isNotEmpty) {
       setState(() => _errors = errors);
+      revealFirstError(context);
       return;
     }
     if (_step == ambulanceStepNames.length - 1) {

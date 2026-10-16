@@ -11,6 +11,7 @@ import '../state/translations.dart';
 import '../state/verification_delivery.dart';
 import '../theme/app_theme.dart';
 import '../widgets/form_inputs.dart';
+import '../widgets/form_submit.dart';
 import '../widgets/form_steps.dart';
 import '../widgets/shared_widgets.dart';
 
@@ -116,7 +117,10 @@ class _ChangePhoneSheetState extends State<ChangePhoneSheet> {
       _passwordError = errors['password'];
       _formError = null;
     });
-    if (errors.isNotEmpty) return;
+    if (errors.isNotEmpty) {
+      revealFirstError(context);
+      return;
+    }
 
     setState(() => _busy = true);
 
@@ -144,6 +148,7 @@ class _ChangePhoneSheetState extends State<ChangePhoneSheet> {
         _formError =
             phoneError == null && passwordError == null ? _messageFor(e) : null;
       });
+      revealFirstError(context);
     } finally {
       if (mounted) setState(() => _busy = false);
     }

@@ -68,10 +68,15 @@ class VerificationDelivery {
 /// shows [error] inline — so the success half needs somewhere to live too.
 class RegisterOutcome {
   final String? error;
+
+  /// The server's message per rejected field, for the form to mark.
+  final Map<String, String> fieldErrors;
   final VerificationDelivery? delivery;
 
-  const RegisterOutcome.failed(String this.error) : delivery = null;
-  const RegisterOutcome.sent(this.delivery) : error = null;
+  const RegisterOutcome.failed(String this.error, {this.fieldErrors = const {}}) : delivery = null;
+  const RegisterOutcome.sent(this.delivery)
+      : error = null,
+        fieldErrors = const {};
 
   bool get failed => error != null;
 }

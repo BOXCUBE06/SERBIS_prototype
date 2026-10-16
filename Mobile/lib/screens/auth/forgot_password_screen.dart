@@ -11,6 +11,7 @@ import '../../state/app_log.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/auth_layout.dart';
 import '../../widgets/form_inputs.dart';
+import '../../widgets/form_submit.dart';
 import '../../widgets/form_steps.dart';
 import '../../widgets/shared_widgets.dart';
 
@@ -70,6 +71,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   bool _busy = false;
   String? _error;
   String? _notice;
+  // The server's per-field rejection, shown under the input it names.
+  String? _phoneError;
+  String? _passError;
 
   /// Held in memory only for the length of this screen, between step two and
   /// step three. Never stored.
@@ -124,7 +128,16 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     } on ApiException catch (e) {
       AppLog.error(_logArea, what, status: e.statusCode, reason: e.message);
       if (!mounted) return;
-      setState(() => _error = e.message);
+      // A field the server rejected is marked under its input (on the step that
+      // has it); only a message that fits none goes in the banner.
+      final phoneError = _step == _Step.phone ? e.fieldErrors['phone_number'] : null;
+      final passError = _step == _Step.password ? e.fieldErrors['password'] : null;
+      setState(() {
+        _phoneError = phoneError;
+        _passError = passError;
+        _error = phoneError == null && passError == null ? e.message : null;
+      });
+      revealFirstError(_step == _Step.password ? _passKey.currentContext : _phoneKey.currentContext);
     } catch (error) {
       AppLog.error(_logArea, what, reason: error.toString());
       if (!mounted) return;
@@ -135,7 +148,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   }
 
   Future<void> _sendCode() async {
-    if (!_phoneKey.currentState!.validate()) return;
+    _phoneError = null;
+    if (!submitForm(_phoneKey)) return;
 
     await _run('forgot', () async {
       final cooldown = await widget.userStore.forgotPassword(phoneNumber: _phone);
@@ -177,7 +191,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   }
 
   Future<void> _setPassword() async {
-    if (!_passKey.currentState!.validate()) return;
+    _passError = null;
+    if (!submitForm(_passKey)) return;
 
     await _run('reset', () async {
       try {
@@ -223,6 +238,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   Widget _phoneStep() {
     return Form(
       key: _phoneKey,
+      autovalidateMode: AutovalidateMode.onUserInteraction,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -236,6 +252,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             label: 'Mobile number',
             hint: '09XXXXXXXXX',
             controller: _phoneCtrl,
+            errorText: _phoneError,
+            onChanged: (_) { if (_phoneError != null) setState(() => _phoneError = null); },
             keyboard: TextInputType.phone,
             prefixIcon: Icons.phone_outlined,
             maxLength: PhoneNumber.maxLength,
@@ -311,6 +329,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   Widget _passwordStep() {
     return Form(
       key: _passKey,
+      autovalidateMode: AutovalidateMode.onUserInteraction,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -323,6 +342,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             label: 'New password',
             hint: '',
             controller: _passCtrl,
+            errorText: _passError,
+            onChanged: (_) { if (_passError != null) setState(() => _passError = null); },
             obscure: true,
             prefixIcon: Icons.lock_outline_rounded,
             validator: _passwordRule,

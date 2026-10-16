@@ -56,7 +56,7 @@
               <span class="font-weight-medium">{{ alert.message }}</span>
             </v-alert>
 
-            <v-form ref="form" class="blast-form" @submit.prevent="sendSmsBlast">
+            <v-form ref="form" class="blast-form" validate-on="blur" @submit.prevent="sendSmsBlast">
               
               <!-- The audience is exactly the active, opted-in residents:
                    SmsController::sendBlast filters status = Active AND
@@ -304,6 +304,7 @@ import { getToken } from '@/composables/authToken'
 import { describeSms, findLink, nameCharacter, toGsmSafe } from '@/composables/smsSegments'
 import { API_BASE } from '@/config/api'
 import { pluralize } from '@/composables/adminUi'
+import { focusFirstError, useFormErrors } from '@/composables/useFormErrors'
 import BarangayFilter from '@/components/BarangayFilter.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import NoticeBanner from '@/components/NoticeBanner.vue'
@@ -314,6 +315,8 @@ import EditDialog from '@/components/EditDialog.vue'
 const message = ref('')
 const loading = ref(false)
 const form = ref(null)
+// Scroll/focus the first invalid field on send.
+const { validate: validateBlast } = useFormErrors(form)
 const barangays = ref([])
 const selectedBarangays = ref([])
 const barangaysLoading = ref(false)
@@ -446,6 +449,7 @@ const applyServerErrors = (data) => {
       else leftovers.push(text)
     }
     fieldErrors.value = mapped
+    if (mapped.message || mapped.barangays) focusFirstError(form.value?.$el)
     return leftovers.length > 0 ? leftovers.join(' ') : 'Please correct the highlighted fields.'
   }
   return data?.message || 'Failed to send blast'
@@ -641,7 +645,7 @@ onMounted(() => {
 const sendSmsBlast = async () => {
   clearFieldErrors()
 
-  const { valid, errors } = await form.value.validate()
+  const { valid, errors } = await validateBlast()
   if (!valid) {
     // Name what is wrong (the rules' own messages) rather than pointing at
     // fields that may be off screen; the old sentence is the fallback.

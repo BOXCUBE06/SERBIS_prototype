@@ -1,0 +1,8 @@
+/* "N fields need attention", beside a form's Save button (useFormErrors' invalidCount). */
+.form-attention {
+  margin-right: auto;
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 700;
+  color: rgb(var(--v-theme-error-strong));
+}

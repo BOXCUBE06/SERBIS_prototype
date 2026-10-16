@@ -198,7 +198,6 @@
       :confirm-label="modal.isEditing ? 'Save changes' : 'Create account'"
       :fields="accountFields"
       :form="formData"
-      :field-errors="fieldErrors"
       :error="modalError"
       :loading="loading"
       :width="600"
@@ -251,14 +250,14 @@
         </div>
       </template>
 
-      <template v-slot:field-street_address>
+      <template v-slot:field-street_address="{ error }">
         <!-- Keyed on the dialog: the picker reads its value once, and this
              form is reused for every resident. -->
         <PurokSelect
           compact
           :key="`${modal.isOpen}-${modal.targetId ?? 'new'}`"
           v-model="formData.street_address"
-          :error-messages="fieldErrors.street_address"
+          :error-messages="error"
         />
       </template>
 
@@ -849,7 +848,6 @@ const loadAll = async () => {
 
 const openAddModal = () => {
   modalError.value = ''
-  clearFieldErrors()
   formData.value = {
     first_name: '', middle_name: '', last_name: '', phone_number: '',
     password: '', barangay_id: null, street_address: '',
@@ -866,7 +864,6 @@ const openAddModal = () => {
 const openExistingEditModal = (item) => {
   modalError.value = ''
   photoError.value = ''
-  clearFieldErrors()
   formData.value = {
     first_name: item.first_name,
     middle_name: item.middle_name,
@@ -951,27 +948,14 @@ const passwordRule = (v) =>
   !v || (v.length >= 8 && /[a-z]/.test(v) && /[A-Z]/.test(v) && /\d/.test(v)) ||
   'At least 8 characters, with upper and lower case and a number.'
 
-// Server-side errors, keyed by field, so a 422 lands on the input it belongs
-// to instead of being concatenated into a blob above the form.
-const fieldErrors = ref({})
-
-const clearFieldErrors = () => { fieldErrors.value = {} }
-
-// Laravel answers `{errors: {field: [msg]}}`. Split it: known fields go to
-// their input, anything unrecognised stays in the summary alert so nothing is
-// silently swallowed.
+// Laravel answers `{errors: {field: [msg]}}`. Known fields get their message on
+// the input (the dialog scrolls to the first); anything unrecognised stays in
+// the summary alert so nothing is silently swallowed.
 const applyServerErrors = async (res) => {
   const data = await res.json().catch(() => ({}))
   if (data.errors && typeof data.errors === 'object') {
-    const mapped = {}
-    const leftovers = []
-    for (const [key, messages] of Object.entries(data.errors)) {
-      const text = Array.isArray(messages) ? messages.join(' ') : String(messages)
-      if (key in formData.value) mapped[key] = text
-      else leftovers.push(text)
-    }
-    fieldErrors.value = mapped
-    return leftovers.length > 0 ? leftovers.join(' ') : 'Please correct the highlighted fields.'
+    const rest = await form.value.applyServerErrors(data.errors, Object.keys(formData.value))
+    return rest.length > 0 ? rest.join(' ') : 'Please correct the highlighted fields.'
   }
   return data.message || 'Request failed'
 }
@@ -982,7 +966,7 @@ const applyServerErrors = async (res) => {
 // either path surfaced as "errorFrom is not defined" rather than the server's
 // reason.
 //
-// Deliberately NOT applyServerErrors: that one populates fieldErrors for inputs
+// Deliberately NOT applyServerErrors: that one puts messages on inputs
 // that are on screen, and neither caller has any. The message here is
 // load-bearing rather than decorative — destroy() answers 422 with "Cannot
 // delete — N service request(s) still reference this resident", which is the
@@ -996,7 +980,6 @@ const errorFrom = async (res) => {
 
 const saveUser = async () => {
   modalError.value = ''
-  clearFieldErrors()
 
   // Validate before spending a round trip. Vuetify focuses the first invalid
   // field itself once the rules are attached.

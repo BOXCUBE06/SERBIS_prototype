@@ -392,7 +392,7 @@ class ApiService {
 
       return RegisterOutcome.sent(VerificationDelivery.fromJson(data));
     } on ApiException catch (e) {
-      return RegisterOutcome.failed(e.message);
+      return RegisterOutcome.failed(e.message, fieldErrors: e.fieldErrors);
     }
   }
 

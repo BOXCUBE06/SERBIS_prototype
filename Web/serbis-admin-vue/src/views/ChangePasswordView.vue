@@ -11,7 +11,7 @@
         rounded="lg" class="mb-4" role="alert"
       >{{ errorMessage }}</v-alert>
 
-      <v-form ref="formRef" @submit.prevent="submit">
+      <v-form ref="formRef" validate-on="blur" @submit.prevent="submit">
         <v-text-field
           v-model="form.current_password" label="Temporary password" variant="outlined"
           density="comfortable" rounded="lg" class="mb-1" autocomplete="current-password"
@@ -66,6 +66,7 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { clearToken, getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
+import { useFormErrors } from '@/composables/useFormErrors'
 
 const router = useRouter()
 
@@ -74,7 +75,8 @@ const formRef = ref()
 const loading = ref(false)
 const showPassword = ref(false)
 const errorMessage = ref('')
-const fieldErrors = ref<Record<string, string>>({})
+// Scroll/focus the first invalid field, and put the server's 422 on its fields.
+const { serverErrors: fieldErrors, validate, applyServerErrors } = useFormErrors(formRef, () => form)
 
 const requiredRule = (label: string) => (v: unknown) =>
   (v !== null && v !== undefined && String(v) !== '') || `${label} is required.`
@@ -83,9 +85,8 @@ const confirmRule = (v: unknown) =>
 
 const submit = async () => {
   errorMessage.value = ''
-  fieldErrors.value = {}
 
-  const { valid } = await formRef.value.validate()
+  const { valid } = await validate()
   if (!valid) return
 
   loading.value = true
@@ -105,12 +106,7 @@ const submit = async () => {
       router.push('/')
     } else if (res.status === 422 && data.errors) {
       // Known fields land on their input; anything else stays in the banner.
-      const leftovers: string[] = []
-      for (const [key, messages] of Object.entries(data.errors as Record<string, string[]>)) {
-        const text = Array.isArray(messages) ? messages.join(' ') : String(messages)
-        if (key in form) fieldErrors.value[key] = text
-        else leftovers.push(text)
-      }
+      const leftovers = await applyServerErrors(data.errors, Object.keys(form))
       if (leftovers.length) errorMessage.value = leftovers.join(' ')
     } else if (res.status === 429) {
       errorMessage.value = 'Too many attempts. Wait a minute, then try again.'

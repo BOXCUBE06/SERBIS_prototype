@@ -8,10 +8,12 @@ import '../../state/account_store.dart';
 import '../../state/api_service.dart' show VerificationDelivery;
 import '../../state/app_log.dart';
 import '../../theme/app_theme.dart';
+import '../../state/verification_delivery.dart' show RegisterOutcome;
 import '../../widgets/auth_layout.dart';
 import '../../widgets/barangay_field.dart';
 import '../../widgets/form_section.dart' show SegmentedChoice;
 import '../../widgets/form_steps.dart';
+import '../../widgets/form_submit.dart';
 import '../../widgets/shared_widgets.dart';
 
 
@@ -52,6 +54,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
   String? _agreeError;
   bool    _loading    = false;
   String? _formError;
+  // What the server rejected, by field, shown under the input it names.
+  Map<String, String> _fieldErrors = const {};
 
   // barangay_id is a required non-null FK on a resident, so the list has to be
   // in hand before anyone can sign up. Fetched from the public GET /barangays.
@@ -138,11 +142,42 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _agreeError = null;
       });
 
+  /// The step each server-checked field is on.
+  static const _fieldStep = {
+    'organization_name': 0,
+    'first_name': 0,
+    'last_name': 0,
+    'phone_number': 0,
+    'password': 2,
+  };
+
+  /// Marks the fields the server rejected, on their step, and brings the first
+  /// into view. A message that fits no field stays in the banner.
+  void _showRejected(RegisterOutcome outcome) {
+    final mine = {
+      for (final e in outcome.fieldErrors.entries)
+        if (_fieldStep.containsKey(e.key)) e.key: e.value,
+    };
+    setState(() {
+      _fieldErrors = mine;
+      _formError = mine.isEmpty ? outcome.error : null;
+      if (mine.isNotEmpty) {
+        _step = mine.keys.map((k) => _fieldStep[k]!).reduce((a, b) => a < b ? a : b);
+      }
+    });
+    revealFirstError(_formKey.currentContext);
+  }
+
+  void _clearRejected(String key) {
+    if (_fieldErrors.containsKey(key)) setState(() => _fieldErrors = {..._fieldErrors}..remove(key));
+  }
+
   void _back() => _step == 0 ? widget.onGoToLogin() : _goTo(_step - 1);
 
   /// Checks only the step that is showing; the last one submits.
   void _next() {
-    if (!_formKey.currentState!.validate()) return;
+    _fieldErrors = const {};
+    if (!submitForm(_formKey)) return;
 
     if (_step == 1 && _barangayId == null) {
       // Reachable when the barangay list could not load: no picker, no validator.
@@ -187,7 +222,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       if (!mounted) return;
 
       if (outcome.failed) {
-        setState(() => _formError = outcome.error);
+        _showRejected(outcome);
         return;
       }
       // The account is not usable yet — the code finishes it. The number goes
@@ -229,6 +264,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ),
       child: Form(
         key: _formKey,
+        autovalidateMode: AutovalidateMode.onUserInteraction,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -277,6 +313,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
             label: 'Organization name',
             hint: 'e.g. Isabela State University',
             controller: _orgNameCtrl,
+            errorText: _fieldErrors['organization_name'],
+            onChanged: (_) => _clearRejected('organization_name'),
             prefixIcon: Icons.apartment_rounded,
             maxLength: 150,
             validator: (v) => (v ?? '').trim().isEmpty ? 'Enter the organization name' : null,
@@ -285,6 +323,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
           label: _organization ? 'Contact first name' : 'First name',
           hint: 'e.g. Juan',
           controller: _firstNameCtrl,
+          errorText: _fieldErrors['first_name'],
+          onChanged: (_) => _clearRejected('first_name'),
           prefixIcon: Icons.person_outline_rounded,
           validator: (v) => (v ?? '').trim().isEmpty
               ? (_organization ? 'Enter the contact person\'s first name' : 'Enter your first name')
@@ -294,6 +334,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
           label: _organization ? 'Contact last name' : 'Last name',
           hint: 'e.g. Delacruz',
           controller: _lastNameCtrl,
+          errorText: _fieldErrors['last_name'],
+          onChanged: (_) => _clearRejected('last_name'),
           prefixIcon: Icons.person_outline_rounded,
           validator: (v) => (v ?? '').trim().isEmpty
               ? (_organization ? 'Enter the contact person\'s last name' : 'Enter your last name')
@@ -303,6 +345,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
           label: 'Mobile number',
           hint: '09XXXXXXXXX',
           controller: _phoneCtrl,
+          errorText: _fieldErrors['phone_number'],
+          onChanged: (_) => _clearRejected('phone_number'),
           keyboard: TextInputType.phone,
           prefixIcon: Icons.phone_outlined,
           maxLength: PhoneNumber.maxLength,
@@ -368,6 +412,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
         label: 'Password',
         hint: 'At least 8 characters',
         controller: _passwordCtrl,
+        errorText: _fieldErrors['password'],
+        onChanged: (_) => _clearRejected('password'),
         obscure: true,
         prefixIcon: Icons.lock_outline_rounded,
         validator: _validatePassword,
