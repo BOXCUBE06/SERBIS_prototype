@@ -2,6 +2,18 @@
   <v-container fluid class="analytics-bg">
 
     <PageHeader title="Analytics">
+      <template #actions>
+        <v-btn
+          variant="outlined"
+          color="primary"
+          prepend-icon="mdi-printer-outline"
+          class="text-none font-weight-bold no-print"
+          :disabled="!report"
+          @click="printReport"
+        >
+          Print report
+        </v-btn>
+      </template>
       <!-- Reconciled against the same helper the Dashboard uses, so the two
            pages cannot report different totals for the same window. -->
       <template v-if="report" #subtitle>
@@ -16,7 +28,7 @@
 
     <!-- One compact row of 36px controls (styles/filter-bar.css). Each select
          shows its own "All …" value, so it needs no floating label. -->
-    <div class="filter-bar mb-2">
+    <div class="filter-bar mb-2 no-print">
       <v-btn-toggle
         v-model="preset"
         mandatory
@@ -100,7 +112,7 @@
          the server reads a half-filled range as no range and answers with
          the quarter. Saying so beats leaving the previous range's caption
          on screen asserting a window the controls no longer show. -->
-    <div v-if="awaitingCustomRange" class="text-caption text-medium-emphasis mb-2">
+    <div v-if="awaitingCustomRange" class="text-caption text-medium-emphasis mb-2 no-print">
       Pick a start and an end date to apply a custom range. Showing
       {{ report ? `${report.range.from} to ${report.range.to}` : 'nothing' }} until then.
     </div>
@@ -110,7 +122,7 @@
       type="warning"
       variant="tonal"
       rounded="lg"
-      class="mb-6"
+      class="mb-6 no-print"
     >
       <div class="d-flex align-center justify-space-between flex-wrap gap-3">
         <span>{{ error }}</span>
@@ -120,7 +132,15 @@
       </div>
     </v-alert>
 
-    <SegmentedTabs v-model="tab" :items="TABS" tonal class="mt-2 mb-5" />
+    <SegmentedTabs v-model="tab" :items="TABS" tonal class="mt-2 mb-5 no-print" />
+
+    <!-- On paper the tabs are gone, so say which section this is and what was
+         filtered; the screen shows both in the controls. -->
+    <div class="print-only print-scope">
+      <strong>{{ TABS.find(t => t.value === tab)?.label }}</strong>
+      &bull; Barangays: {{ selectedNames(barangayIds, barangayOptions).join(', ') || 'all' }}
+      &bull; Services: {{ selectedNames(serviceIds, serviceOptions).join(', ') || 'all' }}
+    </div>
 
     <!-- The answer first, then the numbers behind it, then the charts as
          evidence. All derived from the report already on screen. -->
@@ -451,7 +471,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useTheme } from 'vuetify'
 import {
   Chart as ChartJS, Tooltip, Legend, CategoryScale, LinearScale, BarElement,
@@ -516,6 +536,10 @@ const TABS = [
   { value: 'equipment', label: 'Equipment & Vehicles' },
 ]
 const tab = ref('demand')
+
+const printReport = () => window.print()
+// Charts are canvases sized for the screen layout; make them re-measure for the page.
+const resizeCharts = () => Object.values(ChartJS.instances).forEach(c => c.resize())
 
 const preset = ref('quarter')
 const volumeView = ref('chart')
@@ -622,6 +646,18 @@ const fetchFilterOptions = async () => {
 watch([preset, barangayIds, serviceIds, customFrom, customTo], () => {
   if (preset.value === 'custom' && !(customFrom.value && customTo.value)) return
   fetchReport()
+})
+
+// The class scopes the print rules below to this page.
+onMounted(() => {
+  document.documentElement.classList.add('print-analytics')
+  window.addEventListener('beforeprint', resizeCharts)
+  window.addEventListener('afterprint', resizeCharts)
+})
+onBeforeUnmount(() => {
+  document.documentElement.classList.remove('print-analytics')
+  window.removeEventListener('beforeprint', resizeCharts)
+  window.removeEventListener('afterprint', resizeCharts)
 })
 
 onMounted(async () => {
@@ -1030,6 +1066,35 @@ const horizontalBarOptions = computed(() => barOptions(true))
 
 defineExpose({ fetchReport })
 </script>
+
+<style>
+.print-only { display: none; }
+
+/* Print: the report alone, on white. The shell (sidebar, fixed-height scroll
+   box) is unwrapped so the page flows across sheets instead of clipping. */
+@media print {
+  @page { margin: 12mm; }
+  html.print-analytics,
+  html.print-analytics body,
+  html.print-analytics .v-application,
+  html.print-analytics .v-application__wrap { height: auto !important; min-height: 0 !important; overflow: visible !important; }
+  html.print-analytics .v-navigation-drawer,
+  html.print-analytics .mobile-app-bar,
+  html.print-analytics .no-print { display: none !important; }
+  html.print-analytics .v-main { padding: 0 !important; background: #fff !important; }
+  html.print-analytics .outer-wrapper { display: block; height: auto; padding: 0; margin: 0; }
+  html.print-analytics .inner-wrapper { overflow: visible; height: auto; border-radius: 0; background: #fff; }
+  html.print-analytics .inner-wrapper > .v-container { padding: 0 !important; }
+  html.print-analytics .print-only { display: block; }
+  html.print-analytics .print-scope { margin: 0 0 12px; font-size: 13px; }
+  html.print-analytics .dash-card,
+  html.print-analytics .finding,
+  html.print-analytics .v-card,
+  html.print-analytics .v-row { break-inside: avoid; }
+  html.print-analytics .table-scroll { max-height: none; overflow: visible; }
+  html.print-analytics * { -webkit-print-color-adjust: exact; print-color-adjust: exact; box-shadow: none !important; }
+}
+</style>
 
 <style scoped>
 .analytics-bg {
