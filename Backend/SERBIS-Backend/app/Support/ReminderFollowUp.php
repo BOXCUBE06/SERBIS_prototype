@@ -41,7 +41,8 @@ class ReminderFollowUp
         $alreadyToday = SystemLog::where('action_type', self::ACTION)
             ->where('auditable_type', EquipmentBorrowing::class)
             ->where('auditable_id', $borrowing->getKey())
-            ->where('new_values', 'like', '%"kind":"'.$kind.'"%')
+            // JSON path, not LIKE: MySQL stores `"kind": "x"` with a space, so a text match never hit there.
+            ->where('new_values->kind', $kind)
             ->where('created_at', '>=', now()->subHours(20))
             ->exists();
 
