@@ -128,4 +128,4 @@ PHPUnit (Backend) failed on CI (MySQL 8) with 3 tests that pass on local MariaDB
 
 Fixes: `ReminderFollowUp` now filters with `where('new_values->kind', $kind)`; `ExportLogTest` uses `assertEquals`.
 
-**Verification:** no Docker or MySQL 8 on this machine. On local MariaDB 10.4: the 3 test classes pass (32 tests), full backend suite 1731 tests, 1730 pass, 1 skipped, 0 fail, one run. MariaDB cannot reproduce the original failure, so these runs show no regression but do not prove the fix on MySQL 8; that needs a CI run. BUG-004 to 006 status: "Fixed locally; MySQL 8 not verified".
+**Verification:** passed on CI MySQL 8 twice: branch run `39034382221` (e8633e35) and the merge commit on `main` (`31a39b64`, run `39035212848`), PHPUnit and Flutter both green. Locally on MariaDB 10.4 the 3 test classes (32 tests) and the full backend suite (1731 tests, 1730 pass, 1 skipped) also pass. BUG-004 to 006 are Closed.
