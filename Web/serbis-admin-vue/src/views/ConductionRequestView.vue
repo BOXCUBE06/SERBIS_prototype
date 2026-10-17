@@ -281,30 +281,25 @@
             <div v-for="(_n, idx) in createDialog.form[group.field]" :key="idx" class="mb-3">
               <label class="dd-field-label" :for="`trip-new-${group.field}-${idx}`">{{ group.singular.charAt(0).toUpperCase() + group.singular.slice(1) }} {{ idx + 1 }}</label>
               <div class="d-flex align-center gap-2">
-                <v-autocomplete
+                <CrewPickerField
                   v-if="group.field === 'drivers'"
                   v-model="createDialog.form[group.field][idx]"
+                  :empty-value="null"
                   :error-messages="crewError(group.field, idx)"
                   :items="driverOptionsFor(createDialog.form[group.field][idx])"
-                  item-title="title"
-                  item-value="value"
+                  title="Select a driver"
                   :id="`trip-new-${group.field}-${idx}`"
-                  placeholder="Select a responder"
-                  variant="outlined"
-                  density="compact"
                   hide-details="auto"
-                  clearable
                   class="flex-grow-1"
-                >
-                  <template v-slot:item="{ item, props }">
-                    <v-list-item v-bind="props" :title="item.title" :subtitle="item.position"></v-list-item>
-                  </template>
-                </v-autocomplete>
-                <ResponderCombobox
+                />
+                <CrewPickerField
                   v-else-if="group.field === 'authorized_passengers'"
                   v-model="createDialog.form[group.field][idx]"
+                  allow-custom
                   :error-messages="crewError(group.field, idx)"
                   :items="passengerOptionsFor(createDialog.form.drivers)"
+                  title="Select a passenger"
+                  placeholder="Pick a responder or type a name"
                   hide-details="auto"
                   :id="`trip-new-${group.field}-${idx}`"
                   class="flex-grow-1"
@@ -552,29 +547,25 @@
           <div v-for="(_n, idx) in tripLog.form[group.field]" :key="idx" class="mb-3">
             <label class="dd-field-label" :for="`trip-log-${group.field}-${idx}`">{{ group.singular.charAt(0).toUpperCase() + group.singular.slice(1) }} {{ idx + 1 }}</label>
             <div class="d-flex align-center gap-2">
-              <v-autocomplete
+              <CrewPickerField
                 v-if="group.field === 'drivers'"
                 v-model="tripLog.form[group.field][idx]"
+                :empty-value="null"
                 :items="driverOptionsFor(tripLog.form[group.field][idx])"
-                item-title="title"
-                item-value="value"
+                title="Select a driver"
                 :id="`trip-log-${group.field}-${idx}`"
-                placeholder="Select a responder"
-                variant="outlined"
-                density="compact"
                 hide-details
-                clearable
                 class="flex-grow-1"
-              >
-                <template v-slot:item="{ item, props }">
-                  <v-list-item v-bind="props" :title="item.title" :subtitle="item.position"></v-list-item>
-                </template>
-              </v-autocomplete>
-              <ResponderCombobox
+              />
+              <CrewPickerField
                 v-else-if="group.field === 'authorized_passengers'"
                 v-model="tripLog.form[group.field][idx]"
+                allow-custom
                 :items="passengerOptionsFor(tripLog.form.drivers)"
+                title="Select a passenger"
+                placeholder="Pick a responder or type a name"
                 :id="`trip-log-${group.field}-${idx}`"
+                hide-details
                 class="flex-grow-1"
               />
               <v-text-field
@@ -638,7 +629,7 @@ import { API_BASE } from '@/config/api'
 import { REFERENCE_TTL_MS, invalidate, useCachedFetch } from '@/composables/useCachedFetch'
 import AmbulanceRequestQueue from '@/components/AmbulanceRequestQueue.vue'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
-import ResponderCombobox from '@/components/ResponderCombobox.vue'
+import CrewPickerField from '@/components/CrewPickerField.vue'
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
 import SegmentedTabs from '@/components/SegmentedTabs.vue'
@@ -1310,7 +1301,7 @@ const fetchResponders = async () => {
 const DRIVER_POSITION = 'driver' // one of Responder::POSITIONS; compared lowercased in case of stray spacing
 // title = value = the name, so the field shows just the name once picked;
 // position rides along only for the dropdown's #item subtitle (see the
-// template above and ResponderCombobox.vue).
+// template above and CrewPickerField.vue).
 const driverBaseOptions = computed(() => [...responders.value]
   .sort((a, b) => {
     const aFirst = (a.position || '').trim().toLowerCase() === DRIVER_POSITION
