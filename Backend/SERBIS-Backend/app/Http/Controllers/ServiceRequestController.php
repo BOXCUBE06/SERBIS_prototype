@@ -1646,7 +1646,7 @@ class ServiceRequestController extends Controller
                 ]);
             }
 
-            $blocked = $assigned->filter(fn (Responder $r) => $r->status !== 'available');
+            $blocked = Responder::busy()->whereIn('responder_id', $assigned->pluck('responder_id'))->get();
 
             if ($blocked->isNotEmpty()) {
                 $names = $blocked->map(fn (Responder $r) => "{$r->name} ({$r->status})")->implode(', ');
@@ -2129,7 +2129,7 @@ class ServiceRequestController extends Controller
 
         $responders = Responder::whereIn('responder_id', $validated['responder_ids'])->get();
 
-        $blocked = $responders->filter(fn (Responder $r) => $r->status !== 'available');
+        $blocked = Responder::busy()->whereIn('responder_id', $responders->pluck('responder_id'))->get();
 
         if ($blocked->isNotEmpty()) {
             $names = $blocked->map(fn (Responder $r) => "{$r->name} ({$r->status})")->implode(', ');

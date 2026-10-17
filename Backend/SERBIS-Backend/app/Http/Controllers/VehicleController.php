@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ServiceRequest;
 use App\Models\Vehicle;
+use App\Services\VehicleDispatch;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\Rule;
@@ -57,12 +58,14 @@ class VehicleController extends Controller
         ])->values();
     }
 
-    public function index()
+    public function index(Request $request, VehicleDispatch $dispatch)
     {
         $vehicles = Vehicle::all();
         $conflicts = $this->futureBookedBookingsByVehicle();
+        $busyIds = $dispatch->busyVehicleIds($request->integer('for_request') ?: null);
 
-        $vehicles->each(function (Vehicle $v) use ($conflicts) {
+        $vehicles->each(function (Vehicle $v) use ($conflicts, $busyIds) {
+            $v->setAttribute('busy', in_array($v->vehicle_id, $busyIds, true));
             $v->setAttribute('conflicting_bookings', $this->conflictPayload($conflicts->get($v->vehicle_id) ?? collect()));
         });
 

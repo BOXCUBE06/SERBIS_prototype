@@ -365,9 +365,22 @@ class ServiceRequestFormState extends State<ServiceRequestForm> {
         return;
       }
       // A field the server rejected is marked where it is, not only in the retry banner.
+      final serverErrors = widget.appState.takeFieldErrors();
+      // The chosen time was taken between the schedule step's check and Submit:
+      // back to that step, with the refusal under the picker.
+      if (service.formKind == ServiceFormKind.ambulance && serverErrors.containsKey('scheduled_at')) {
+        _ambulanceForm
+          ..unitsFree = false
+          ..scheduleRefusal = serverErrors['scheduled_at'];
+        setState(() {
+          _step = _scheduleStep;
+          _errors = const {};
+        });
+        return;
+      }
       final rejected = service.formKind == ServiceFormKind.ambulance
           ? const <String, String>{}
-          : _rejectedFields(widget.appState.takeFieldErrors());
+          : _rejectedFields(serverErrors);
       if (rejected.isNotEmpty) {
         _refuse(rejected, rejected.containsKey('letter') ? _letterKey : _idKey);
         return;
@@ -679,7 +692,11 @@ class ServiceRequestFormState extends State<ServiceRequestForm> {
     };
   }
 
+  /// "Schedule and ID", the step AmbulanceScheduleField sits on.
+  static const _scheduleStep = 3;
+
   void _next(bool f) {
+    if (_step == _scheduleStep && _ambulanceForm.scheduleBlocked) return;
     final errors = _stepErrors(f);
     if (errors.isNotEmpty) {
       setState(() => _errors = errors);
@@ -772,6 +789,7 @@ class ServiceRequestFormState extends State<ServiceRequestForm> {
           submitting: _submitting,
           onBack: handleBack,
           onNext: () => _next(f),
+          nextEnabled: !(_step == _scheduleStep && _ambulanceForm.scheduleBlocked),
         ),
       ],
     );

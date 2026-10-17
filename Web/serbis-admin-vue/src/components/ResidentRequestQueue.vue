@@ -149,8 +149,8 @@
             :selected="pickerSelected"
             :search-placeholder="picker.tab === 'responders' ? 'Search name or position' : 'Search unit or type'"
             :empty-text="picker.tab === 'responders'
-              ? 'Every responder is deployed elsewhere or off duty.'
-              : 'No free unit of a type this service uses. Units are dispatched, under maintenance, or set aside for other services.'"
+              ? 'No responders on the roster.'
+              : 'No unit of a type this service uses. Units under maintenance or set aside for other services are not listed.'"
             :error="responderModal.error"
             @toggle="onPick"
             @back="picker.open = false"
@@ -622,7 +622,7 @@ const openCreateDialog = () => {
 const { attachments, lightbox, lightboxAttachment, openLightbox, loadAttachments, releaseAttachments } =
   useRequestAttachments(selectedRequest, { itemId, getHeaders })
 
-const { requests, vehicles, residents, services, responders, listAbortController, refreshing, fetchData, fetchRequests, selectRequest, listUpdate } =
+const { requests, vehicles, residents, services, responders, listAbortController, refreshing, fetchData, fetchRequests, refreshFleet, selectRequest, listUpdate } =
   useRequestFetch({
     isAmbulance: false, initialLoad, apiError, formData, selectedRequest, loadAttachments,
     isIdle: () => !selectedRequest.value && !createDialog.value.open && !reasonDialog.value.open && !resolveDialog.value.open,
@@ -754,25 +754,21 @@ const time = (d) => (d ? new Date(d).getTime() : 0)
 
 if (statusTabs.includes(route.query.status)) filters.status = route.query.status
 
-const availableVehicles = computed(() => {
+// Every unit of a type this service uses; busy ones are listed but disabled
+// (the server's own busy rule, as `busy` on each row), not hidden.
+const pickableVehicles = computed(() => {
   const allowed = vehicleTypesByService.value[selectedRequest.value?.service?.code] ?? []
   return vehicles.value.filter(v =>
-    v.status === 'Available' && v.type !== 'Ambulance' && (allowed.length === 0 || allowed.includes(v.type)),
+    v.status !== 'Maintenance' && v.type !== 'Ambulance' && (allowed.length === 0 || allowed.includes(v.type)),
   )
 })
 
-// Available responders, plus whichever are already on this request (so an
-// admin removing one sees who they are removing, and toggling a different
-// row's checkbox never silently drops one just by being absent from the list).
-const responderPickerList = computed(() => {
-  const assignedIds = responderModal.value.selectedIds
-  return responders.value.filter(r => r.status === 'available' || assignedIds.has(r.responder_id))
-})
-
-const openPicker = (tab) => {
+// Refetched fresh on open: the page-load lists can be minutes old.
+const openPicker = async (tab) => {
   const assigned = selectedRequest.value?.responders || []
   responderModal.value = { loading: false, error: '', selectedIds: new Set(assigned.map(r => r.responder_id)) }
   picker.tab = tab
+  await refreshFleet(itemId(selectedRequest.value))
   picker.open = true
 }
 
@@ -781,7 +777,7 @@ const closeDrawer = () => {
   selectedRequest.value = null
 }
 
-const RESPONDER_STATUS = { available: 'Available', deployed: 'Deployed', off_duty: 'Off duty' }
+const RESPONDER_STATUS = { available: 'Available', deployed: 'On trip', off_duty: 'Off duty' }
 const pickerTabs = computed(() => [
   { value: 'responders', label: 'Responders', count: responderModal.value.selectedIds.size },
   // Programs send no vehicle, so they get no Vehicle tab.
@@ -792,20 +788,21 @@ const pickerSubtitle = computed(() => {
   return r ? `${r.service?.service_name || 'Other'} · ${requesterName(r)} · ${transactionNo(r.request_id)}` : ''
 })
 const pickerItems = computed(() => (picker.tab === 'responders'
-  ? responderPickerList.value.map((r) => ({
+  ? responders.value.map((r) => ({
       id: r.responder_id,
       name: r.name,
       secondary: r.position,
       initials: nameInitials(r.name),
       status: RESPONDER_STATUS[r.status] || r.status,
-      disabled: responderModal.value.loading || (r.status !== 'available' && !responderModal.value.selectedIds.has(r.responder_id)),
+      disabled: responderModal.value.loading || (r.busy && !responderModal.value.selectedIds.has(r.responder_id)),
     }))
-  : availableVehicles.value.map((v) => ({
+  : pickableVehicles.value.map((v) => ({
       id: v.vehicle_id,
       name: vehicleName(v),
       secondary: [v.type, v.specification].filter(Boolean).join(' · '),
       icon: vehicleIcon(v.type),
-      status: 'Available',
+      status: v.busy ? 'On trip' : 'Available',
+      disabled: v.busy,
     }))))
 const pickerSelected = computed(() => (picker.tab === 'responders'
   ? [...responderModal.value.selectedIds]

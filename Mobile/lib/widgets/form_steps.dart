@@ -17,6 +17,9 @@ class FormStepFooter extends StatelessWidget {
   final VoidCallback onBack;
   final VoidCallback onNext;
 
+  /// False greys the button out (a step that cannot be left as it stands).
+  final bool nextEnabled;
+
   /// The last step's button, when "Submit request" is not what it does.
   final String? submitLabel;
 
@@ -28,6 +31,7 @@ class FormStepFooter extends StatelessWidget {
     required this.submitting,
     required this.onBack,
     required this.onNext,
+    this.nextEnabled = true,
     this.submitLabel,
   });
 
@@ -62,7 +66,7 @@ class FormStepFooter extends StatelessWidget {
                   label: last
                       ? (submitLabel ?? tr(f, 'common.submit_request'))
                       : trEn(f, 'Next: {step}').replaceAll('{step}', trEn(f, stepNames[step + 1])),
-                  onPressed: onNext,
+                  onPressed: nextEnabled ? onNext : null,
                   loading: submitting,
                 ),
               ),

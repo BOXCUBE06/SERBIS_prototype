@@ -293,7 +293,7 @@
                   <v-btn
                     v-if="isPendingRequest"
                     color="primary-strong" variant="outlined" height="40" class="text-none font-weight-bold flex-shrink-0"
-                    @click="picker.open = true"
+                    @click="openAssignUnitModal"
                   >{{ formData.vehicle_id ? 'Change' : 'Select unit' }}</v-btn>
                 </div>
               </div>
@@ -933,7 +933,7 @@ const checkWalkInAvailability = async () => {
 const { attachments, lightbox, lightboxAttachment, openLightbox, loadAttachments, releaseAttachments } =
   useRequestAttachments(selectedRequest, { itemId, getHeaders })
 
-const { requests, vehicles, residents, services, listAbortController, refreshing, fetchData, fetchRequests, selectRequest, listUpdate } =
+const { requests, vehicles, residents, services, listAbortController, refreshing, fetchData, fetchRequests, refreshFleet, selectRequest, listUpdate } =
   useRequestFetch({
     isAmbulance: true, initialLoad, apiError, formData, selectedRequest, loadAttachments,
     isIdle: () => !selectedRequest.value && !createDialog.value.open && !reasonDialog.value.open
@@ -1113,14 +1113,18 @@ const closeDrawer = () => {
   selectedRequest.value = null
 }
 
-const pickerItems = computed(() => availableVehicles.value.map((v) => ({
-  id: v.vehicle_id,
-  name: vehicleName(v),
-  secondary: [v.type, v.specification].filter(Boolean).join(' · '),
-  icon: vehicleIcon(v.type),
-  status: 'Available',
-})))
-const pickerSubtitle = computed(() => `${pluralize(pickerItems.value.length, 'unit')} free for this request. Busy units are hidden.`)
+const pickerItems = computed(() => pickableVehicles.value.map((v) => {
+  const busy = isUnitBusy(v)
+  return {
+    id: v.vehicle_id,
+    name: vehicleName(v),
+    secondary: [v.type, v.specification].filter(Boolean).join(' · '),
+    icon: vehicleIcon(v.type),
+    status: busy ? 'On trip' : 'Available',
+    disabled: busy,
+  }
+}))
+const pickerSubtitle = computed(() => `${pluralize(pickerItems.value.filter((i) => !i.disabled).length, 'unit')} free for this request. Busy units show as On trip.`)
 // A Booked pick is saved on Done (it re-approves with the new unit); a Pending one is a draft until Approve.
 const donePicker = () => {
   if (isBooked.value && formData.value.vehicle_id && formData.value.vehicle_id !== selectedRequest.value.vehicle_id) return approveBooking()
@@ -1203,20 +1207,21 @@ const fetchScheduledAvailability = async (req) => {
   }
 }
 
+// Refetched fresh on open: the page-load list can be minutes old.
 const openAssignUnitModal = async () => {
   apiError.value = ''
-  await fetchScheduledAvailability(selectedRequest.value)
+  await Promise.all([fetchScheduledAvailability(selectedRequest.value), refreshFleet(itemId(selectedRequest.value))])
   picker.open = true
 }
 
-const availableVehicles = computed(() => {
-  if (selectedRequest.value?.status === 'Booked') {
-    return scheduledAvailability.value
-      .map(u => vehicles.value.find(v => v.vehicle_id === u.vehicle_id))
-      .filter(Boolean)
-  }
-  return vehicles.value.filter(v => v.status === 'Available' && v.type === 'Ambulance')
-})
+// Every ambulance not in the shop; busy ones are listed but disabled, not hidden.
+const pickableVehicles = computed(() => vehicles.value.filter(v => v.type === 'Ambulance' && v.status !== 'Maintenance'))
+
+// A Booked request is judged by the window endpoint (the rule approve enforces); its own
+// unit is never busy to it. A Pending one by the server's busy flag.
+const isUnitBusy = (v) => selectedRequest.value?.status === 'Booked'
+  ? v.vehicle_id !== selectedRequest.value.vehicle_id && !scheduledAvailability.value.some(u => u.vehicle_id === v.vehicle_id)
+  : !!v.busy
 
 const residentOptions = computed(() => residents.value
   .map(r => ({

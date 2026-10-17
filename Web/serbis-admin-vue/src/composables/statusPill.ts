@@ -53,6 +53,7 @@ const RESOURCE_ACCENTS: Record<string, string> = {
   Available: '#297A67',
   Dispatched: accentOf('Pending'),
   Deployed: accentOf('Pending'),
+  'On trip': accentOf('Pending'),
   'Low stock': accentOf('Pending'),
   Maintenance: accentOf('Cancelled'),
   Depleted: accentOf('Denied'),
@@ -113,6 +114,7 @@ const TAB_PILL_KEYS: Record<string, string> = {
   // Vehicles, Responders (snake_case values) and Services.
   Available: 'Available',
   Dispatched: 'Dispatched',
+  'On trip': 'On trip',
   Maintenance: 'Maintenance',
   available: 'Available',
   deployed: 'Deployed',

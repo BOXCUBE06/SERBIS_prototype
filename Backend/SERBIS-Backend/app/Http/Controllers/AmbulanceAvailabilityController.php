@@ -28,6 +28,11 @@ class AmbulanceAvailabilityController extends Controller
      */
     private const OFFICE_TIMEZONE = 'Asia/Manila';
 
+    /** next_free_start looks forward this far, in this step. */
+    private const SUGGEST_STEP_MINUTES = 30;
+
+    private const SUGGEST_SPAN_MINUTES = 180;
+
     public function __construct(private readonly AmbulanceAvailability $availability) {}
 
     public function index(Request $request)
@@ -110,10 +115,37 @@ class AmbulanceAvailabilityController extends Controller
 
         $vehicles = $this->availability->availableAmbulances($start, $end);
 
-        return response()->json($vehicles->map(fn (Vehicle $vehicle) => [
+        $units = $vehicles->map(fn (Vehicle $vehicle) => [
             'vehicle_id' => $vehicle->vehicle_id,
             'unit_identifier' => $vehicle->unit_identifier,
             'specification' => $vehicle->specification,
-        ])->values());
+        ])->values();
+
+        // Opt-in so the bare list the admin calendar and older app builds read
+        // keeps its shape.
+        if (! $request->boolean('suggest')) {
+            return response()->json($units);
+        }
+
+        return response()->json([
+            'units' => $units,
+            'next_free_start' => $units->isEmpty() ? $this->nextFreeStart($start, $end) : null,
+        ]);
+    }
+
+    /** First start within 3 hours after $start, in 30-minute steps, with a unit free for the same-length window; null if none. */
+    private function nextFreeStart(Carbon $start, Carbon $end): ?string
+    {
+        $length = $start->diffInMinutes($end);
+
+        for ($offset = self::SUGGEST_STEP_MINUTES; $offset <= self::SUGGEST_SPAN_MINUTES; $offset += self::SUGGEST_STEP_MINUTES) {
+            $candidate = $start->copy()->addMinutes($offset);
+
+            if ($this->availability->availableAmbulances($candidate, $candidate->copy()->addMinutes($length))->isNotEmpty()) {
+                return $candidate->toIso8601String();
+            }
+        }
+
+        return null;
     }
 }

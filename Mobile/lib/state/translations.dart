@@ -271,9 +271,10 @@ const Map<String, (String, String)> _strings = {
     'May kaunting ambulansyang maaaring libre sa oras na iyon.',
   ),
   'ambulance_schedule.none_free': (
-    'No ambulance may be free at that time yet. You can still submit — MDRRMO will confirm.',
-    'Maaaring walang libreng ambulansya sa oras na iyon. Maaari ka pa ring magsumite — kukumpirmahin ito ng MDRRMO.',
+    'No ambulance is free then. Pick another time.',
+    'Walang libreng ambulansya sa oras na iyon. Pumili ng ibang oras.',
   ),
+  'ambulance_schedule.next_free': ('Next free: {time}', 'Susunod na bakante: {time}'),
 
   'track.title': ('Track', 'Subaybay'),
   'track.subtitle': ('Your requests and borrowed items', 'Ang iyong mga kahilingan at hiniram na gamit'),
