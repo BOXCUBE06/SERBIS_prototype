@@ -1,0 +1,967 @@
+00:00 +0: loading C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart
+00:00 +0: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_dirty_test.dart: the ambulance form is dirty only once the resident enters something
+00:00 +1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: reading the account from the server an organization carries its type, name and status
+00:00 +2: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/advisories_test.dart: the model reads the blast body and converts the timestamp out of UTC
+00:00 +3: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/advisories_test.dart: the model reads the blast body and converts the timestamp out of UTC
+00:00 +4: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: reading the account from the server a payload with no account fields is an individual
+00:00 +5: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/advisories_test.dart: the model a row with no barangay or date still loads
+00:00 +6: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: reading the account from the server only an organization can be awaiting approval
+00:00 +7: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/advisories_test.dart: the model a row with no message is not readable
+00:00 +8: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: reading the account from the server copyWith keeps the account fields
+00:00 +9: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/advisories_test.dart: the store loads the feed newest first and drops unreadable rows
+00:00 +10: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +11: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +12: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +13: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +14: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +15: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +16: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +17: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +18: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +19: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +20: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +21: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +22: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +23: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +24: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +25: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +26: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +27: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +28: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +29: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +30: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +31: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +32: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +33: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +34: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +35: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +36: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +37: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +38: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +39: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +40: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +41: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +42: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +43: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +44: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +45: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +46: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:00 +47: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:01 +48: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/account_type_test.dart: the top of Home greets an individual by name, with no type line
+00:01 +49: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_schedule_block_test.dart: blocks Next and says why when no unit is free
+00:01 +50: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_schedule_block_test.dart: blocks Next and says why when no unit is free
+00:01 +51: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_schedule_block_test.dart: blocks Next and says why when no unit is free
+00:01 +52: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_schedule_block_test.dart: blocks Next and says why when no unit is free
+00:01 +53: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +54: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +55: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +56: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +57: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +58: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +59: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +60: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +61: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +62: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +63: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +64: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +65: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +66: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +67: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +68: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +69: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +70: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +71: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +72: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +73: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +74: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +75: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +76: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +77: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +78: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +79: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +80: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +81: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +82: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +83: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +84: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +85: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +86: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +87: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +88: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +89: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +90: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +91: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +92: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +93: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +94: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +95: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +96: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +97: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +98: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +99: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +100: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +101: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +102: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +103: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +104: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +105: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in English without overflow
+00:01 +106: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/announcements_test.dart: Home announcements shows the newest two, newest first
+00:01 +107: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in Filipino without overflow
+00:01 +108: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in Filipino without overflow
+00:01 +109: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in Filipino without overflow
+00:01 +110: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in Filipino without overflow
+00:01 +111: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in Filipino without overflow
+00:01 +112: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in Filipino without overflow
+00:01 +113: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in Filipino without overflow
+00:01 +114: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 1 fits 320px in Filipino without overflow
+00:02 +115: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/announcements_test.dart: Home announcements an empty catalogue says nothing has been published
+00:02 +116: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/announcements_test.dart: Home announcements an empty catalogue says nothing has been published
+00:02 +117: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/announcements_test.dart: Home announcements an empty catalogue says nothing has been published
+00:02 +118: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 2 fits 320px in English without overflow
+00:02 +119: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 2 fits 320px in English without overflow
+00:02 +120: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 2 fits 320px in English without overflow
+00:02 +121: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 2 fits 320px in English without overflow
+00:02 +122: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 2 fits 320px in English without overflow
+00:02 +123: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 2 fits 320px in English without overflow
+00:02 +124: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 2 fits 320px in English without overflow
+00:02 +125: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 2 fits 320px in English without overflow
+00:02 +126: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 2 fits 320px in English without overflow
+00:02 +127: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 2 fits 320px in English without overflow
+00:02 +128: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 2 fits 320px in English without overflow
+00:02 +129: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 2 fits 320px in English without overflow
+00:02 +130: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 2 fits 320px in English without overflow
+00:02 +131: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/announcements_test.dart: Home announcements saved copies are labelled as not refreshed
+00:02 +132: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 2 fits 320px in Filipino without overflow
+00:02 +133: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/ambulance_steps_test.dart: step 2 fits 320px in Filipino without overflow
+00:02 +134: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/announcements_test.dart: Notifications sheet with no requests it says so, without a welcome message
+00:02 +135: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/article_reader_test.dart: opening an article renders the English title, subtitle and every section
+00:02 +136: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/article_reader_test.dart: opening an article renders the English title, subtitle and every section
+00:02 +137: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/article_reader_test.dart: opening an article renders the English title, subtitle and every section
+00:02 +138: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/article_reader_test.dart: opening an article renders the English title, subtitle and every section
+00:02 +139: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/article_reader_test.dart: opening an article renders the English title, subtitle and every section
+00:02 +140: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/article_reader_test.dart: opening an article renders the English title, subtitle and every section
+00:02 +141: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/article_reader_test.dart: opening an article renders the English title, subtitle and every section
+00:02 +142: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/article_reader_test.dart: opening an article renders the English title, subtitle and every section
+00:02 +143: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/article_reader_test.dart: opening an article renders the English title, subtitle and every section
+00:02 +144: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/article_reader_test.dart: opening an article renders the English title, subtitle and every section
+00:02 +145: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/article_reader_test.dart: opening an article renders the English title, subtitle and every section
+00:02 +146: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/article_reader_test.dart: opening an article renders the English title, subtitle and every section
+00:02 +147: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/article_reader_test.dart: opening an article renders the English title, subtitle and every section
+00:03 +148: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_flow_restyle_test.dart: the verify phone screen sits under the shared header, with the code on a 16px field
+00:03 +149: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_flow_restyle_test.dart: the verify phone screen sits under the shared header, with the code on a 16px field
+00:03 +150: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_flow_restyle_test.dart: the verify phone screen sits under the shared header, with the code on a 16px field
+00:03 +151: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_flow_restyle_test.dart: the verify phone screen sits under the shared header, with the code on a 16px field
+00:03 +152: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_flow_restyle_test.dart: the verify phone screen sits under the shared header, with the code on a 16px field
+00:03 +153: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_flow_restyle_test.dart: the verify phone screen sits under the shared header, with the code on a 16px field
+00:03 +154: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_flow_restyle_test.dart: the verify phone screen sits under the shared header, with the code on a 16px field
+00:03 +155: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_flow_restyle_test.dart: the verify phone screen sits under the shared header, with the code on a 16px field
+00:03 +156: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_flow_restyle_test.dart: the verify phone screen sits under the shared header, with the code on a 16px field
+00:03 +157: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_flow_restyle_test.dart: the verify phone screen sits under the shared header, with the code on a 16px field
+00:03 +158: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_flow_restyle_test.dart: the verify phone screen sits under the shared header, with the code on a 16px field
+00:03 +159: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_flow_restyle_test.dart: the verify phone screen sits under the shared header, with the code on a 16px field
+00:03 +160: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_flow_restyle_test.dart: the verify phone screen sits under the shared header, with the code on a 16px field
+00:03 +161: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_flow_restyle_test.dart: the verify phone screen sits under the shared header, with the code on a 16px field
+00:03 +162: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_flow_restyle_test.dart: the verify phone screen sits under the shared header, with the code on a 16px field
+00:03 +163: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_flow_restyle_test.dart: the verify phone screen sits under the shared header, with the code on a 16px field
+00:03 +164: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_flow_restyle_test.dart: the verify phone screen sits under the shared header, with the code on a 16px field
+00:03 +165: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_flow_restyle_test.dart: the verify phone screen sits under the shared header, with the code on a 16px field
+00:03 +166: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_flow_restyle_test.dart: the verify phone screen sits under the shared header, with the code on a 16px field
+00:03 +167: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_flow_restyle_test.dart: the verify phone screen sits under the shared header, with the code on a 16px field
+00:03 +168: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_flow_restyle_test.dart: the verify phone screen sits under the shared header, with the code on a 16px field
+00:03 +169: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_flow_restyle_test.dart: the verify phone screen sits under the shared header, with the code on a 16px field
+00:03 +170: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_flow_restyle_test.dart: the verify phone screen sits under the shared header, with the code on a 16px field
+00:03 +171: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_flow_restyle_test.dart: the verify phone screen sits under the shared header, with the code on a 16px field
+00:03 +172: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_flow_restyle_test.dart: the verify phone screen sits under the shared header, with the code on a 16px field
+00:03 +173: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_flow_restyle_test.dart: the verify phone screen sits under the shared header, with the code on a 16px field
+00:03 +174: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_flow_restyle_test.dart: the verify phone screen sits under the shared header, with the code on a 16px field
+00:03 +175: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_flow_restyle_test.dart: the verify phone screen sits under the shared header, with the code on a 16px field
+00:03 +176: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_flow_restyle_test.dart: the verify phone screen sits under the shared header, with the code on a 16px field
+00:03 +177: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_flow_restyle_test.dart: the verify phone screen sits under the shared header, with the code on a 16px field
+00:03 +178: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_flow_restyle_test.dart: the verify phone screen sits under the shared header, with the code on a 16px field
+00:03 +179: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: what the system is for the login screen says what SERBIS is before asking to sign in
+00:03 +180: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: what the system is for the login screen says what SERBIS is before asking to sign in
+00:03 +181: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: what the system is for the login screen says what SERBIS is before asking to sign in
+00:03 +182: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: what the system is for the login screen says what SERBIS is before asking to sign in
+00:03 +183: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: what the system is for the login screen says what SERBIS is before asking to sign in
+00:03 +184: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: what the system is for the login screen says what SERBIS is before asking to sign in
+00:03 +185: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: what the system is for the login screen says what SERBIS is before asking to sign in
+00:03 +186: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: what the system is for the login screen says what SERBIS is before asking to sign in
+00:03 +187: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: what the system is for the login screen says what SERBIS is before asking to sign in
+00:03 +188: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: what the system is for the login screen says what SERBIS is before asking to sign in
+00:03 +189: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: what the system is for the login screen says what SERBIS is before asking to sign in
+00:03 +190: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: what the system is for the login screen says what SERBIS is before asking to sign in
+00:03 +191: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: what the system is for the login screen says what SERBIS is before asking to sign in
+00:03 +192: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: what the system is for the login screen says what SERBIS is before asking to sign in
+00:03 +193: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: what the system is for the login screen says what SERBIS is before asking to sign in
+00:03 +194: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: what the system is for the login screen says what SERBIS is before asking to sign in
+00:03 +195: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: what the system is for the login screen says what SERBIS is before asking to sign in
+00:03 +196: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: what the system is for the login screen says what SERBIS is before asking to sign in
+00:03 +197: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: what the system is for the login screen says what SERBIS is before asking to sign in
+00:03 +198: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: what the system is for the login screen says what SERBIS is before asking to sign in
+00:03 +199: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: what the system is for the login screen says what SERBIS is before asking to sign in
+00:03 +200: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: what the system is for the login screen says what SERBIS is before asking to sign in
+00:03 +201: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: what the system is for the login screen says what SERBIS is before asking to sign in
+00:03 +202: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: what the system is for the login screen says what SERBIS is before asking to sign in
+00:03 +203: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: what the system is for the login screen says what SERBIS is before asking to sign in
+00:03 +204: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: what the system is for the login screen says what SERBIS is before asking to sign in
+00:03 +205: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: what the system is for the login screen says what SERBIS is before asking to sign in
+00:03 +206: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: what the system is for the login screen says what SERBIS is before asking to sign in
+00:03 +207: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: what the system is for the login screen says what SERBIS is before asking to sign in
+00:03 +208: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: what the system is for the login screen says what SERBIS is before asking to sign in
+00:03 +209: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: what the system is for the login screen says what SERBIS is before asking to sign in
+00:03 +210: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +211: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +212: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +213: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +214: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +215: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +216: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +217: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +218: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +219: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +220: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +221: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +222: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +223: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +224: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +225: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +226: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +227: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +228: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +229: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +230: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +231: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +232: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +233: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +234: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +235: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +236: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +237: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +238: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +239: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +240: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +241: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +242: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +243: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +244: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +245: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +246: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +247: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +248: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +249: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +250: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +251: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +252: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +253: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +254: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +255: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +256: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +257: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +258: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +259: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +260: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +261: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +262: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +263: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +264: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +265: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +266: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +267: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +268: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +269: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +270: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +271: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +272: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +273: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab shows the rows' shape while the catalogue is still loading
+00:04 +274: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/calm_components_test.dart: theme the tab header is flat dark green with 20 corners
+00:04 +275: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/calm_components_test.dart: theme the tab header is flat dark green with 20 corners
+00:04 +276: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/calm_components_test.dart: theme the tab header is flat dark green with 20 corners
+00:04 +277: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/calm_components_test.dart: theme the tab header is flat dark green with 20 corners
+00:04 +278: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/calm_components_test.dart: theme the tab header is flat dark green with 20 corners
+00:04 +279: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/calm_components_test.dart: theme the tab header is flat dark green with 20 corners
+00:04 +280: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/calm_components_test.dart: theme the tab header is flat dark green with 20 corners
+00:04 +281: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/calm_components_test.dart: theme the tab header is flat dark green with 20 corners
+00:04 +282: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/calm_components_test.dart: theme the tab header is flat dark green with 20 corners
+00:04 +283: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/calm_components_test.dart: theme the tab header is flat dark green with 20 corners
+00:04 +284: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/calm_components_test.dart: theme the tab header is flat dark green with 20 corners
+00:04 +285: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/calm_components_test.dart: theme the tab header is flat dark green with 20 corners
+00:04 +286: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/calm_components_test.dart: theme the tab header is flat dark green with 20 corners
+00:04 +287: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the Available tab an empty catalogue says so instead of rendering nothing
+00:04 +288: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: login validation refuses an empty form without calling the server
+00:04 +289: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: login validation refuses an empty form without calling the server
+00:04 +290: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: login validation refuses an empty form without calling the server
+00:04 +291: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: login validation refuses an empty form without calling the server
+00:04 +292: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: login validation refuses an empty form without calling the server
+00:04 +293: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: login validation refuses an empty form without calling the server
+00:04 +294: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: login validation refuses an empty form without calling the server
+00:04 +295: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: login validation refuses an empty form without calling the server
+00:04 +296: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: login validation refuses an empty form without calling the server
+00:04 +297: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: login validation refuses an empty form without calling the server
+00:04 +298: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: login validation refuses an empty form without calling the server
+00:04 +299: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: login validation refuses an empty form without calling the server
+00:04 +300: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: login validation refuses an empty form without calling the server
+00:04 +301: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: login validation refuses an empty form without calling the server
+00:04 +302: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: login validation refuses an empty form without calling the server
+00:04 +303: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: login validation refuses an empty form without calling the server
+00:04 +304: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: login validation refuses an empty form without calling the server
+00:04 +305: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: login validation refuses an empty form without calling the server
+00:04 +306: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: login validation refuses an empty form without calling the server
+00:04 +307: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: login validation refuses an empty form without calling the server
+00:04 +308: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: login validation refuses an empty form without calling the server
+00:04 +309: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: login validation refuses an empty form without calling the server
+00:04 +310: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: login validation refuses an empty form without calling the server
+00:04 +311: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: login validation refuses an empty form without calling the server
+00:04 +312: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the borrow sheet an empty purpose is refused before anything is sent
+00:04 +313: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the borrow sheet an empty purpose is refused before anything is sent
+00:04 +314: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the borrow sheet an empty purpose is refused before anything is sent
+00:04 +315: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the borrow sheet an empty purpose is refused before anything is sent
+00:04 +316: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the borrow sheet an empty purpose is refused before anything is sent
+00:04 +317: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the borrow sheet an empty purpose is refused before anything is sent
+00:05 +318: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the borrow sheet an empty purpose is refused before anything is sent
+00:05 +319: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the borrow sheet an empty purpose is refused before anything is sent
+00:05 +320: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the borrow sheet an empty purpose is refused before anything is sent
+00:05 +321: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the borrow sheet an empty purpose is refused before anything is sent
+00:05 +322: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the borrow sheet an empty purpose is refused before anything is sent
+00:05 +323: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the borrow sheet an empty purpose is refused before anything is sent
+00:05 +324: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: login validation refuses a number that is not a Philippine mobile number
+00:05 +325: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: login validation refuses a number that is not a Philippine mobile number
+00:05 +326: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the borrow sheet whitespace alone does not count as a purpose
+00:05 +327: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the borrow sheet whitespace alone does not count as a purpose
+00:05 +328: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the borrow sheet whitespace alone does not count as a purpose
+00:05 +329: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: starts with the number the login screen had
+00:05 +330: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: starts with the number the login screen had
+00:05 +331: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: starts with the number the login screen had
+00:05 +332: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: starts with the number the login screen had
+00:05 +333: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: starts with the number the login screen had
+00:05 +334: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: starts with the number the login screen had
+00:05 +335: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: starts with the number the login screen had
+00:05 +336: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: starts with the number the login screen had
+00:05 +337: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: starts with the number the login screen had
+00:05 +338: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: starts with the number the login screen had
+00:05 +339: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: starts with the number the login screen had
+00:05 +340: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: starts with the number the login screen had
+00:05 +341: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: starts with the number the login screen had
+00:05 +342: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: starts with the number the login screen had
+00:05 +343: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: starts with the number the login screen had
+00:05 +344: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: starts with the number the login screen had
+00:05 +345: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: starts with the number the login screen had
+00:05 +346: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: starts with the number the login screen had
+00:05 +347: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: starts with the number the login screen had
+00:05 +348: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: starts with the number the login screen had
+00:05 +349: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: starts with the number the login screen had
+00:06 +350: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: starts with the number the login screen had
+00:06 +351: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: starts with the number the login screen had
+00:06 +352: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/home_screen_test.dart: Your latest request 0 active: the panel is hidden
+00:06 +353: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the borrow sheet a successful submit closes the sheet, switches tabs and says so
+00:06 +354: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the borrow sheet a successful submit closes the sheet, switches tabs and says so
+00:06 +355: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: a bad number is refused before anything is sent
+00:06 +356: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: a bad number is refused before anything is sent
+00:06 +357: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: a bad number is refused before anything is sent
+00:06 +358: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: a bad number is refused before anything is sent
+00:06 +359: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: a bad number is refused before anything is sent
+00:06 +360: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: a bad number is refused before anything is sent
+00:06 +361: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: a bad number is refused before anything is sent
+00:06 +362: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/home_screen_test.dart: Your latest request 5 active: the newest, with the other 4 counted
+00:06 +363: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: login a login that reached its code prompt hands the number and challenge up
+00:06 +364: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the My Requests tab splits open requests from past ones
+00:06 +365: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: sending moves on and never says whether the number has an account
+00:06 +366: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/home_screen_test.dart: Track: Borrowed items lists open loans newest first, opens My requests, and matches Home's count
+00:06 +367: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/home_screen_test.dart: Track: Borrowed items lists open loans newest first, opens My requests, and matches Home's count
+00:06 +368: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/home_screen_test.dart: Track: Borrowed items lists open loans newest first, opens My requests, and matches Home's count
+00:06 +369: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/home_screen_test.dart: Track: Borrowed items lists open loans newest first, opens My requests, and matches Home's count
+00:06 +370: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/home_screen_test.dart: Track: Borrowed items lists open loans newest first, opens My requests, and matches Home's count
+00:06 +371: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: the register steps are Who you are, Where you live, Password and review, under the shared header
+00:06 +372: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: the register steps are Who you are, Where you live, Password and review, under the shared header
+00:06 +373: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: the register steps are Who you are, Where you live, Password and review, under the shared header
+00:06 +374: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: the register steps are Who you are, Where you live, Password and review, under the shared header
+00:07 +375: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: the register steps are Who you are, Where you live, Password and review, under the shared header
+00:07 +376: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: the register steps are Who you are, Where you live, Password and review, under the shared header
+00:07 +377: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: the register steps are Who you are, Where you live, Password and review, under the shared header
+00:07 +378: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: the register steps are Who you are, Where you live, Password and review, under the shared header
+00:07 +379: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: the register steps are Who you are, Where you live, Password and review, under the shared header
+00:07 +380: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: the register steps are Who you are, Where you live, Password and review, under the shared header
+00:07 +381: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: the register steps are Who you are, Where you live, Password and review, under the shared header
+00:07 +382: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: the register steps are Who you are, Where you live, Password and review, under the shared header
+00:07 +383: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: resend is off during the cooldown and on after it
+00:07 +384: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: resend is off during the cooldown and on after it
+00:07 +385: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: handover photos both stages are shown and each is fetched once
+00:07 +386: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: handover photos both stages are shown and each is fetched once
+00:07 +387: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: the register steps Back and the header arrow step back, and leave from the first step
+00:07 +388: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: the register steps Back and the header arrow step back, and leave from the first step
+00:07 +389: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: the register steps Back and the header arrow step back, and leave from the first step
+00:07 +390: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: the register steps Back and the header arrow step back, and leave from the first step
+00:07 +391: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: the new password must meet the rules and match
+00:07 +392: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: the new password must meet the rules and match
+00:07 +393: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: the register steps the last step reviews the first two, each with Edit back to its step
+00:07 +394: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: the register steps the last step reviews the first two, each with Edit back to its step
+00:08 +395: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: finishing sends the token and hands a message back, without signing in
+00:08 +396: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the borrow sheet at 320px a catalogued item fits in Filipino
+00:08 +397: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: the register steps keeps its content to 600dp on a wide screen
+00:08 +398: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/forgot_password_screen_test.dart: an expired reset sends the resident back to the number step
+00:08 +399: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the borrow sheet at 320px an uncatalogued item fits in English
+00:08 +400: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: the register steps every step fits 320px without overflow
+00:08 +401: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: the register steps every step fits 320px without overflow
+00:08 +402: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the borrow sheet at 320px an uncatalogued item fits in Filipino
+00:08 +403: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: the register steps every step fits 390px without overflow
+00:08 +404: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: the register steps every step fits 390px without overflow
+00:08 +405: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the borrow sheet the delivery address appears only for Delivery
+00:08 +406: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: the register steps step 3 reviews the answers in one list with an Edit per row
+00:08 +407: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: the register steps step 3 reviews the answers in one list with an Edit per row
+00:08 +408: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the borrow sheet a Delivery with no address is refused before it is sent
+00:09 +409: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the borrow sheet a Delivery with no address is refused before it is sent
+00:09 +410: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: the barangay picker offers a retry when the fetch fails, and recovers
+00:09 +411: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the borrow sheet an address typed and then switched away from is not sent
+00:09 +412: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: the barangay picker will not leave the step with no barangay to send
+00:09 +413: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the borrow sheet an uncatalogued request names the item and sends no equipment_id
+00:09 +414: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: registering as an organization an individual is the default and sends head_of_family
+00:09 +415: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the borrow sheet an uncatalogued request with no item name is refused before it is sent
+00:09 +416: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: registering as an organization offers Head of the Family and Organization and nothing else
+00:09 +417: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/borrow_equipment_screen_test.dart: the borrow sheet a catalogued request never offers the free-text item field
+00:09 +418: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: registering as an organization an organization asks for its name and the names become the contact person
+00:09 +419: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: registering as an organization an organization asks for its name and the names become the contact person
+00:09 +420: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: registering as an organization an organization with no name is refused before it moves on
+00:09 +421: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: registering as an organization a filled organization form sends organization and its name
+00:10 +422: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: register validation refuses an empty step field by field
+00:10 +423: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: register validation refuses "Pas12" the way the server would
+00:10 +424: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: register validation refuses "pasada123" the way the server would
+00:11 +425: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: register validation refuses "PASADA123" the way the server would
+00:11 +426: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: register validation refuses "PasadaPass" the way the server would
+00:11 +427: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: register validation accepts a password the server would accept
+00:11 +428: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: register validation refuses a confirmation that does not match
+00:12 +429: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: register validation refuses a mobile number that is not one
+00:12 +430: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: register validation refuses to register anyone who has not agreed, under the checkbox
+00:12 +431: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: register validation refuses to register anyone who has not agreed, under the checkbox
+00:12 +432: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: register validation refuses to register anyone who has not agreed, under the checkbox
+00:12 +433: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/auth_screens_test.dart: register validation refuses to register anyone who has not agreed, under the checkbox
+00:12 +434: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/hotlines_test.dart: the Library hotline card lists every number as its own row
+00:12 +435: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/hotlines_test.dart: the Library hotline card lists every number as its own row
+00:12 +436: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/hotlines_test.dart: the Library hotline card lists every number as its own row
+00:12 +437: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/hotlines_test.dart: the Library hotline card lists every number as its own row
+00:12 +438: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/hotlines_test.dart: the Library hotline card lists every number as its own row
+00:12 +439: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/hotlines_test.dart: the Library hotline card lists every number as its own row
+00:12 +440: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/hotlines_test.dart: the Library hotline card lists every number as its own row
+00:12 +441: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/hotlines_test.dart: the Library hotline card lists every number as its own row
+00:13 +442: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/hotlines_test.dart: the Library hotline card lists every number as its own row
+00:13 +443: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/hotlines_test.dart: the Library hotline card lists every number as its own row
+00:13 +444: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/hotlines_test.dart: the Library hotline card lists every number as its own row
+00:13 +445: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/hotlines_test.dart: the Library hotline card lists every number as its own row
+00:13 +446: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/hotline_store_test.dart: Library shows the server list
+00:13 +447: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/hotline_store_test.dart: Library shows the server list
+00:13 +448: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/hotline_store_test.dart: Library shows the server list
+00:13 +449: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/hotline_store_test.dart: Library shows the server list
+00:13 +450: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/hotline_store_test.dart: Library shows the server list
+00:13 +451: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/hotline_store_test.dart: Library shows the server list
+00:13 +452: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/hotline_store_test.dart: Library shows the server list
+00:13 +453: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/hotline_store_test.dart: Library shows the server list
+00:13 +454: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/hotline_store_test.dart: Library shows the server list
+00:13 +455: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/hotline_store_test.dart: Library shows the server list
+00:13 +456: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/library_restyle_test.dart: the Library sits under the shared header, with a back arrow when opened as a page
+00:13 +457: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/library_restyle_test.dart: the Library sits under the shared header, with a back arrow when opened as a page
+00:13 +458: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/library_restyle_test.dart: the Library sits under the shared header, with a back arrow when opened as a page
+00:13 +459: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/library_restyle_test.dart: the Library sits under the shared header, with a back arrow when opened as a page
+00:13 +460: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/library_restyle_test.dart: the Library sits under the shared header, with a back arrow when opened as a page
+00:13 +461: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/library_restyle_test.dart: the Library sits under the shared header, with a back arrow when opened as a page
+00:13 +462: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/library_restyle_test.dart: the Library sits under the shared header, with a back arrow when opened as a page
+00:13 +463: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/library_restyle_test.dart: the Library sits under the shared header, with a back arrow when opened as a page
+00:13 +464: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/library_restyle_test.dart: the Library sits under the shared header, with a back arrow when opened as a page
+00:13 +465: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/library_restyle_test.dart: the Library sits under the shared header, with a back arrow when opened as a page
+00:13 +466: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/library_restyle_test.dart: the Library sits under the shared header, with a back arrow when opened as a page
+00:13 +467: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/library_restyle_test.dart: the Library sits under the shared header, with a back arrow when opened as a page
+00:13 +468: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/library_restyle_test.dart: the Library sits under the shared header, with a back arrow when opened as a page
+00:13 +469: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/library_restyle_test.dart: the Library sits under the shared header, with a back arrow when opened as a page
+00:13 +470: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/library_verifier_test.dart: Library row names the verifier and their role on a verified material
+00:13 +471: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/library_verifier_test.dart: Library row names the verifier and their role on a verified material
+00:13 +472: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/library_verifier_test.dart: Library row names the verifier and their role on a verified material
+00:14 +473: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/library_verifier_test.dart: Library row names the verifier and their role on a verified material
+00:14 +474: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/login_screen_deactivated_test.dart: a deactivated account shows the server message
+00:14 +475: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/login_screen_deactivated_test.dart: a deactivated account shows the server message
+00:14 +476: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/login_screen_deactivated_test.dart: a deactivated account shows the server message
+00:14 +477: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/login_screen_deactivated_test.dart: a deactivated account shows the server message
+00:14 +478: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/login_screen_deactivated_test.dart: a deactivated account shows the server message
+00:14 +479: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/login_screen_deactivated_test.dart: a deactivated account shows the server message
+00:14 +480: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/login_screen_deactivated_test.dart: a deactivated account shows the server message
+00:14 +481: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/login_screen_deactivated_test.dart: a deactivated account shows the server message
+00:14 +482: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/login_screen_deactivated_test.dart: a deactivated account shows the server message
+00:14 +483: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/login_screen_deactivated_test.dart: a deactivated account shows the server message
+00:14 +484: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/login_screen_deactivated_test.dart: a deactivated account shows the server message
+00:14 +485: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/login_screen_deactivated_test.dart: a deactivated account shows the server message
+00:14 +486: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/login_screen_deactivated_test.dart: a deactivated account shows the server message
+00:14 +487: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/login_screen_deactivated_test.dart: a deactivated account shows the server message
+00:14 +488: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/login_screen_deactivated_test.dart: a deactivated account shows the server message
+00:14 +489: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/login_screen_deactivated_test.dart: a deactivated account shows the server message
+00:14 +490: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/login_screen_deactivated_test.dart: a deactivated account shows the server message
+00:14 +491: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/login_screen_deactivated_test.dart: a deactivated account shows the server message
+00:14 +492: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/login_screen_deactivated_test.dart: a deactivated account shows the server message
+00:14 +493: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/login_screen_deactivated_test.dart: a deactivated account shows the server message
+00:14 +494: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/login_screen_deactivated_test.dart: a deactivated account shows the server message
+00:14 +495: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:14 +496: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +497: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +498: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +499: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +500: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +501: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +502: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +503: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +504: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +505: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +506: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +507: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +508: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +509: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +510: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +511: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +512: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +513: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +514: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +515: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +516: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +517: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +518: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +519: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +520: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +521: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +522: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +523: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +524: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +525: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +526: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +527: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +528: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +529: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +530: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +531: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +532: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +533: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +534: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +535: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +536: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/material_open_test.dart: tapping the row in the Library is what opens it
+00:15 +537: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/notifications_profile_row_test.dart: the bell sheet lists only requests that moved in the last 30 days
+00:15 +538: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/notifications_profile_row_test.dart: the bell sheet lists only requests that moved in the last 30 days
+00:15 +539: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/notifications_profile_row_test.dart: the bell sheet lists only requests that moved in the last 30 days
+00:15 +540: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/notifications_profile_row_test.dart: the bell sheet lists only requests that moved in the last 30 days
+00:15 +541: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/notifications_profile_row_test.dart: the bell sheet lists only requests that moved in the last 30 days
+00:15 +542: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/notifications_profile_row_test.dart: the bell sheet lists only requests that moved in the last 30 days
+00:15 +543: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/notifications_profile_row_test.dart: the bell sheet lists only requests that moved in the last 30 days
+00:15 +544: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/notifications_profile_row_test.dart: the bell sheet lists only requests that moved in the last 30 days
+00:15 +545: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/notifications_profile_row_test.dart: the bell sheet lists only requests that moved in the last 30 days
+00:15 +546: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/notifications_profile_row_test.dart: the bell sheet lists only requests that moved in the last 30 days
+00:15 +547: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/notifications_profile_row_test.dart: the bell sheet lists only requests that moved in the last 30 days
+00:15 +548: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/notifications_profile_row_test.dart: the bell sheet lists only requests that moved in the last 30 days
+00:15 +549: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/offline_test.dart: what the resident sees the banner names the problem and dates the data
+00:15 +550: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/offline_test.dart: what the resident sees the banner names the problem and dates the data
+00:15 +551: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/motion_test.dart: tab fade a tab keeps its state while another is showing
+00:15 +552: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/motion_test.dart: tab fade a tab keeps its state while another is showing
+00:15 +553: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/notifications_profile_row_test.dart: the bell sheet splits at the stored seen time into New, with a dot, and Earlier
+00:15 +554: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/offline_test.dart: what the resident sees with nothing ever loaded it says that instead of a date
+00:15 +555: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/navigation_test.dart: app header shows a back button instead of the profile icon on a page
+00:16 +556: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/navigation_test.dart: app header shows a back button instead of the profile icon on a page
+00:16 +557: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/navigation_test.dart: app header shows a back button instead of the profile icon on a page
+00:16 +558: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/navigation_test.dart: app header shows a back button instead of the profile icon on a page
+00:16 +559: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/offline_test.dart: what the resident sees Track marks cached rows as saved copies
+00:16 +560: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/offline_test.dart: what the resident sees Track marks cached rows as saved copies
+00:16 +561: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/offline_test.dart: what the resident sees Track marks cached rows as saved copies
+00:16 +562: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/offline_test.dart: what the resident sees Track marks cached rows as saved copies
+00:16 +563: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/offline_test.dart: what the resident sees Track marks cached rows as saved copies
+00:16 +564: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/offline_test.dart: what the resident sees Track marks cached rows as saved copies
+00:16 +565: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/offline_test.dart: what the resident sees Track marks cached rows as saved copies
+00:16 +566: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/offline_test.dart: what the resident sees Track marks cached rows as saved copies
+00:16 +567: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/offline_test.dart: what the resident sees Track marks cached rows as saved copies
+00:16 +568: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/offline_test.dart: what the resident sees Track marks cached rows as saved copies
+00:16 +569: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/offline_test.dart: what the resident sees Track marks cached rows as saved copies
+00:16 +570: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/offline_test.dart: what the resident sees Track marks cached rows as saved copies
+00:16 +571: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/offline_test.dart: what the resident sees Track marks cached rows as saved copies
+00:16 +572: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/offline_test.dart: what the resident sees Track marks cached rows as saved copies
+00:16 +573: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/offline_test.dart: what the resident sees Track marks cached rows as saved copies
+00:16 +574: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/offline_test.dart: what the resident sees Track marks cached rows as saved copies
+00:16 +575: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/offline_test.dart: what the resident sees Track marks cached rows as saved copies
+00:16 +576: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/notifications_profile_row_test.dart: the bell sheet a row hands its request to Track
+00:16 +577: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/phone_number_test.dart: AppTextField.phone lets the country-code shapes be typed
+00:16 +578: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/phone_number_test.dart: AppTextField.phone lets the country-code shapes be typed
+00:16 +579: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/phone_number_test.dart: AppTextField.phone lets the country-code shapes be typed
+00:16 +580: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/phone_number_test.dart: AppTextField.phone lets the country-code shapes be typed
+00:16 +581: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/phone_number_test.dart: AppTextField.phone lets the country-code shapes be typed
+00:16 +582: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/phone_number_test.dart: AppTextField.phone lets the country-code shapes be typed
+00:16 +583: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/phone_number_test.dart: AppTextField.phone lets the country-code shapes be typed
+00:16 +584: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/phone_number_test.dart: AppTextField.phone lets the country-code shapes be typed
+00:16 +585: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/phone_number_test.dart: AppTextField.phone lets the country-code shapes be typed
+00:16 +586: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/phone_number_test.dart: AppTextField.phone lets the country-code shapes be typed
+00:16 +587: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/phone_number_test.dart: AppTextField.phone lets the country-code shapes be typed
+00:16 +588: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/phone_number_test.dart: AppTextField.phone lets the country-code shapes be typed
+00:17 +589: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/phone_number_test.dart: AppTextField.phone lets the country-code shapes be typed
+00:17 +590: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/phone_number_test.dart: AppTextField.phone lets the country-code shapes be typed
+00:17 +591: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/phone_number_test.dart: AppTextField.phone lets the country-code shapes be typed
+00:17 +592: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/phone_number_test.dart: AppTextField.phone lets the country-code shapes be typed
+00:17 +593: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/phone_number_test.dart: AppTextField.phone lets the country-code shapes be typed
+00:17 +594: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/phone_number_test.dart: AppTextField.phone lets the country-code shapes be typed
+00:17 +595: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/phone_number_test.dart: AppTextField.phone lets the country-code shapes be typed
+00:17 +596: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/phone_number_test.dart: AppTextField.phone lets the country-code shapes be typed
+00:17 +597: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/phone_number_test.dart: AppTextField.phone lets the country-code shapes be typed
+00:17 +598: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/phone_number_test.dart: AppTextField.phone lets the country-code shapes be typed
+00:17 +599: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/phone_number_test.dart: AppTextField.phone lets the country-code shapes be typed
+00:17 +600: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/phone_number_test.dart: AppTextField.phone lets the country-code shapes be typed
+00:17 +601: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/phone_number_test.dart: AppTextField.phone lets the country-code shapes be typed
+00:17 +602: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +603: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +604: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +605: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +606: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +607: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +608: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +609: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +610: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +611: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +612: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +613: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +614: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +615: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +616: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +617: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +618: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +619: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +620: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +621: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +622: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +623: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +624: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +625: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +626: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +627: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +628: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +629: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +630: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +631: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +632: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +633: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +634: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +635: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +636: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +637: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +638: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: the sheet fits 320px in English without overflow
+00:17 +639: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_restyle_test.dart: the profile page sits under the shared header with a back arrow
+00:17 +640: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/requests_refresh_test.dart: pulling down the Track screen refetches
+00:18 +641: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/requests_refresh_test.dart: pulling down the Track screen refetches
+00:18 +642: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/requests_refresh_test.dart: pulling down the Track screen refetches
+00:18 +643: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/requests_refresh_test.dart: pulling down the Track screen refetches
+00:18 +644: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/requests_refresh_test.dart: pulling down the Track screen refetches
+00:18 +645: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/requests_refresh_test.dart: pulling down the Track screen refetches
+00:18 +646: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/requests_refresh_test.dart: pulling down the Track screen refetches
+00:18 +647: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/requests_refresh_test.dart: pulling down the Track screen refetches
+00:18 +648: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/requests_refresh_test.dart: pulling down the Track screen refetches
+00:18 +649: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/requests_refresh_test.dart: pulling down the Track screen refetches
+00:18 +650: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/requests_refresh_test.dart: pulling down the Track screen refetches
+00:18 +651: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/requests_refresh_test.dart: pulling down the Track screen refetches
+00:18 +652: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/requests_refresh_test.dart: pulling down the Track screen refetches
+00:18 +653: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/requests_refresh_test.dart: pulling down the Track screen refetches
+00:18 +654: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/requests_refresh_test.dart: pulling down the Track screen refetches
+00:18 +655: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/requests_refresh_test.dart: pulling down the Track screen refetches
+00:18 +656: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/requests_refresh_test.dart: pulling down the Track screen refetches
+00:18 +657: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/requests_refresh_test.dart: pulling down the Track screen refetches
+00:18 +658: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/requests_refresh_test.dart: pulling down the Track screen refetches
+00:18 +659: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/requests_refresh_test.dart: pulling down the Track screen refetches
+00:18 +660: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/requests_refresh_test.dart: pulling down the Track screen refetches
+00:18 +661: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/requests_refresh_test.dart: pulling down the Track screen refetches
+00:18 +662: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:18 +663: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:18 +664: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:18 +665: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:18 +666: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:18 +667: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:18 +668: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:18 +669: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:18 +670: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:19 +671: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:19 +672: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:19 +673: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:19 +674: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:19 +675: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:19 +676: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:19 +677: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:19 +678: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:19 +679: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:19 +680: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:19 +681: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:19 +682: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:19 +683: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:19 +684: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:19 +685: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:19 +686: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:19 +687: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:19 +688: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:19 +689: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:19 +690: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:19 +691: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:19 +692: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:19 +693: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: loading the catalogue shows the rows' shape until the services arrive
+00:19 +694: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_restyle_test.dart: its sheets and dialogs edit my details has a close button, its inputs and the number locked as text
+00:19 +695: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_restyle_test.dart: its sheets and dialogs edit my details has a close button, its inputs and the number locked as text
+00:19 +696: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_restyle_test.dart: its sheets and dialogs edit my details has a close button, its inputs and the number locked as text
+00:19 +697: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_restyle_test.dart: its sheets and dialogs edit my details has a close button, its inputs and the number locked as text
+00:19 +698: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_restyle_test.dart: its sheets and dialogs edit my details has a close button, its inputs and the number locked as text
+00:19 +699: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_restyle_test.dart: its sheets and dialogs edit my details has a close button, its inputs and the number locked as text
+00:19 +700: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_restyle_test.dart: its sheets and dialogs edit my details has a close button, its inputs and the number locked as text
+00:19 +701: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: a blank required field blocks the request entirely
+00:19 +702: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: a blank required field blocks the request entirely
+00:19 +703: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_restyle_test.dart: its sheets and dialogs the offline page has the shared header and 72dp rows
+00:19 +704: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_restyle_test.dart: its sheets and dialogs the offline page has the shared header and 72dp rows
+00:19 +705: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_restyle_test.dart: its sheets and dialogs the offline page has the shared header and 72dp rows
+00:19 +706: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: save stays disabled until a field changes, and again once it is put back
+00:19 +707: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: save stays disabled until a field changes, and again once it is put back
+00:19 +708: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: save stays disabled until a field changes, and again once it is put back
+00:19 +709: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: save stays disabled until a field changes, and again once it is put back
+00:19 +710: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: every field on screen reaches the dispatcher ambulance
+00:19 +711: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: every field on screen reaches the dispatcher ambulance
+00:19 +712: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: every field on screen reaches the dispatcher ambulance
+00:20 +713: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: every field on screen reaches the dispatcher ambulance
+00:20 +714: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: every field on screen reaches the dispatcher ambulance
+00:20 +715: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: every field on screen reaches the dispatcher ambulance
+00:20 +716: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: every field on screen reaches the dispatcher ambulance
+00:20 +717: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: every field on screen reaches the dispatcher ambulance
+00:20 +718: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: every field on screen reaches the dispatcher ambulance
+00:20 +719: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: every field on screen reaches the dispatcher ambulance
+00:20 +720: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: every field on screen reaches the dispatcher ambulance
+00:20 +721: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: every field on screen reaches the dispatcher ambulance
+00:20 +722: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: every field on screen reaches the dispatcher ambulance
+00:20 +723: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: every field on screen reaches the dispatcher ambulance
+00:20 +724: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: every field on screen reaches the dispatcher ambulance
+00:20 +725: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: every field on screen reaches the dispatcher ambulance
+00:20 +726: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: every field on screen reaches the dispatcher ambulance
+00:20 +727: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: every field on screen reaches the dispatcher ambulance
+00:21 +728: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: every field on screen reaches the dispatcher ambulance
+00:21 +729: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: every field on screen reaches the dispatcher ambulance
+00:21 +730: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: every field on screen reaches the dispatcher ambulance
+00:21 +731: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: every field on screen reaches the dispatcher ambulance
+00:21 +732: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: every field on screen reaches the dispatcher ambulance
+00:21 +733: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: every field on screen reaches the dispatcher ambulance
+00:21 +734: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: every field on screen reaches the dispatcher ambulance
+00:21 +735: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: every field on screen reaches the dispatcher ambulance
+00:21 +736: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: every field on screen reaches the dispatcher ambulance
+00:21 +737: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: every field on screen reaches the dispatcher ambulance
+00:21 +738: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/session_restore_test.dart: a network failure with no cached profile still shows login
+00:21 +739: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/session_restore_test.dart: a network failure with no cached profile still shows login
+00:21 +740: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/session_restore_test.dart: a network failure with no cached profile still shows login
+00:21 +741: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/session_restore_test.dart: a network failure with no cached profile still shows login
+00:21 +742: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/session_restore_test.dart: a network failure with no cached profile still shows login
+00:21 +743: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/session_restore_test.dart: a network failure with no cached profile still shows login
+00:21 +744: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/session_restore_test.dart: a network failure with no cached profile still shows login
+00:21 +745: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/session_restore_test.dart: a network failure with no cached profile still shows login
+00:21 +746: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/session_restore_test.dart: a network failure with no cached profile still shows login
+00:21 +747: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/session_restore_test.dart: a network failure with no cached profile still shows login
+00:21 +748: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/session_restore_test.dart: a network failure with no cached profile still shows login
+00:21 +749: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/session_restore_test.dart: a network failure with no cached profile still shows login
+00:21 +750: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: opening a service Edit on Review and Back move between steps, keeping answers
+00:21 +751: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: opening a service Edit on Review and Back move between steps, keeping answers
+00:21 +752: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: opening a service Edit on Review and Back move between steps, keeping answers
+00:21 +753: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: opening a service Edit on Review and Back move between steps, keeping answers
+00:21 +754: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: opening a service Edit on Review and Back move between steps, keeping answers
+00:21 +755: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: opening a service Edit on Review and Back move between steps, keeping answers
+00:22 +756: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: opening a service Edit on Review and Back move between steps, keeping answers
+00:22 +757: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: opening a service Edit on Review and Back move between steps, keeping answers
+00:22 +758: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: opening a service Edit on Review and Back move between steps, keeping answers
+00:22 +759: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: opening a service Edit on Review and Back move between steps, keeping answers
+00:22 +760: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: opening a service Edit on Review and Back move between steps, keeping answers
+00:22 +761: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: opening a service Edit on Review and Back move between steps, keeping answers
+00:22 +762: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/session_restore_test.dart: a network failure with a cached profile boots straight into the app
+00:22 +763: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: every field on screen reaches the dispatcher relief offers pickup/delivery; road and generic do not
+00:22 +764: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: every field on screen reaches the dispatcher relief offers pickup/delivery; road and generic do not
+00:22 +765: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: every field on screen reaches the dispatcher relief offers pickup/delivery; road and generic do not
+00:22 +766: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +767: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +767: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_widgets_test.dart: ConfirmationSheet a Booked status names the time once, in its own line
+══╡ EXCEPTION CAUGHT BY FLUTTER TEST FRAMEWORK ╞════════════════════════════════════════════════════
+The following TestFailure was thrown running a test:
+Expected: exactly one matching candidate
+  Actual: _TextWidgetFinder:<Found 0 widgets with text "Booked": []>
+   Which: means none were found but one was expected
+
+When the exception was thrown, this was the stack:
+#4      main.<anonymous closure>.<anonymous closure> (file:///C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_widgets_test.dart:336:7)
+<asynchronous suspension>
+#5      testWidgets.<anonymous closure>.<anonymous closure> (package:flutter_test/src/widget_tester.dart:192:15)
+<asynchronous suspension>
+#6      TestWidgetsFlutterBinding._runTestBody (package:flutter_test/src/binding.dart:1953:5)
+<asynchronous suspension>
+<asynchronous suspension>
+(elided one frame from package:stack_trace)
+
+This was caught by the test expectation on the following line:
+  file:///C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_widgets_test.dart line 336
+The test description was:
+  a Booked status names the time once, in its own line
+════════════════════════════════════════════════════════════════════════════════════════════════════
+00:22 +767 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +767 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_widgets_test.dart: ConfirmationSheet a Booked status names the time once, in its own line [E]
+  Test failed. See exception logs above.
+  The test description was: a Booked status names the time once, in its own line
+  
+00:22 +768 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +769 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +770 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +771 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +772 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +773 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +774 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +775 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +776 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +777 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +778 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +779 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +780 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +781 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +782 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +783 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +784 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +785 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +786 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +787 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +788 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +789 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +790 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +791 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +792 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +793 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +794 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +795 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +796 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +797 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +798 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +799 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +800 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +801 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +802 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +803 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +804 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +805 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +806 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +807 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +808 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +809 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +810 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +811 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +812 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +813 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +814 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +815 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +816 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +817 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +818 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +819 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:22 +820 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:23 +821 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:23 +822 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/sms_preference_test.dart: the switch starts from the value the server sent
+00:23 +823 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: opening a service a typed name survives leaving the form and coming back
+00:23 +824 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: opening a service a typed name survives leaving the form and coming back
+00:23 +825 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: opening a service a typed name survives leaving the form and coming back
+00:23 +826 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_steps_test.dart: relief goods, step by step Back steps to the previous step, and leaves the page from the first
+00:23 +827 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_steps_test.dart: relief goods, step by step Back steps to the previous step, and leaves the page from the first
+00:23 +828 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: the form widget choosing "Myself" fills the name field on screen
+00:23 +829 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: the form widget choosing "Myself" fills the name field on screen
+00:23 +830 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: changing the mobile number a malformed number and your own number stop before any request
+00:23 +831 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: changing the mobile number a malformed number and your own number stop before any request
+00:23 +832 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/profile_edit_test.dart: changing the mobile number a malformed number and your own number stop before any request
+00:23 +833 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: opening a service the ID attached on one form is still attached on the next
+00:23 +834 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: the form widget the patient and pickup "my address" switches fill independently
+00:23 +835 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: the form widget the patient and pickup "my address" switches fill independently
+00:23 +836 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_forms_test.dart: the form widget the patient and pickup "my address" switches fill independently
+00:23 +837 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_steps_test.dart: relief goods, step by step every step fits 320px in English without overflow
+00:23 +838 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_steps_test.dart: relief goods, step by step every step fits 320px in English without overflow
+00:23 +839 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/target_size_test.dart: buttons and links meet their size on TargetPlatform.windows
+00:23 +840 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/target_size_test.dart: buttons and links meet their size on TargetPlatform.windows
+00:23 +841 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/target_size_test.dart: buttons and links meet their size on TargetPlatform.windows
+00:23 +842 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/target_size_test.dart: buttons and links meet their size on TargetPlatform.windows
+00:23 +843 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/target_size_test.dart: buttons and links meet their size on TargetPlatform.windows
+00:24 +844 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/target_size_test.dart: buttons and links meet their size on TargetPlatform.windows
+00:24 +845 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/target_size_test.dart: buttons and links meet their size on TargetPlatform.windows
+00:24 +846 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/target_size_test.dart: buttons and links meet their size on TargetPlatform.windows
+00:24 +847 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/target_size_test.dart: buttons and links meet their size on TargetPlatform.windows
+00:24 +848 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/target_size_test.dart: buttons and links meet their size on TargetPlatform.windows
+00:24 +849 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/target_size_test.dart: buttons and links meet their size on TargetPlatform.windows
+00:24 +850 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/target_size_test.dart: buttons and links meet their size on TargetPlatform.windows
+00:24 +851 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/target_size_test.dart: buttons and links meet their size on TargetPlatform.windows
+00:24 +852 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/target_size_test.dart: buttons and links meet their size on TargetPlatform.windows
+00:24 +853 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/target_size_test.dart: buttons and links meet their size on TargetPlatform.windows
+00:24 +854 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/target_size_test.dart: buttons and links meet their size on TargetPlatform.windows
+00:24 +855 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/target_size_test.dart: buttons and links meet their size on TargetPlatform.windows
+00:24 +856 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/target_size_test.dart: buttons and links meet their size on TargetPlatform.windows
+00:24 +857 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/target_size_test.dart: buttons and links meet their size on TargetPlatform.windows
+00:24 +858 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/track_screen_test.dart: sections run In progress, Borrowed items, Past
+00:24 +859 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/track_screen_test.dart: sections run In progress, Borrowed items, Past
+00:24 +860 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/track_screen_test.dart: sections run In progress, Borrowed items, Past
+00:24 +861 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/track_screen_test.dart: sections run In progress, Borrowed items, Past
+00:24 +862 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/track_screen_test.dart: sections run In progress, Borrowed items, Past
+00:24 +863 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/track_screen_test.dart: sections run In progress, Borrowed items, Past
+00:24 +864 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/track_screen_test.dart: sections run In progress, Borrowed items, Past
+00:24 +865 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/track_screen_test.dart: sections run In progress, Borrowed items, Past
+00:24 +866 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/track_screen_test.dart: sections run In progress, Borrowed items, Past
+00:24 +867 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/track_screen_test.dart: sections run In progress, Borrowed items, Past
+00:24 +868 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/track_screen_test.dart: sections run In progress, Borrowed items, Past
+00:24 +869 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/track_screen_test.dart: sections run In progress, Borrowed items, Past
+00:24 +870 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/track_screen_test.dart: sections run In progress, Borrowed items, Past
+00:24 +871 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/track_screen_test.dart: sections run In progress, Borrowed items, Past
+00:24 +872 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/track_screen_test.dart: sections run In progress, Borrowed items, Past
+00:24 +873 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/track_screen_test.dart: sections run In progress, Borrowed items, Past
+00:24 +874 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/unknown_service_fallback_test.dart: an unknown code shows the Details form and files the request
+00:24 +875 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/unknown_service_fallback_test.dart: an unknown code shows the Details form and files the request
+00:24 +876 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/unknown_service_fallback_test.dart: an unknown code shows the Details form and files the request
+00:24 +877 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/unknown_service_fallback_test.dart: an unknown code shows the Details form and files the request
+00:24 +878 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/unknown_service_fallback_test.dart: an unknown code shows the Details form and files the request
+00:24 +879 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/unknown_service_fallback_test.dart: an unknown code shows the Details form and files the request
+00:25 +880 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/unknown_service_fallback_test.dart: an unknown code shows the Details form and files the request
+00:25 +881 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/unknown_service_fallback_test.dart: an unknown code shows the Details form and files the request
+00:25 +882 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/unknown_service_fallback_test.dart: an unknown code shows the Details form and files the request
+00:25 +883 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/unknown_service_fallback_test.dart: an unknown code shows the Details form and files the request
+00:25 +884 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/unknown_service_fallback_test.dart: an unknown code shows the Details form and files the request
+00:25 +885 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/unknown_service_fallback_test.dart: an unknown code shows the Details form and files the request
+00:25 +886 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/unknown_service_fallback_test.dart: an unknown code shows the Details form and files the request
+00:25 +887 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/unknown_service_fallback_test.dart: an unknown code shows the Details form and files the request
+00:25 +888 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/unknown_service_fallback_test.dart: an unknown code shows the Details form and files the request
+00:25 +889 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/unknown_service_fallback_test.dart: an unknown code shows the Details form and files the request
+00:25 +890 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/unknown_service_fallback_test.dart: an unknown code shows the Details form and files the request
+00:25 +891 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/unknown_service_fallback_test.dart: an unknown code shows the Details form and files the request
+00:25 +892 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/unknown_service_fallback_test.dart: an unknown code shows the Details form and files the request
+00:25 +893 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/unknown_service_fallback_test.dart: an unknown code shows the Details form and files the request
+00:25 +894 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/verify_phone_screen_test.dart: names the number the code went to, as a person writes it
+00:25 +895 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/verify_phone_screen_test.dart: names the number the code went to, as a person writes it
+00:25 +896 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/verify_phone_screen_test.dart: names the number the code went to, as a person writes it
+00:25 +897 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/verify_phone_screen_test.dart: names the number the code went to, as a person writes it
+00:25 +898 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: refusing an incomplete submit the account's number reaches the dispatcher as a real field
+00:25 +899 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: refusing an incomplete submit the account's number reaches the dispatcher as a real field
+00:25 +900 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_steps_test.dart: single-page forms at 320px mdrrmo-certification fits in English without overflow
+00:25 +901 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/verify_phone_screen_test.dart: names the last four digits when the server reports them
+00:26 +902 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: refusing an incomplete submit checking "Same as my address" sends the account address as the patient address
+00:26 +903 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: refusing an incomplete submit checking "Same as my address" sends the account address as the patient address
+00:26 +904 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: refusing an incomplete submit checking "Same as my address" sends the account address as the patient address
+00:26 +905 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: refusing an incomplete submit checking "Same as my address" sends the account address as the patient address
+00:26 +906 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: refusing an incomplete submit checking "Same as my address" sends the account address as the patient address
+00:26 +907 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: refusing an incomplete submit checking "Same as my address" sends the account address as the patient address
+00:26 +908 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: refusing an incomplete submit checking "Same as my address" sends the account address as the patient address
+00:26 +909 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/verify_phone_screen_test.dart: a resend that comes back unknown shows the hint
+00:26 +910 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: refusing an incomplete submit an ambulance request sends the structured fields, not a description
+00:26 +911 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: refusing an incomplete submit an ambulance request sends the structured fields, not a description
+00:26 +912 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: refusing an incomplete submit an ambulance request sends the structured fields, not a description
+00:26 +913 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: refusing an incomplete submit an ambulance request sends the structured fields, not a description
+00:26 +914 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/verify_phone_screen_test.dart: resend is disabled while the cooldown is running
+00:26 +915 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: refusing an incomplete submit a non-ambulance request still sends a description and no intake
+00:26 +916 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: refusing an incomplete submit a non-ambulance request still sends a description and no intake
+00:26 +917 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/verify_phone_screen_test.dart: a resend the server could not text shows its sentence
+00:26 +918 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: refusing an incomplete submit a road request carries no contact line at all
+00:26 +919 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: refusing an incomplete submit a cancelled picker leaves the previous attachment alone
+00:27 +920 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: a submit that fails shows a persistent error card, not a confirmation sheet
+00:27 +921 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: a submit that fails keeps the attached ID and site photo so Retry costs one tap
+00:27 +922 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: a submit that fails the error card clears once a retry succeeds
+00:27 +923 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: a submit that succeeds opens the confirmation sheet carrying the server reference
+00:27 +924 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: a submit that succeeds clears the site photo but keeps the valid ID
+00:27 +925 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: a submit that succeeds the site photo is sent when attached and omitted when not
+00:27 +926 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: a submit that succeeds clearing the site photo removes it before submitting
+00:28 +927 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: a submit that succeeds onSubmitted fires when the sheet sends the resident to Track
+00:28 +928 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: the in-flight guard a second tap during the upload does not file a second request
+00:28 +929 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: the restyled tab the header names the tab; the old "Service Request" heading is gone
+00:28 +930 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: the restyled tab search filters by name
+00:28 +931 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: the restyled tab search filters by description
+00:28 +932 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: the restyled tab no match shows the empty state
+00:28 +933 -1: C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/services_screen_test.dart: the restyled tab fits a 320px phone in Filipino without overflow
+00:28 +934 -1: Some tests failed.
+
+Failing tests:
+  C:/Users/User/Documents/CODEZZZ/SERBIS/SERBIS_prototype/Mobile/test/service_widgets_test.dart: ConfirmationSheet a Booked status names the time once, in its own line
+FLUTTERDONE
