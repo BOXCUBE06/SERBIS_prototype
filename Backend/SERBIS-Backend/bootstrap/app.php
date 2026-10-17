@@ -9,6 +9,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
@@ -54,6 +55,9 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->redirectGuestsTo(
             fn (Request $request) => $request->is('api/*') ? null : route('login'),
         );
+        // Route-model binding would otherwise 404 a missing id before is.admin
+        // answers 403, telling a resident which admin-route ids exist.
+        $middleware->prependToPriorityList(before: SubstituteBindings::class, prepend: IsAdmin::class);
         $middleware->alias([
             'is.admin' => IsAdmin::class,
             'section' => EnsureSection::class,
