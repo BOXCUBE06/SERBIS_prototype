@@ -93,21 +93,9 @@ class VehicleDispatch
             throw ValidationException::withMessages(['vehicle_id' => 'That unit is under Maintenance and cannot be assigned.']);
         }
 
-        // Busy: another Responding request holds it...
-        $requestId = ServiceRequest::where('vehicle_id', $vehicleId)
-            ->where('status', 'Responding')
-            ->when($exceptRequestId, fn ($q) => $q->whereKeyNot($exceptRequestId))
-            ->lockForUpdate()
-            ->value('request_id');
-
-        // ...or it is out on a trip with no request behind it: departed, not back.
-        $tripId = $requestId ? null : ConductionRequest::where('vehicle_id', $vehicleId)
-            ->whereNull('service_request_id')
-            ->whereNotNull('departed_office_at')
-            ->whereNull('returned_office_at')
-            ->when($exceptTripId, fn ($q) => $q->whereKeyNot($exceptTripId))
-            ->lockForUpdate()
-            ->value('conduction_request_id');
+        $busy = $this->busy([$vehicleId], $exceptRequestId, $exceptTripId, lock: true)[$vehicleId] ?? null;
+        $requestId = $busy['request_id'] ?? null;
+        $tripId = $busy['trip_id'] ?? null;
 
         if ($requestId || $tripId) {
             throw new HttpResponseException(response()->json([
@@ -118,5 +106,53 @@ class VehicleDispatch
         }
 
         return $vehicle;
+    }
+
+    /**
+     * Ids of units that are busy right now: the one rule lockFree() enforces and
+     * the pickers' "On trip" flag reads, so the two cannot disagree.
+     *
+     * @return list<int>
+     */
+    public function busyVehicleIds(?int $exceptRequestId = null): array
+    {
+        return array_keys($this->busy(null, $exceptRequestId));
+    }
+
+    /**
+     * @param  list<int>|null  $onlyIds  null = every unit
+     * @return array<int, array{request_id: ?int, trip_id: ?int}> keyed by vehicle_id
+     */
+    private function busy(?array $onlyIds, ?int $exceptRequestId = null, ?int $exceptTripId = null, bool $lock = false): array
+    {
+        $busy = [];
+
+        // Busy: another Responding request holds it...
+        $requests = ServiceRequest::whereNotNull('vehicle_id')
+            ->where('status', 'Responding')
+            ->when($onlyIds, fn ($q) => $q->whereIn('vehicle_id', $onlyIds))
+            ->when($exceptRequestId, fn ($q) => $q->whereKeyNot($exceptRequestId))
+            ->when($lock, fn ($q) => $q->lockForUpdate())
+            ->get(['request_id', 'vehicle_id']);
+
+        foreach ($requests as $r) {
+            $busy[$r->vehicle_id] ??= ['request_id' => $r->request_id, 'trip_id' => null];
+        }
+
+        // ...or it is out on a trip with no request behind it: departed, not back.
+        $trips = ConductionRequest::whereNotNull('vehicle_id')
+            ->whereNull('service_request_id')
+            ->whereNotNull('departed_office_at')
+            ->whereNull('returned_office_at')
+            ->when($onlyIds, fn ($q) => $q->whereIn('vehicle_id', $onlyIds))
+            ->when($exceptTripId, fn ($q) => $q->whereKeyNot($exceptTripId))
+            ->when($lock, fn ($q) => $q->lockForUpdate())
+            ->get(['conduction_request_id', 'vehicle_id']);
+
+        foreach ($trips as $t) {
+            $busy[$t->vehicle_id] ??= ['request_id' => null, 'trip_id' => $t->conduction_request_id];
+        }
+
+        return $busy;
     }
 }

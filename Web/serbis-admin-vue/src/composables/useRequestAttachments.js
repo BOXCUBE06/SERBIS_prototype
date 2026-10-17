@@ -1,5 +1,6 @@
 import { ref, reactive, computed, watch } from 'vue'
 import { API_BASE } from '@/config/api'
+import { friendlyError } from '@/composables/adminUi'
 
 export function useRequestAttachments(selectedRequest, { itemId, getHeaders }) {
   const createAttachment = (segment, failureMessage) => {
@@ -29,7 +30,7 @@ export function useRequestAttachments(selectedRequest, { itemId, getHeaders }) {
         state.type = blob.type
         state.url = URL.createObjectURL(blob)
       } catch (error) {
-        if (state.for === id) {state.error = error.message}
+        if (state.for === id) {state.error = friendlyError(error)}
       } finally {
         if (state.for === id) {state.loading = false}
       }

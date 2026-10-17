@@ -337,6 +337,30 @@ class AmbulanceFormData extends ServiceFormData {
   /// [metaLines], never folded into prose.
   DateTime? scheduledAt;
 
+  /// The availability answer for [scheduledAt]: `false` = no unit is free (the
+  /// schedule step blocks), `null` = not checked or the check failed (never
+  /// blocks). Held here, not in the field's State, so it survives leaving the
+  /// step. Reset whenever [scheduledAt] changes.
+  bool? unitsFree;
+
+  /// First later start with a unit free, when [unitsFree] is false.
+  DateTime? nextFreeStart;
+
+  /// The server's refusal of [scheduledAt] at submit (a 422 on `scheduled_at`),
+  /// shown under the picker until the time changes.
+  String? scheduleRefusal;
+
+  /// True when the picked time has no free unit, by the pre-check or the server.
+  bool get scheduleBlocked => scheduledAt != null && (unitsFree == false || scheduleRefusal != null);
+
+  /// A new time invalidates every answer given for the old one.
+  void setSchedule(DateTime? at) {
+    scheduledAt = at;
+    unitsFree = null;
+    nextFreeStart = null;
+    scheduleRefusal = null;
+  }
+
   /// True once the resident has typed or picked anything, so leaving the flow
   /// asks before throwing it away. The prefilled contact counts only if edited.
   bool get isDirty =>

@@ -283,9 +283,9 @@ class AppState extends ChangeNotifier {
   }
 
   /// Which Ambulance units GET /ambulance-availability reports free for
-  /// `[start, end)`. Advisory only — shown before submit so a resident is not
-  /// steered toward an obviously full slot, not a guarantee, since the
-  /// server re-checks under a lock at submission regardless.
+  /// `[start, end)`, and the next start with one free when none is. The same
+  /// rule the server re-runs under a lock at submission, so an empty answer
+  /// blocks the schedule step; a slot taken in between is still refused there.
   ///
   /// Returns `null` when the check itself could not be reached, which the
   /// caller must treat as "could not check" and not as "nothing is free" —
@@ -294,7 +294,7 @@ class AppState extends ChangeNotifier {
   /// while the resident is still filling in the form, and a snackbar over an
   /// in-progress booking would report a failure nothing has been submitted
   /// against yet.
-  Future<List<Map<String, dynamic>>?> checkAmbulanceAvailability(
+  Future<AmbulanceAvailabilityCheck?> checkAmbulanceAvailability(
     DateTime start,
     DateTime end,
   ) async {

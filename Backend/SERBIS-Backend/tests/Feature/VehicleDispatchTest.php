@@ -176,6 +176,57 @@ class VehicleDispatchTest extends TestCase
         $this->assertNotNull(ConductionRequest::find($trip)->departed_office_at);
     }
 
+    public function test_the_vehicle_list_flags_exactly_the_units_dispatch_rejects(): void
+    {
+        $this->request($this->road, 'Responding', $this->rescueUnit);
+        $free = Vehicle::create(['unit_identifier' => 'RES-02', 'type' => 'Rescue Vehicle', 'status' => 'Available']);
+        $request = $this->request($this->road);
+        $this->assignResponder($request);
+
+        $busy = collect($this->getJson('/api/vehicles')->assertOk()->json())->pluck('busy', 'unit_identifier');
+
+        // Flag says Available for RES-01 too; the Responding request is what makes it busy.
+        $this->assertTrue($busy['RES-01']);
+        $this->assertFalse($busy['RES-02']);
+        $this->assertFalse($busy['AMB-01']);
+
+        $this->respond($request, $this->rescueUnit)->assertStatus(409);
+        $this->respond($request, $free)->assertOk();
+    }
+
+    public function test_an_open_unlinked_trip_is_flagged_busy_and_for_request_spares_the_requests_own_unit(): void
+    {
+        ConductionRequest::create([...$this->trip(), 'departed_office_at' => now()->subHour()]);
+        $holder = $this->request($this->road, 'Responding', $this->rescueUnit);
+
+        $byUnit = fn (string $query = '') => collect($this->getJson('/api/vehicles'.$query)->json())->pluck('busy', 'unit_identifier');
+
+        $this->assertTrue($byUnit()['AMB-01']);
+        $this->assertTrue($byUnit()['RES-01']);
+        $this->assertFalse($byUnit("?for_request={$holder->request_id}")['RES-01']);
+    }
+
+    public function test_the_responder_list_flags_exactly_the_responders_assign_and_dispatch_reject(): void
+    {
+        $request = $this->request($this->road);
+        $deployed = $this->assignResponder($this->request($this->road, 'Responding'));
+        $deployed->update(['status' => 'deployed']);
+        $idle = $this->assignResponder($this->request($this->road));
+
+        $busy = collect($this->getJson('/api/responders')->assertOk()->json())->pluck('busy', 'responder_id');
+
+        $this->assertTrue($busy[$deployed->responder_id]);
+        $this->assertFalse($busy[$idle->responder_id]);
+
+        $this->patchJson("/api/service-requests/{$request->request_id}/responders", [
+            'responder_ids' => [$deployed->responder_id],
+        ])->assertStatus(422);
+
+        $this->patchJson("/api/service-requests/{$request->request_id}/responders", [
+            'responder_ids' => [$idle->responder_id],
+        ])->assertOk();
+    }
+
     public function test_non_ambulance_dispatch_without_a_vehicle_is_still_allowed(): void
     {
         $request = $this->request($this->road);

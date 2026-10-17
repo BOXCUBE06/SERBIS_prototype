@@ -7,6 +7,8 @@ use App\Support\AdminSections;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Laravel\Sanctum\Sanctum;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Concerns\MakesAdmins;
 use Tests\TestCase;
 
@@ -156,5 +158,56 @@ class AdminSectionAccessTest extends TestCase
         $this->assertSame(AdminSections::REQUESTS, AdminSections::forServiceCode('road-clearing'));
         // The "Others" request has no service row.
         $this->assertSame(AdminSections::REQUESTS, AdminSections::forServiceCode(null));
+    }
+
+    // --- Over HTTP: one read-only route per section ---------------------------
+
+    /** @return array<string, array{string, string}> path, the section that opens it */
+    public static function sectionRoutes(): array
+    {
+        return [
+            'logs' => ['/api/logs/system', AdminSections::LOGS],
+            'residents' => ['/api/residents', AdminSections::RESIDENTS],
+            'responders' => ['/api/responders', AdminSections::RESPONDERS],
+            'files' => ['/api/admin/info-materials', AdminSections::FILES],
+            'service audience' => ['/api/service-audience', AdminSections::SERVICE_AUDIENCE],
+            'procurement' => ['/api/procurement/other-equipment', AdminSections::PROCUREMENT],
+            'staff' => ['/api/admins', AdminSections::STAFF],
+        ];
+    }
+
+    #[DataProvider('sectionRoutes')]
+    public function test_no_token_is_401(string $path, string $section): void
+    {
+        $this->getJson($path)->assertUnauthorized();
+    }
+
+    #[DataProvider('sectionRoutes')]
+    public function test_an_admin_without_the_section_is_403(string $path, string $section): void
+    {
+        $others = array_values(array_diff(AdminSections::ASSIGNABLE, [$section]));
+        Sanctum::actingAs($this->makeLimitedStaff($others));
+
+        $this->getJson($path)->assertForbidden();
+    }
+
+    #[DataProvider('sectionRoutes')]
+    public function test_an_admin_with_the_section_is_let_in(string $path, string $section): void
+    {
+        if ($section === AdminSections::STAFF) {
+            $this->markTestSkipped('Staff Accounts cannot be assigned; only a super admin opens it.');
+        }
+
+        Sanctum::actingAs($this->makeLimitedStaff([$section]));
+
+        $this->getJson($path)->assertSuccessful();
+    }
+
+    #[DataProvider('sectionRoutes')]
+    public function test_a_super_admin_is_let_in(string $path, string $section): void
+    {
+        Sanctum::actingAs($this->makeSuperAdmin());
+
+        $this->getJson($path)->assertSuccessful();
     }
 }

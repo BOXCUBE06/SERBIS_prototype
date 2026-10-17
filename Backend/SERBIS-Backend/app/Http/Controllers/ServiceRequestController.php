@@ -1355,6 +1355,18 @@ class ServiceRequestController extends Controller
             $serviceRequest->update(['status' => 'Cancelled']);
         });
 
+        // A resident cancelling their own request needs no push; staff doing it for them do.
+        if ($request->user() instanceof User) {
+            $name = $serviceRequest->service?->service_name ?? 'service';
+
+            $this->fcm->notifyResident(
+                $serviceRequest->resident_id,
+                self::PUSH_TITLE,
+                "Your {$name} request was cancelled by MDRRMO. Call the office for details. — MDRRMO Echague",
+                ['request_id' => (string) $serviceRequest->request_id, 'service_type' => $name],
+            );
+        }
+
         return response()->json($serviceRequest->makeHidden('conductionRequests'));
     }
 
@@ -1646,7 +1658,7 @@ class ServiceRequestController extends Controller
                 ]);
             }
 
-            $blocked = $assigned->filter(fn (Responder $r) => $r->status !== 'available');
+            $blocked = Responder::busy()->whereIn('responder_id', $assigned->pluck('responder_id'))->get();
 
             if ($blocked->isNotEmpty()) {
                 $names = $blocked->map(fn (Responder $r) => "{$r->name} ({$r->status})")->implode(', ');
@@ -2129,7 +2141,7 @@ class ServiceRequestController extends Controller
 
         $responders = Responder::whereIn('responder_id', $validated['responder_ids'])->get();
 
-        $blocked = $responders->filter(fn (Responder $r) => $r->status !== 'available');
+        $blocked = Responder::busy()->whereIn('responder_id', $responders->pluck('responder_id'))->get();
 
         if ($blocked->isNotEmpty()) {
             $names = $blocked->map(fn (Responder $r) => "{$r->name} ({$r->status})")->implode(', ');

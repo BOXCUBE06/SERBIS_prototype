@@ -53,12 +53,24 @@ class AmbulanceScheduleField extends StatefulWidget {
 class _AmbulanceScheduleFieldState extends State<AmbulanceScheduleField> {
   bool _checking = false;
 
-  /// `true`/`false` once a check has completed; `null` before the first one,
-  /// or after a check that failed to reach the server — which must read as
-  /// "not checked" on screen, not as "nothing is free".
-  bool? _someUnitFree;
+  // The check's answer lives on [AmbulanceFormData.unitsFree]: `null` before
+  // the first check or after one that failed to reach the server, which must
+  // read as "not checked", not as "nothing is free".
 
   String? _leadTimeError;
+
+  @override
+  void initState() {
+    super.initState();
+    // Back on this step (or sent back by a refused submit): ask again, so the
+    // answer and the next-free suggestion are current.
+    final at = widget.form.scheduledAt;
+    if (at != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) unawaited(_checkAvailability(at));
+      });
+    }
+  }
 
   Future<void> _pickDateTime() async {
     final now = DateTime.now();
@@ -100,15 +112,13 @@ class _AmbulanceScheduleFieldState extends State<AmbulanceScheduleField> {
     if (combined.isBefore(earliest)) {
       setState(() {
         _leadTimeError = tr(widget.filipino, 'ambulance_schedule.lead_time_error');
-        _someUnitFree = null;
       });
       return;
     }
 
     setState(() {
-      widget.form.scheduledAt = combined;
+      widget.form.setSchedule(combined);
       _leadTimeError = null;
-      _someUnitFree = null;
     });
     widget.onChanged();
     unawaited(_checkAvailability(combined));
@@ -118,7 +128,7 @@ class _AmbulanceScheduleFieldState extends State<AmbulanceScheduleField> {
     setState(() => _checking = true);
 
     final end = start.add(const Duration(hours: _defaultBookingHours));
-    final units = await widget.appState.checkAmbulanceAvailability(start, end);
+    final check = await widget.appState.checkAmbulanceAvailability(start, end);
 
     // The resident may have picked a different time — or cleared the pick
     // entirely — while this was in flight. A stale answer for an
@@ -129,15 +139,28 @@ class _AmbulanceScheduleFieldState extends State<AmbulanceScheduleField> {
 
     setState(() {
       _checking = false;
-      _someUnitFree = units?.isNotEmpty;
+      widget.form.unitsFree = check?.units.isNotEmpty;
+      // A slot the server refused at submit that has since freed up may be retried.
+      if (check != null && check.units.isNotEmpty) widget.form.scheduleRefusal = null;
+      widget.form.nextFreeStart = check == null || check.units.isNotEmpty ? null : check.nextFreeStart;
     });
+    widget.onChanged();
+  }
+
+  /// Takes the suggested start: same as picking it, so it is checked again.
+  void _useNextFree(DateTime next) {
+    setState(() {
+      widget.form.setSchedule(next);
+      _leadTimeError = null;
+    });
+    widget.onChanged();
+    unawaited(_checkAvailability(next));
   }
 
   void _clear() {
     setState(() {
-      widget.form.scheduledAt = null;
+      widget.form.setSchedule(null);
       _leadTimeError = null;
-      _someUnitFree = null;
       _checking = false;
     });
     widget.onChanged();
@@ -155,6 +178,53 @@ class _AmbulanceScheduleFieldState extends State<AmbulanceScheduleField> {
     } else {
       _clear();
     }
+  }
+
+  /// The time has no free unit: say so, and offer the next one that has.
+  Widget _blockedNotice(bool f, DateTime? next) {
+    final scheduled = widget.form.scheduledAt!;
+    final sameDay = next != null &&
+        next.year == scheduled.year &&
+        next.month == scheduled.month &&
+        next.day == scheduled.day;
+    final label = next == null
+        ? null
+        : tr(f, 'ambulance_schedule.next_free').replaceAll(
+            '{time}',
+            sameDay
+                ? MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(next))
+                : formatBookingConfirmationTime(next, f),
+          );
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 6, left: 2),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.error_outline_rounded, size: 14, color: AppColors.red600),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  tr(f, 'ambulance_schedule.none_free'),
+                  style: AppText.body(size: AppTextSize.small, color: AppColors.red600),
+                ),
+              ),
+            ],
+          ),
+          if (next != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            ActionChip(
+              avatar: const Icon(Icons.schedule_rounded, size: 18, color: AppColors.green700),
+              label: Text(label!),
+              onPressed: () => _useNextFree(next),
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   @override
@@ -241,26 +311,19 @@ class _AmbulanceScheduleFieldState extends State<AmbulanceScheduleField> {
                 ],
               ),
             )
-          else if (_someUnitFree != null)
+          else if (widget.form.scheduleBlocked)
+            _blockedNotice(f, widget.form.nextFreeStart)
+          else if (widget.form.unitsFree == true)
             Padding(
               padding: const EdgeInsets.only(top: 6, left: 2),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    _someUnitFree! ? Icons.check_circle_outline_rounded : Icons.info_outline_rounded,
-                    size: 14,
-                    color: _someUnitFree! ? AppColors.green700 : AppColors.amber600,
-                  ),
+                  const Icon(Icons.check_circle_outline_rounded, size: 14, color: AppColors.green700),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      tr(
-                        f,
-                        _someUnitFree!
-                            ? 'ambulance_schedule.some_free'
-                            : 'ambulance_schedule.none_free',
-                      ),
+                      tr(f, 'ambulance_schedule.some_free'),
                       style: AppText.body(size: AppTextSize.small, color: AppColors.inkMuted),
                     ),
                   ),

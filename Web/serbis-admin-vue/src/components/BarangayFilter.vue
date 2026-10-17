@@ -25,7 +25,14 @@
   >
     <template #selection="{ item, index }">
       <v-chip
-        v-if="index < maxChips"
+        v-if="allSelected"
+        v-show="index === 0"
+        size="small"
+        class="barangay-filter__chip barangay-filter__chip--more"
+        @mousedown.stop
+      >All {{ total }} barangays</v-chip>
+      <v-chip
+        v-else-if="index < maxChips"
         size="small"
         closable
         class="barangay-filter__chip"
@@ -43,7 +50,12 @@
 </template>
 
 <script setup lang="ts">
-withDefaults(defineProps<{ modelValue: (string | number)[]; maxChips?: number }>(), { maxChips: 2 })
+import { computed } from 'vue'
+
+// `total` is only for a field where the full list is a real selection (the text
+// blast); the filters use [] for "all" and leave it unset.
+const props = withDefaults(defineProps<{ modelValue: (string | number)[]; maxChips?: number; total?: number }>(), { maxChips: 2, total: 0 })
+const allSelected = computed(() => props.total > 1 && props.modelValue.length === props.total)
 const emit = defineEmits<{ (e: 'update:modelValue', value: (string | number)[]): void }>()
 </script>
 

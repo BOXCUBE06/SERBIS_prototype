@@ -14,9 +14,16 @@ class ResponderController extends Controller
 {
     use ResolvesUploadDisks;
 
-    public function index()
+    public function index(Request $request)
     {
-        return response()->json($this->withPhotoUrls(Responder::all()));
+        $forRequest = $request->integer('for_request') ?: null;
+        $busyIds = Responder::busy($forRequest)->pluck('responder_id')->all();
+
+        $responders = Responder::all()->each(
+            fn (Responder $r) => $r->setAttribute('busy', in_array($r->responder_id, $busyIds, true))
+        );
+
+        return response()->json($this->withPhotoUrls($responders));
     }
 
     /** Names and positions only, for the trip log's driver picker — ambulance staff do not hold the responders section. */

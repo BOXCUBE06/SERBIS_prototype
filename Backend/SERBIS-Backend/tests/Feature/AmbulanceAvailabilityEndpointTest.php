@@ -159,6 +159,42 @@ class AmbulanceAvailabilityEndpointTest extends TestCase
         $this->assertSame(['AMB-02'], $identifiers);
     }
 
+    public function test_suggest_returns_the_next_free_start_in_half_hour_steps(): void
+    {
+        Sanctum::actingAs($this->resident);
+
+        // AMB-01 is held 00:00-02:00 UTC (08:00-10:00 Manila). A 1-hour ask at
+        // 09:00 Manila is full; 10:00 Manila is the first 30-min step clear of it.
+        $query = 'start=2026-09-01T09:00:00&end=2026-09-01T10:00:00&suggest=1';
+        $body = $this->getJson("/api/ambulance-availability?$query")->assertOk()->json();
+
+        $this->assertSame([], $body['units']);
+        $this->assertSame('2026-09-01T02:00:00+00:00', $body['next_free_start']);
+    }
+
+    public function test_suggest_is_null_when_a_unit_is_free_or_nothing_frees_within_three_hours(): void
+    {
+        Sanctum::actingAs($this->resident);
+
+        $free = $this->getJson('/api/ambulance-availability?start=2026-09-01T12:00:00&end=2026-09-01T13:00:00&suggest=1')->assertOk()->json();
+        $this->assertCount(1, $free['units']);
+        $this->assertNull($free['next_free_start']);
+
+        // Hold the unit until 20:00 Manila, well past the 3-hour search span.
+        AmbulanceBooking::query()->update(['scheduled_end' => '2026-09-01 12:00:00']);
+        $none = $this->getJson('/api/ambulance-availability?start=2026-09-01T09:00:00&end=2026-09-01T10:00:00&suggest=1')->assertOk()->json();
+        $this->assertSame([], $none['units']);
+        $this->assertNull($none['next_free_start']);
+    }
+
+    public function test_without_suggest_the_response_stays_a_bare_list(): void
+    {
+        Sanctum::actingAs($this->resident);
+
+        $this->getJson('/api/ambulance-availability?start=2026-09-01T09:00:00&end=2026-09-01T10:00:00')
+            ->assertOk()->assertExactJson([]);
+    }
+
     public function test_neither_date_nor_window_is_rejected(): void
     {
         Sanctum::actingAs($this->resident);

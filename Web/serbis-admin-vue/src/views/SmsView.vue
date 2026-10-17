@@ -80,6 +80,7 @@
                   item-value="barangay_id"
                   :loading="barangaysLoading"
                   :max-chips="3"
+                  :total="barangays.length"
                   placeholder="Select one or more barangays"
                   hide-details="auto"
                   color="primary"

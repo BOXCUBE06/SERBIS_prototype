@@ -109,6 +109,32 @@ class AdminSmsMfaTest extends TestCase
             ->assertStatus(422)->assertJsonPath('code', 'mfa_challenge_expired');
     }
 
+    public function test_a_code_is_still_good_just_inside_five_minutes(): void
+    {
+        $this->enable();
+        $this->staff('ana');
+        $challenge = $this->login()->json('challenge_id');
+
+        $this->travel(4)->minutes();
+
+        $this->postJson('/api/admin/login/verify', ['challenge_id' => $challenge, 'code' => $this->lastCodeTexted()])
+            ->assertOk()->assertJsonStructure(['token']);
+    }
+
+    public function test_an_expired_challenge_stays_dead_for_a_correct_code_after_wrong_ones(): void
+    {
+        $this->enable();
+        $this->staff('ana');
+        $challenge = $this->login()->json('challenge_id');
+        $wrong = $this->lastCodeTexted() === '000000' ? '111111' : '000000';
+
+        $this->postJson('/api/admin/login/verify', ['challenge_id' => $challenge, 'code' => $wrong])->assertStatus(422);
+        $this->travel(6)->minutes();
+
+        $this->postJson('/api/admin/login/verify', ['challenge_id' => $challenge, 'code' => $this->lastCodeTexted()])
+            ->assertStatus(422)->assertJsonPath('code', 'mfa_challenge_expired');
+    }
+
     public function test_resend_waits_out_the_resident_cooldown_and_the_new_code_works(): void
     {
         $this->enable();

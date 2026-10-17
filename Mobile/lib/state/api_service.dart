@@ -15,6 +15,15 @@ import 'verification_delivery.dart';
 export 'api_exception.dart';
 export 'verification_delivery.dart';
 
+/// The availability endpoint's answer for one window: the units free in it, and
+/// when none are, the next start within the server's search that has one.
+class AmbulanceAvailabilityCheck {
+  final List<Map<String, dynamic>> units;
+  final DateTime? nextFreeStart;
+
+  const AmbulanceAvailabilityCheck({required this.units, this.nextFreeStart});
+}
+
 class ApiService {
   /// Log area for everything in this file. Every line the HTTP layer writes
   /// names the method and path it was attempting; none of them carries a
@@ -745,18 +754,28 @@ class ApiService {
   /// lock at submit time. This call is advisory only: a resident sees it
   /// before committing to a date and time, but the server's own check at
   /// submission is the one that decides whether the booking is accepted.
-  Future<List<Map<String, dynamic>>> getAmbulanceAvailability({
+  ///
+  /// `suggest=1` also asks for `next_free_start`, the first later start (within
+  /// the server's 3-hour search) that has a unit free, when this one has none.
+  Future<AmbulanceAvailabilityCheck> getAmbulanceAvailability({
     required DateTime start,
     required DateTime end,
   }) async {
     final query = <String, String>{
       'start': start.toUtc().toIso8601String(),
       'end': end.toUtc().toIso8601String(),
+      'suggest': '1',
     };
     final data = await _get(
       '/ambulance-availability?${Uri(queryParameters: query).query}',
     );
-    return listFrom(data);
+    // A bare list (an older server) arrives wrapped as {'data': [...]}.
+    final units = data['units'];
+    final next = data['next_free_start'];
+    return AmbulanceAvailabilityCheck(
+      units: units is List ? units.whereType<Map<String, dynamic>>().toList() : listFrom(data),
+      nextFreeStart: next is String ? DateTime.tryParse(next)?.toLocal() : null,
+    );
   }
 
   /// Fetches a published material's bytes from its absolute `full_url`, which

@@ -1,5 +1,6 @@
 import { ref, type Ref } from 'vue'
 
+import { friendlyError } from './adminUi'
 import { useCachedFetch } from './useCachedFetch'
 import { refreshPulse } from './usePulse'
 
@@ -53,7 +54,7 @@ async function fetchRows(): Promise<void> {
     })
   } catch (error) {
     console.error('Failed to fetch borrowings:', error)
-    loadError.value = (error as Error).message || 'Could not reach the server'
+    loadError.value = friendlyError(error, 'Could not reach the server')
   } finally {
     initialLoad.value = false
     reloading.value = false

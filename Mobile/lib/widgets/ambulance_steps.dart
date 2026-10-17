@@ -45,6 +45,7 @@ class AmbulanceStepFooter extends StatelessWidget {
   final bool submitting;
   final VoidCallback onBack;
   final VoidCallback onNext;
+  final bool nextEnabled;
 
   const AmbulanceStepFooter({
     super.key,
@@ -53,6 +54,7 @@ class AmbulanceStepFooter extends StatelessWidget {
     required this.submitting,
     required this.onBack,
     required this.onNext,
+    this.nextEnabled = true,
   });
 
   @override
@@ -63,6 +65,7 @@ class AmbulanceStepFooter extends StatelessWidget {
         submitting: submitting,
         onBack: onBack,
         onNext: onNext,
+        nextEnabled: nextEnabled,
       );
 }
 

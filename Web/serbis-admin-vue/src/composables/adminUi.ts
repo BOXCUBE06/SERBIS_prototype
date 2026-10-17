@@ -35,6 +35,37 @@ export function authHeaders(json = true): Record<string, string> {
   return headers
 }
 
+export const GENERIC_ERROR = 'Something went wrong. Please try again.'
+export const NETWORK_ERROR = 'Could not reach the server. Check your connection and try again.'
+
+/**
+ * The text to show for a failed response. A 5xx never shows what the server
+ * said (a proxy page or a framework error is not for staff); a 4xx shows the
+ * first field error, else the server's message, else `fallback`.
+ */
+export function responseMessage(status: number, body: unknown, fallback = GENERIC_ERROR): string {
+  if (status >= 500) return GENERIC_ERROR
+
+  const { errors, message } = (body ?? {}) as { errors?: Record<string, string[]>; message?: unknown }
+  const firstError = errors ? Object.values(errors)[0]?.[0] : undefined
+
+  return firstError || (typeof message === 'string' && message) || fallback
+}
+
+/**
+ * The text to show for a caught error. Browser failures (fetch's TypeError when
+ * the network is down, a SyntaxError from res.json() on an HTML page) become a
+ * friendly line; an Error this app threw itself, from responseMessage or a
+ * hand-written message, passes through.
+ */
+export function friendlyError(error: unknown, fallback = GENERIC_ERROR): string {
+  if (error instanceof TypeError) return NETWORK_ERROR
+  if (error instanceof SyntaxError) return GENERIC_ERROR
+  const message = error instanceof Error ? error.message : ''
+
+  return message || fallback
+}
+
 export interface SnackbarState {
   show: boolean
   text: string

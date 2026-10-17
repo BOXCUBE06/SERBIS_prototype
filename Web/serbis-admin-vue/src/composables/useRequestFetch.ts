@@ -87,6 +87,19 @@ export function useRequestFetch({ isAmbulance, initialLoad, apiError, formData, 
     }
   }
 
+  // Called when a unit/responder picker opens: the page-load copies can be minutes old,
+  // and `busy` is judged against this request (its own unit and crew are not busy to it).
+  const refreshFleet = async (requestId: string | number) => {
+    const query = `?for_request=${requestId}`
+    await Promise.all([
+      get('/vehicles' + query, { fresh: true, onData: take(vehicles) }),
+      // Ambulance staff may lack the Responders section, and only the response picker needs it.
+      isAmbulance ? null : get('/responders' + query, { fresh: true, onData: take(responders) }),
+    ]).catch((error) => {
+      if (!gone()) {console.error('Failed to refresh units:', error)}
+    })
+  }
+
   // Only called after a write. A write can also move a vehicle (Dispatched), so
   // both are dropped: the refetch must not flash the pre-write copy.
   const fetchRequests = async () => {
@@ -111,5 +124,5 @@ export function useRequestFetch({ isAmbulance, initialLoad, apiError, formData, 
     watch(() => listUpdate.value.changed && isIdle(), (go) => { if (go) {fetchRequests()} })
   }
 
-  return { requests, vehicles, residents, services, responders, listAbortController, refreshing, fetchData, fetchRequests, selectRequest, listUpdate }
+  return { requests, vehicles, residents, services, responders, listAbortController, refreshing, fetchData, fetchRequests, refreshFleet, selectRequest, listUpdate }
 }
