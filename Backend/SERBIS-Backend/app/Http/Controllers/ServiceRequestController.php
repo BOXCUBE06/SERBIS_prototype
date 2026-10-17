@@ -1355,6 +1355,18 @@ class ServiceRequestController extends Controller
             $serviceRequest->update(['status' => 'Cancelled']);
         });
 
+        // A resident cancelling their own request needs no push; staff doing it for them do.
+        if ($request->user() instanceof User) {
+            $name = $serviceRequest->service?->service_name ?? 'service';
+
+            $this->fcm->notifyResident(
+                $serviceRequest->resident_id,
+                self::PUSH_TITLE,
+                "Your {$name} request was cancelled by MDRRMO. Call the office for details. — MDRRMO Echague",
+                ['request_id' => (string) $serviceRequest->request_id, 'service_type' => $name],
+            );
+        }
+
         return response()->json($serviceRequest->makeHidden('conductionRequests'));
     }
 
