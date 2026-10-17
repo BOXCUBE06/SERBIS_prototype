@@ -2,10 +2,16 @@
 
 use App\Http\Middleware\EnsureSection;
 use App\Http\Middleware\IsAdmin;
+use Illuminate\Auth\AuthenticationException;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
+use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -57,4 +63,43 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*'),
         );
+
+        // What a client may learn about a failure it did not cause. Rendering
+        // only: reporting is untouched, so the full error still reaches the log.
+        // Debug stays detailed for local work; production refuses to boot with
+        // it on (AppServiceProvider). A message a controller wrote on purpose
+        // (abort(404, 'Vehicle not found')) is kept — only the framework's own
+        // wording is replaced.
+        $exceptions->render(function (NotFoundHttpException $e, Request $request) {
+            if (! $request->is('api/*') || config('app.debug')) {
+                return null;
+            }
+
+            // findOrFail's "No query results for model [App\Models\X] 5" names an
+            // internal class; an unknown URL echoes the route back.
+            if ($e->getPrevious() instanceof ModelNotFoundException || str_starts_with($e->getMessage(), 'The route ')) {
+                return response()->json(['message' => 'Not found.'], 404);
+            }
+
+            return null;
+        });
+
+        $exceptions->render(function (Throwable $e, Request $request) {
+            if (! $request->is('api/*') || config('app.debug')) {
+                return null;
+            }
+
+            // These have their own, user-facing rendering (422, 401, a response
+            // the code built itself, or any deliberate 4xx).
+            if ($e instanceof ValidationException || $e instanceof AuthenticationException || $e instanceof HttpResponseException) {
+                return null;
+            }
+            if ($e instanceof HttpExceptionInterface && $e->getStatusCode() < 500) {
+                return null;
+            }
+
+            $status = $e instanceof HttpExceptionInterface ? $e->getStatusCode() : 500;
+
+            return response()->json(['message' => 'Something went wrong. Please try again.'], $status);
+        });
     })->create();

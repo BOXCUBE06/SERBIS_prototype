@@ -15,7 +15,7 @@
  * reach the next.
  */
 import { computed, ref } from 'vue'
-import { authHeaders } from '@/composables/adminUi'
+import { authHeaders, friendlyError, responseMessage } from '@/composables/adminUi'
 import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
 
@@ -58,12 +58,11 @@ export function invalidate(path: string): void {
 
 async function request(url: string): Promise<unknown> {
   const started = generation
-  const res = await fetch(url, { headers: authHeaders() })
+  const res = await fetch(url, { headers: authHeaders() }).catch((error) => { throw new Error(friendlyError(error)) })
   const body = await res.json().catch(() => null)
 
   if (!res.ok) {
-    const message = (body as { message?: string } | null)?.message ?? `Request failed (${res.status})`
-    throw Object.assign(new Error(message), { status: res.status })
+    throw Object.assign(new Error(responseMessage(res.status, body, `Request failed (${res.status})`)), { status: res.status })
   }
 
   if (started === generation) {

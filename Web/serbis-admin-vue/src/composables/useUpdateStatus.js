@@ -1,4 +1,5 @@
 import { API_BASE } from '@/config/api'
+import { friendlyError, responseMessage } from '@/composables/adminUi'
 
 export function useUpdateStatus({ selectedRequest, loading, apiError, formData, itemId, getHeaders, fetchRequests, reasonDialog, onResponding }) {
   const updateStatus = async (newStatus, targetRequest = selectedRequest.value) => {
@@ -20,8 +21,7 @@ export function useUpdateStatus({ selectedRequest, loading, apiError, formData, 
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}))
-        const firstError = errData.errors ? Object.values(errData.errors)[0]?.[0] : null
-        throw new Error(firstError || errData.message || 'Failed to update request')
+        throw new Error(responseMessage(res.status, errData, 'Failed to update request'))
       }
 
       await fetchRequests()
@@ -30,8 +30,8 @@ export function useUpdateStatus({ selectedRequest, loading, apiError, formData, 
 
       reasonDialog.value.open = false
     } catch (error) {
-      apiError.value = error.message
-      reasonDialog.value.error = error.message
+      apiError.value = friendlyError(error)
+      reasonDialog.value.error = friendlyError(error)
     } finally {
       loading.value = false
     }
