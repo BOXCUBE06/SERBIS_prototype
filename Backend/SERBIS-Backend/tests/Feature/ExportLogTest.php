@@ -119,7 +119,8 @@ class ExportLogTest extends TestCase
         Sanctum::actingAs($this->makeStaff());
         $this->log('request', ['scope' => 'selected', 'count' => 2, 'ids' => [5, 6]])->assertCreated();
 
-        $this->assertSame(['type' => 'request', 'format' => 'xlsx', 'scope' => 'selected', 'count' => 2, 'ids' => [5, 6]],
+        // assertEquals: MySQL's JSON column reorders object keys, MariaDB keeps insertion order.
+        $this->assertEquals(['type' => 'request', 'format' => 'xlsx', 'scope' => 'selected', 'count' => 2, 'ids' => [5, 6]],
             $this->exportLogs()->firstOrFail()->new_values);
     }
 }
