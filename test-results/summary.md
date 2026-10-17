@@ -115,3 +115,17 @@ The request to test "push when the update path moves a request to Cancelled" cou
 **Final RTM counts** (`audits/rtm-draft.csv`, 125 rows): Pass 102, Live 15, Manual 7, Out of scope 1, Gap 0.
 
 Bug log: BUG-001 and BUG-002 Closed, BUG-003 Known limitation.
+
+## CI failures on merge commit 82f8c383 (2026-10-17)
+
+PHPUnit (Backend) failed on CI (MySQL 8) with 3 tests that pass on local MariaDB 10.4. Flutter passed.
+
+| Bug | Test | Cause | Production? |
+| --- | --- | --- | --- |
+| BUG-004 | `EquipmentAvailabilityNotifierTest` follow up not repeated within a day | `ReminderFollowUp` dedup used `new_values LIKE '%"kind":"x"%'`; MySQL stores JSON as `"kind": "x"`, so it never matched | Yes, Medium: duplicate "Follow up by phone" rows |
+| BUG-005 | `SendReturnRemindersTest` second run the same day | Same line, reached through the cron command | Yes, Medium |
+| BUG-006 | `ExportLogTest` log row carries no record data | `assertSame` on JSON key order; MySQL sorts keys | No, test only, Low |
+
+Fixes: `ReminderFollowUp` now filters with `where('new_values->kind', $kind)`; `ExportLogTest` uses `assertEquals`.
+
+**Verification:** no Docker or MySQL 8 on this machine. On local MariaDB 10.4: the 3 test classes pass (32 tests), full backend suite 1731 tests, 1730 pass, 1 skipped, 0 fail, one run. MariaDB cannot reproduce the original failure, so these runs show no regression but do not prove the fix on MySQL 8; that needs a CI run. BUG-004 to 006 status: "Fixed locally; MySQL 8 not verified".
