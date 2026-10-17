@@ -323,10 +323,11 @@ void main() {
     });
 
     testWidgets('a Booked status names the time once, in its own line', (tester) async {
+      // Far future: a booking whose time has passed reads as overdue, not Booked.
       await _pump(
         tester,
         ConfirmationSheet(
-          request: filed(status: ReqStatus.booked, scheduledAt: DateTime(2026, 10, 12, 15, 30)),
+          request: filed(status: ReqStatus.booked, scheduledAt: DateTime(2099, 10, 12, 15, 30)),
           title: 'Ambulance',
           filipino: false,
           onViewTrack: () {},
@@ -334,7 +335,7 @@ void main() {
       );
 
       expect(find.text('Booked'), findsOneWidget);
-      expect(find.textContaining('Oct 12, 2026, 3:30 PM'), findsOneWidget);
+      expect(find.textContaining('Oct 12, 2099, 3:30 PM'), findsOneWidget);
     });
 
     testWidgets('keeps its content to 600dp on a wide screen', (tester) async {
