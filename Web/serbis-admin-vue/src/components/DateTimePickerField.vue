@@ -2,7 +2,7 @@
   Replaces a native <input type="date"> / <input type="datetime-local">
   with Vuetify's own VDatePicker (+ VTimePicker for the datetime case),
   behind a readonly text field so the browser's own picker chrome never
-  shows.
+  shows. Opens as a dialog in the middle of the screen.
 
   The one rule that matters more than anything else here: modelValue is
   the EXACT same string shape the native input produced — 'YYYY-MM-DD' for
@@ -13,11 +13,10 @@
   never what the string looks like once it's in the form.
 -->
 <template>
-  <v-menu
+  <v-dialog
     v-model="menuOpen"
-    :close-on-content-click="false"
-    location="bottom start"
-    transition="scale-transition"
+    :max-width="isDateTime ? 720 : 380"
+    width="auto"
   >
     <template v-slot:activator="{ props: menuProps }">
       <v-text-field
@@ -28,7 +27,8 @@
       ></v-text-field>
     </template>
 
-    <v-card min-width="300" class="pa-2 dtp-card">
+    <v-card class="pa-3 dtp-card" rounded="lg">
+      <div class="dtp-title">{{ isDateTime ? 'Pick a date and time' : 'Pick a date' }}</div>
       <div class="dtp-panes">
         <v-date-picker
           v-model="pickerDate"
@@ -66,7 +66,7 @@
         <v-btn color="primary" variant="flat" size="small" class="text-none" @click="confirm">OK</v-btn>
       </v-card-actions>
     </v-card>
-  </v-menu>
+  </v-dialog>
 </template>
 
 <script setup>
@@ -202,10 +202,10 @@ function clear () {
 </script>
 
 <style scoped>
-/* Stacked, the date + time pair ran ~700px tall and pushed the menu past the
-   bottom of a 1280x800 window, where it drew over the dialog that opened it.
-   Side by side it fits; the card is capped at the viewport and scrolls the
-   pickers internally rather than growing, so Clear/Cancel/OK stay reachable. */
+/* Centred in a dialog so it never opens off-screen or over the form that
+   launched it. Stacked, the date + time pair ran ~700px tall; side by side it
+   fits. The card is capped at the viewport and scrolls the pickers internally,
+   so Clear/Cancel/OK stay reachable. */
 .dtp-card {
   display: flex;
   flex-direction: column;
@@ -213,10 +213,17 @@ function clear () {
   max-height: calc(100dvh - 24px);
 }
 
+.dtp-title {
+  padding: 4px 8px 8px;
+  font-size: 17px;
+  font-weight: 700;
+}
+
 .dtp-panes {
   display: flex;
   flex-direction: row;
   align-items: flex-start;
+  justify-content: center;
   gap: 8px;
   overflow-y: auto;
   /* min-height:0 or the flex item refuses to shrink below its content and
