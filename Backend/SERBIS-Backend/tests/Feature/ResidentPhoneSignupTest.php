@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Testing\TestResponse;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Concerns\FakesSkySms;
 use Tests\TestCase;
 
@@ -529,5 +530,53 @@ class ResidentPhoneSignupTest extends TestCase
         $this->registerAndCaptureCode();
 
         $this->assertSame(0, DB::table('tbl_system_logs')->where('auditable_type', Resident::class)->count());
+    }
+
+    // --- /register validation -------------------------------------------------
+
+    /** @return array<string, array{0: array<string, mixed>, 1: string, 2?: bool}> overrides, error key, number already taken */
+    public static function invalidRegistrations(): array
+    {
+        return [
+            'first_name null' => [['first_name' => null], 'first_name'],
+            'last_name null' => [['last_name' => null], 'last_name'],
+            'barangay_id null' => [['barangay_id' => null], 'barangay_id'],
+            'phone_number null' => [['phone_number' => null], 'phone_number'],
+            'password null' => [['password' => null, 'password_confirmation' => null], 'password'],
+            'phone with letters' => [['phone_number' => '0917abc4567'], 'phone_number'],
+            'phone with symbols' => [['phone_number' => '0917-123-4567'], 'phone_number'],
+            'phone too short' => [['phone_number' => '091712345'], 'phone_number'],
+            'phone too long' => [['phone_number' => '091712345678'], 'phone_number'],
+            'phone wrong prefix' => [['phone_number' => '08171234567'], 'phone_number'],
+            'phone duplicate' => [['phone_number' => '09170000000'], 'phone_number', true],
+            'password too short' => [['password' => 'Pass1', 'password_confirmation' => 'Pass1'], 'password'],
+            'password no uppercase' => [['password' => 'password123', 'password_confirmation' => 'password123'], 'password'],
+            'password no number' => [['password' => 'PasswordOnly', 'password_confirmation' => 'PasswordOnly'], 'password'],
+            'password not confirmed' => [['password_confirmation' => 'Different123'], 'password'],
+            'barangay account refused' => [['account_type' => Resident::TYPE_BARANGAY], 'account_type'],
+            'organization without name' => [['account_type' => Resident::TYPE_ORGANIZATION], 'organization_name'],
+        ];
+    }
+
+    #[DataProvider('invalidRegistrations')]
+    public function test_register_rejects_invalid_input_with_the_right_error_key(array $overrides, string $key, bool $taken = false): void
+    {
+        if ($taken) {
+            $this->verifiedResident('09170000000');
+        }
+
+        $this->postJson('/api/register', $this->payload($overrides))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors($key);
+
+        $this->assertSame([], $this->numbersTexted(), 'A rejected sign-up must not text anyone.');
+    }
+
+    public function test_register_accepts_a_valid_organization(): void
+    {
+        $this->postJson('/api/register', $this->payload([
+            'account_type' => Resident::TYPE_ORGANIZATION,
+            'organization_name' => 'Echague Rescue Volunteers',
+        ]))->assertStatus(201)->assertJsonPath('verification_required', true);
     }
 }
