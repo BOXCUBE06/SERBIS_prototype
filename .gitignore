@@ -38,3 +38,6 @@ docs/user-manuals/tools/capture/.state/
 docs/user-manuals/tools/capture/*.png
 # Manual screenshot capture: local sign-in helper, holds real phone numbers.
 docs/user-manuals/tools/capture/login-as.cmd
+
+# Test run output.
+test-results/

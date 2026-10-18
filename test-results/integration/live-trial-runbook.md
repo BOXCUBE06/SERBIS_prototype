@@ -31,7 +31,7 @@ system (Railway API, Vercel panel, a real Android phone) after the merge to `mai
 
 | Step | TC | Do | Expect |
 | --- | --- | --- | --- |
-| A1 | TC-NFR-31 | Open the Railway deployment log for `82f8c383`. | Entrypoint passed its checks, `migrate --force` ran with nothing pending (this merge has no migrations), service healthy, no restart loop. |
+| A1 | TC-NFR-31 | Open the Railway deployment log for `3a0c5866`. | Entrypoint passed its checks, `migrate --force` ran with nothing pending (this merge has no migrations), service healthy, no restart loop. |
 | A2 | TC-NFR-31 | `GET <api>/up`. | 200. |
 | A3 | TC-NFR-21 | Open the panel from the Vercel URL, watch the Network tab. | All calls go to the production API over `https`; no mixed-content or CORS errors; login works. |
 | A4 | TC-NFR-21 | Look at response headers on `/api/me`. | `Strict-Transport-Security` present; no `X-Powered-By` PHP version; HTTP redirects to HTTPS. |
