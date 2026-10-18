@@ -481,8 +481,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Enter a valid mobile number.'), findsOneWidget);
 
-      // Typed in a different spelling: still the number already on the account.
-      await tester.enterText(_changeFields().at(0), '+639171111111');
+      // The account's number, typed the way the field takes it.
+      await tester.enterText(_changeFields().at(0), '09171111111');
       await tester.tap(find.text('Send code'));
       await tester.pumpAndSettle();
       expect(find.text('That is already your number.'), findsOneWidget);

@@ -10,6 +10,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:serbis/models/phone_number.dart';
+import 'package:serbis/models/validators.dart';
 import 'package:serbis/widgets/form_inputs.dart';
 
 void main() {
@@ -81,19 +82,20 @@ void main() {
       ));
     }
 
-    testWidgets('lets the country-code shapes be typed', (tester) async {
+    // The field takes the national form only; the server still accepts the
+    // country-code shapes from older app builds.
+    testWidgets('keeps to 11 digits, so a country-code shape cannot be typed', (tester) async {
       final controller = TextEditingController();
       addTearDown(controller.dispose);
 
       await pumpField(tester, controller);
 
-      // Both were impossible before: `+` was stripped by digitsOnly and the
-      // 12-digit form was cut off by maxLength 11.
-      await tester.enterText(find.byType(TextField), '+639171234567');
-      expect(controller.text, '+639171234567');
+      await tester.enterText(find.byType(TextField), '09171234567');
+      expect(controller.text, '09171234567');
 
-      await tester.enterText(find.byType(TextField), '639171234567');
-      expect(controller.text, '639171234567');
+      await tester.enterText(find.byType(TextField), '');
+      await tester.enterText(find.byType(TextField), '+639171234567');
+      expect(controller.text, '63917123456');
     });
 
     testWidgets('still keeps letters and punctuation out', (tester) async {
@@ -106,16 +108,15 @@ void main() {
       expect(controller.text, '0917123');
     });
 
-    testWidgets('caps input at the longest valid shape', (tester) async {
+    testWidgets('is a phone field, capped at 11', (tester) async {
       final controller = TextEditingController();
       addTearDown(controller.dispose);
 
       await pumpField(tester, controller);
 
-      expect(
-        tester.widget<AppTextField>(find.byType(AppTextField)).maxLength,
-        PhoneNumber.maxLength,
-      );
+      expect(tester.widget<AppTextField>(find.byType(AppTextField)).kind, FieldKind.phone);
+      expect(Validators.maxLength(FieldKind.phone), 11);
+      expect(tester.widget<TextField>(find.byType(TextField)).maxLength, 11);
     });
   });
 }

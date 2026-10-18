@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Traits\StoresCanonicalPhones;
 use App\Traits\TracksHistory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Table;
@@ -17,7 +18,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable(['request_id', 'patient_name', 'patient_age', 'patient_address', 'patient_contact_number', 'pickup_location', 'destination', 'condition_notes', 'scheduled_at', 'scheduled_end', 'approved_at', 'scheduled_reminder_sent_at'])]
 class AmbulanceBooking extends Model
 {
-    use TracksHistory;
+    use StoresCanonicalPhones, TracksHistory;
+
+    protected array $phoneColumns = ['patient_contact_number'];
 
     protected $ignoreLogging = ['created_at', 'updated_at'];
 

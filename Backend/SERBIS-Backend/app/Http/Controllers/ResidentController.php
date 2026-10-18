@@ -6,6 +6,7 @@ use App\Models\EquipmentBorrowing;
 use App\Models\Resident;
 use App\Models\User;
 use App\Rules\PhoneAvailable;
+use App\Support\FieldRules;
 use App\Support\PhoneNumber;
 use App\Traits\ResolvesUploadDisks;
 use Illuminate\Http\Request;
@@ -72,15 +73,15 @@ class ResidentController extends Controller
         // until a feature reads the column, then a hole that predates it.
         $validated = $request->validate([
             'barangay_id' => 'required|integer|exists:tbl_barangay,barangay_id',
-            'street_address' => 'nullable|string|max:255',
-            'first_name' => 'required|string|max:255',
-            'middle_name' => 'nullable|string|max:255',
-            'last_name' => 'required|string|max:255',
+            'street_address' => ['nullable', ...FieldRules::address()],
+            'first_name' => ['required', ...FieldRules::name()],
+            'middle_name' => ['nullable', ...FieldRules::name()],
+            'last_name' => ['required', ...FieldRules::name()],
             // Unique in canonical form: the number is the resident's login. An
             // officer who is also a head of the family needs a second number for
             // the institutional account, hence the plain message.
             'phone_number' => ['required', 'string', 'max:20', 'regex:'.PhoneNumber::REGEX, new PhoneAvailable(null, 'This number is already used by another account. Give this account a different number.')],
-            'email_address' => 'nullable|email|unique:tbl_residents,email_address',
+            'email_address' => 'nullable|email|max:100|unique:tbl_residents,email_address',
             'password' => ['required', 'string', Password::min(8)->mixedCase()->numbers()],
             // The column carries exactly three values and 'required|string'
             // accepted every other one, 'banana' included. That was not
@@ -132,7 +133,7 @@ class ResidentController extends Controller
     {
         return [
             'account_type' => ['sometimes', 'required', Rule::in(Resident::ACCOUNT_TYPES)],
-            'organization_name' => 'required_if:account_type,organization|nullable|string|max:150',
+            'organization_name' => ['required_if:account_type,organization', 'nullable', ...FieldRules::label(150)],
         ];
     }
 
@@ -237,13 +238,13 @@ class ResidentController extends Controller
         }
 
         $validated = $request->validate([
-            'first_name' => 'required|string|max:255',
-            'middle_name' => 'nullable|string|max:255',
-            'last_name' => 'required|string|max:255',
+            'first_name' => ['required', ...FieldRules::name()],
+            'middle_name' => ['nullable', ...FieldRules::name()],
+            'last_name' => ['required', ...FieldRules::name()],
             'phone_number' => ['required', 'string', 'max:20', 'regex:'.PhoneNumber::REGEX, new PhoneAvailable((int) $id, 'This number is already used by another account. Give this account a different number.')],
-            'email_address' => 'nullable|email|unique:tbl_residents,email_address,'.$id.',resident_id',
+            'email_address' => 'nullable|email|max:100|unique:tbl_residents,email_address,'.$id.',resident_id',
             'barangay_id' => 'required|integer|exists:tbl_barangay,barangay_id',
-            'street_address' => 'nullable|string|max:255',
+            'street_address' => ['nullable', ...FieldRules::address()],
             // Same three values as store(). Both admin write paths reach this
             // method — the list's status toggle and the edit form's radio —
             // and the vocabulary is mirrored in the panel at

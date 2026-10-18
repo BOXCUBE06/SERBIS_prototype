@@ -805,6 +805,7 @@ class AuthTextField extends StatefulWidget {
   final IconData? prefixIcon;
   final int? maxLength;
   final List<TextInputFormatter>? inputFormatters;
+  final TextCapitalization textCapitalization;
 
   const AuthTextField({
     super.key,
@@ -819,6 +820,7 @@ class AuthTextField extends StatefulWidget {
     this.prefixIcon,
     this.maxLength,
     this.inputFormatters,
+    this.textCapitalization = TextCapitalization.none,
   });
 
   @override
@@ -842,6 +844,9 @@ class _AuthTextFieldState extends State<AuthTextField> {
             keyboardType: widget.keyboard,
             obscureText: _hidden,
             validator: widget.validator,
+            // Checked when focus leaves the field, not only on submit.
+            autovalidateMode: AutovalidateMode.onUnfocus,
+            textCapitalization: widget.textCapitalization,
             forceErrorText: widget.errorText,
             onChanged: widget.onChanged,
             maxLength: widget.maxLength,

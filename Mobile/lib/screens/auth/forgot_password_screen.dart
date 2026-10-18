@@ -5,6 +5,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../models/phone_number.dart';
+import '../../models/validators.dart';
 import '../../state/account_store.dart';
 import '../../state/api_service.dart';
 import '../../state/app_log.dart';
@@ -256,8 +257,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
             onChanged: (_) { if (_phoneError != null) setState(() => _phoneError = null); },
             keyboard: TextInputType.phone,
             prefixIcon: Icons.phone_outlined,
-            maxLength: PhoneNumber.maxLength,
-            inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9+]'))],
+            maxLength: Validators.maxLength(FieldKind.phone),
+            inputFormatters: Validators.formatters(FieldKind.phone),
             validator: (v) {
               final val = (v ?? '').trim();
               if (val.isEmpty) return 'Enter your mobile number';

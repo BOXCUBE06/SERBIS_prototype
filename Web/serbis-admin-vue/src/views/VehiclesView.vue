@@ -155,6 +155,7 @@ import RowActions from '@/components/RowActions.vue'
 import ExportMenu from '@/components/ExportMenu.vue'
 import FilterSelect from '@/components/FilterSelect.vue'
 import EditDialog from '@/components/EditDialog.vue'
+import { rules } from '@/composables/inputRules'
 
 const router = useRouter()
 
@@ -190,9 +191,9 @@ const snackbar = ref({ show: false, text: '', color: 'success' })
 const formRef = ref(null)
 
 const formFields = [
-  { key: 'unit_identifier', label: 'Unit identifier', required: true, placeholder: 'e.g. AMB-01' },
+  { key: 'unit_identifier', label: 'Unit identifier', required: true, placeholder: 'e.g. AMB-01', filter: 'identifier', rules: [rules.required('Unit identifier'), rules.identifier('Unit identifier')] },
   { key: 'type', label: 'Type', required: true, items: VEHICLE_TYPES },
-  { key: 'specification', label: 'Specification', placeholder: 'e.g. TYPE I' },
+  { key: 'specification', label: 'Specification', placeholder: 'e.g. TYPE I', filter: 'identifier', maxlength: 100, rules: [rules.identifier('Specification', 100)] },
   { key: 'status', label: 'Status', required: true, items: STATUSES },
 ]
 

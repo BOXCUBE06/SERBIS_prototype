@@ -14,11 +14,14 @@ use App\Models\ServiceRequestRelative;
 use App\Models\ServiceVehicleType;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Rules\Charset;
 use App\Services\AmbulanceAvailability;
-use App\Services\VehicleDispatch;
 use App\Services\Fcm;
+use App\Services\VehicleDispatch;
 use App\Support\AdminSections;
+use App\Support\FieldRules;
 use App\Support\PhoneNumber;
+use App\Support\Text;
 use App\Traits\ResolvesUploadDisks;
 use App\Traits\ScopesToOwner;
 use Carbon\Carbon;
@@ -74,6 +77,12 @@ class ServiceRequestController extends Controller
      * unrelated to this intake-time list.
      */
     private const MAX_RELATIVES = 2;
+
+    // Typed text and places on an intake: stripped and capitalized by Text::tidy().
+    private const INTAKE_TEXT = ['description', 'landmark', 'delivery_address', 'patient_address', 'pickup_location', 'destination', 'condition_notes'];
+
+    // Staff notes added to a request after intake.
+    private const STAFF_TEXT = ['remarks', 'internal_notes'];
 
     private const RELATIVES_MESSAGES = [
         'patient_relatives.required' => 'Name at least one relative or companion going with the patient.',
@@ -361,6 +370,8 @@ class ServiceRequestController extends Controller
         $isScheduledProgram = in_array($programCode, self::SCHEDULED_PROGRAM_CODES, true);
         $isProgram = $isScheduledProgram || $programCode === self::CERTIFICATION_SERVICE_CODE;
 
+        Text::tidy($request, self::INTAKE_TEXT);
+
         $validated = $request->validate([
             // Nullable: the "Others" tile has no catalogue row to point at —
             // mirrors tbl_equipment_borrowing.equipment_id, which is nullable
@@ -374,7 +385,7 @@ class ServiceRequestController extends Controller
             // structured fields, exactly as adminStore() does — whatever a
             // client sends under this key for an ambulance request is ignored
             // rather than trusted. Every other service still types it by hand.
-            'description' => "required_unless:service_id,{$ambulanceServiceId}|nullable|string|max:5000",
+            'description' => ["required_unless:service_id,{$ambulanceServiceId}", 'nullable', ...FieldRules::note()],
             // Not asked of the programs: the requester is a barangay or an
             // organization, which has no government ID to photograph.
             'valid_id' => [$isProgram ? 'nullable' : 'required', 'file', 'mimes:jpg,jpeg,png', 'max:2048'],
@@ -392,7 +403,7 @@ class ServiceRequestController extends Controller
             'site_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:4096',
             // Free-text companion to site_photo — a landmark the resident can
             // type faster than they can stop to photograph one.
-            'landmark' => 'nullable|string|max:255',
+            'landmark' => ['nullable', ...FieldRules::address()],
             // Offered on every service, same as landmark above, but only the
             // relief goods form actually sends it (MDRRMO feedback,
             // 2026-09-18) — ambulance and conduction don't map onto "pickup
@@ -400,7 +411,7 @@ class ServiceRequestController extends Controller
             // this. Mirrors tbl_equipment_borrowing's own fulfillment_method
             // / delivery_address pair.
             'fulfillment_method' => 'sometimes|in:Pickup,Delivery',
-            'delivery_address' => 'required_if:fulfillment_method,Delivery|nullable|string|max:255',
+            'delivery_address' => ['required_if:fulfillment_method,Delivery', 'nullable', ...FieldRules::address()],
             // Absent means "as soon as you can" — the request behaves exactly as
             // it always has. Present means a scheduled ambulance booking; see
             // the checks right below, which run before any file touches disk.
@@ -412,28 +423,26 @@ class ServiceRequestController extends Controller
             // address and the diagnosis are what admin verification confirms
             // by phone afterwards. Only the two facts that make the request
             // actionable at all are required here — who is going, and where.
-            'patient_name' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
-            'destination' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
-            // min:0 stays — a neonate transport is a real ambulance case and 0
-            // is the honest reading. 150 was not defensible: the oldest
-            // verified human lived to 122. Mirrored in adminStore() and in
-            // ConductionRequestController::store().
-            'patient_age' => 'nullable|integer|min:0|max:120',
-            'patient_address' => 'nullable|string|max:255',
+            'patient_name' => ["required_if:service_id,{$ambulanceServiceId}", 'nullable', ...FieldRules::name()],
+            'destination' => ["required_if:service_id,{$ambulanceServiceId}", 'nullable', ...FieldRules::address()],
+            // 0 stays valid — a neonate transport is a real ambulance case.
+            // Mirrored in adminStore() and ConductionRequestController::store().
+            'patient_age' => ['nullable', ...FieldRules::age()],
+            'patient_address' => ['nullable', ...FieldRules::address()],
             // The number for this patient, when it is not the account holder's.
             // Left null when they are the same person; the trip record falls
             // back to the account number, as it always did.
-            'patient_contact_number' => 'nullable|string|max:32',
+            'patient_contact_number' => ['nullable', ...FieldRules::phone()],
             // Blank is expected, not exceptional — it defaults to the
             // resident's registered barangay below.
-            'pickup_location' => 'nullable|string|max:255',
-            'condition_notes' => 'nullable|string|max:5000',
+            'pickup_location' => ['nullable', ...FieldRules::address()],
+            'condition_notes' => ['nullable', ...FieldRules::note()],
             // Who is coming with the patient, named at intake rather than at
             // dispatch. Required for an ambulance request — the hospital asks for
             // a companion (MDRRMO, 2026-09-20) — and never sent by any other
             // service.
             'patient_relatives' => $this->relativesRules($this->isAmbulanceInput($request, $ambulanceServiceId)),
-            'patient_relatives.*' => 'nullable|string|max:255',
+            'patient_relatives.*' => ['nullable', ...FieldRules::name()],
         ], self::RELATIVES_MESSAGES);
 
         // Disabling, not deleting, is how a service goes away (the intake
@@ -906,30 +915,32 @@ class ServiceRequestController extends Controller
             );
         }
 
+        Text::tidy($request, self::INTAKE_TEXT);
+
         $validated = $request->validate([
             'resident_id' => 'nullable|integer|exists:tbl_residents,resident_id',
             // Required only when there is no account to pull them from.
-            'walk_in_name' => 'required_without:resident_id|nullable|string|max:255',
-            'walk_in_contact_number' => 'required_without:resident_id|nullable|string|max:32',
+            'walk_in_name' => ['required_without:resident_id', 'nullable', 'string', 'min:2', 'max:100', Charset::name()],
+            'walk_in_contact_number' => ['required_without:resident_id', 'nullable', ...FieldRules::phone()],
             'service_id' => 'required|exists:tbl_services,service_id',
             // Every other service still types this by hand. For ambulance it
             // is composed server-side below from the structured fields, so
             // whatever the client sends here is ignored rather than trusted.
-            'description' => "required_unless:service_id,{$ambulanceServiceId}|nullable|string|max:5000",
+            'description' => ["required_unless:service_id,{$ambulanceServiceId}", 'nullable', ...FieldRules::note()],
             // Structured intake, ambulance only. patient_age stays optional
             // even for ambulance — the paper form allows it to be unknown at
             // intake and ConductionRequestController's own column is
             // nullable for the same reason.
-            'patient_name' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
-            // Same ceiling as store() — see the note there.
-            'patient_age' => 'nullable|integer|min:0|max:120',
-            'patient_address' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
+            'patient_name' => ["required_if:service_id,{$ambulanceServiceId}", 'nullable', ...FieldRules::name()],
+            // Same range as store() — see the note there.
+            'patient_age' => ['nullable', ...FieldRules::age()],
+            'patient_address' => ["required_if:service_id,{$ambulanceServiceId}", 'nullable', ...FieldRules::address()],
             // Optional on both paths: null means the patient is reachable on
             // the number that filed the request, which is the common case.
-            'patient_contact_number' => 'nullable|string|max:32',
-            'pickup_location' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
-            'destination' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:255",
-            'condition_notes' => "required_if:service_id,{$ambulanceServiceId}|nullable|string|max:5000",
+            'patient_contact_number' => ['nullable', ...FieldRules::phone()],
+            'pickup_location' => ["required_if:service_id,{$ambulanceServiceId}", 'nullable', ...FieldRules::address()],
+            'destination' => ["required_if:service_id,{$ambulanceServiceId}", 'nullable', ...FieldRules::address()],
+            'condition_notes' => ["required_if:service_id,{$ambulanceServiceId}", 'nullable', ...FieldRules::note()],
             'valid_id' => 'nullable|file|mimes:jpg,jpeg,png|max:2048',
             'site_photo' => 'nullable|file|mimes:jpg,jpeg,png|max:4096',
             'required_vehicle_type' => 'nullable|string|exists:tbl_vehicles,type',
@@ -941,7 +952,7 @@ class ServiceRequestController extends Controller
             // waited for until dispatch, when the trip record that used to be
             // their only home is finally created.
             'patient_relatives' => $this->relativesRules($this->isAmbulanceInput($request, $ambulanceServiceId)),
-            'patient_relatives.*' => 'nullable|string|max:255',
+            'patient_relatives.*' => ['nullable', ...FieldRules::name()],
         ], self::RELATIVES_MESSAGES);
 
         // Disabling, not deleting, is how a service goes away (the intake
@@ -1533,11 +1544,13 @@ class ServiceRequestController extends Controller
             return $refusal;
         }
 
+        Text::tidy($request, [...self::INTAKE_TEXT, ...self::STAFF_TEXT]);
+
         $validated = $request->validate([
             'resident_id' => 'sometimes|required|integer|exists:tbl_residents,resident_id',
             'service_id' => 'sometimes|required|integer|exists:tbl_services,service_id',
             'processed_by' => 'nullable|integer|exists:tbl_user,admin_id',
-            'description' => 'nullable|string|max:5000',
+            'description' => ['nullable', ...FieldRules::note()],
             // 'valid_id' is deliberately not accepted here. It is a storage path written
             // only by store(); allowing it to be set would let any admin point it at an
             // arbitrary file for validId() to stream back.
@@ -1560,18 +1573,18 @@ class ServiceRequestController extends Controller
             'remarks' => 'nullable|string|max:160|required_if:status,Disapproved',
             // Staff-only, never sent to SkySMS and never returned to a resident
             // (see index()/show()) — so it carries no per-segment SMS cap.
-            'internal_notes' => 'nullable|string|max:1000',
+            'internal_notes' => ['nullable', ...FieldRules::note(1000)],
             // Same types as store()/adminStore(). Routed to AmbulanceBooking
             // below rather than written here — this table no longer carries
             // them as of writing, and correcting a typo in a patient's name
             // after intake should not require a specialised endpoint.
-            'patient_name' => 'sometimes|nullable|string|max:255',
-            'patient_age' => 'sometimes|nullable|integer|min:0|max:120',
-            'patient_address' => 'sometimes|nullable|string|max:255',
-            'patient_contact_number' => 'sometimes|nullable|string|max:32',
-            'pickup_location' => 'sometimes|nullable|string|max:255',
-            'destination' => 'sometimes|nullable|string|max:255',
-            'condition_notes' => 'sometimes|nullable|string|max:5000',
+            'patient_name' => ['sometimes', 'nullable', ...FieldRules::name()],
+            'patient_age' => ['sometimes', 'nullable', ...FieldRules::age()],
+            'patient_address' => ['sometimes', 'nullable', ...FieldRules::address()],
+            'patient_contact_number' => ['sometimes', 'nullable', ...FieldRules::phone()],
+            'pickup_location' => ['sometimes', 'nullable', ...FieldRules::address()],
+            'destination' => ['sometimes', 'nullable', ...FieldRules::address()],
+            'condition_notes' => ['sometimes', 'nullable', ...FieldRules::note()],
         ]);
 
         $ambulanceServiceId = $this->ambulanceServiceId();
@@ -2047,6 +2060,8 @@ class ServiceRequestController extends Controller
                 'message' => 'Only a booked request can be rescheduled.',
             ], 422);
         }
+
+        Text::tidy($request, self::STAFF_TEXT);
 
         $validated = $request->validate([
             // Bounded here as well as in store(): this method takes its own

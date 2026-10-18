@@ -195,7 +195,7 @@
               <span class="dd-route__mark dd-route__mark--start" aria-hidden="true"></span>
               <div class="dd-route__stop--start">
                 <div class="dd-label">Pickup</div>
-                {{ selectedRequest.pickup_location || selectedRequest.landmark || NOT_RECORDED }}
+                {{ sentenceCase(selectedRequest.pickup_location || selectedRequest.landmark) || NOT_RECORDED }}
                 <div
                   v-if="selectedRequest.landmark && selectedRequest.pickup_location && !isLandmarkRedundant(selectedRequest.landmark, selectedRequest.pickup_location)"
                   class="text-body-2 text-medium-emphasis"
@@ -204,7 +204,7 @@
               <span class="dd-route__mark dd-route__mark--end" aria-hidden="true"></span>
               <div>
                 <div class="dd-label">Destination</div>
-                {{ selectedRequest.destination || NOT_RECORDED }}
+                {{ sentenceCase(selectedRequest.destination) || NOT_RECORDED }}
               </div>
             </div>
           </section>
@@ -214,8 +214,8 @@
             <dl class="kv">
               <dt>Name</dt><dd class="font-weight-bold">{{ selectedRequest.patient_name }}</dd>
               <dt>Age</dt><dd>{{ selectedRequest.patient_age ?? NOT_RECORDED }}</dd>
-              <dt>Address</dt><dd>{{ selectedRequest.patient_address || NOT_RECORDED }}</dd>
-              <dt>Condition</dt><dd>{{ selectedRequest.condition_notes || NOT_RECORDED }}</dd>
+              <dt>Address</dt><dd>{{ sentenceCase(selectedRequest.patient_address) || NOT_RECORDED }}</dd>
+              <dt>Condition</dt><dd>{{ sentenceCase(selectedRequest.condition_notes) || NOT_RECORDED }}</dd>
             </dl>
           </section>
 
@@ -309,7 +309,7 @@
             <dl class="kv">
               <dt>{{ closedLabel }}</dt><dd>{{ formatDateTime(selectedRequest.resolved_at) || NOT_RECORDED }}</dd>
               <template v-if="selectedRequest.status === 'Disapproved' && selectedRequest.remarks">
-                <dt>Reason</dt><dd>{{ selectedRequest.remarks }}</dd>
+                <dt>Reason</dt><dd>{{ sentenceCase(selectedRequest.remarks) }}</dd>
               </template>
             </dl>
           </section>
@@ -434,8 +434,8 @@
               persistent-hint
               variant="outlined"
               rows="3"
-              counter="255"
-              maxlength="255"
+              counter="160"
+              v-filter="{ kind: 'note', max: 160 }"
               autofocus
               :error-messages="reasonDialog.error"
               @update:model-value="reasonDialog.error = ''"
@@ -550,8 +550,8 @@
             persistent-hint
             variant="outlined"
             rows="2"
-            counter="255"
-            maxlength="255"
+            counter="160"
+            v-filter="{ kind: 'note', max: 160 }"
             :error-messages="rescheduleDialog.errors.remarks"
             @update:model-value="rescheduleDialog.errors.remarks = ''"
           ></v-textarea>
@@ -613,37 +613,41 @@
               <v-col cols="12" sm="6">
                 <v-text-field
                   v-model="createDialog.form.walk_in_first_name"
+                  v-filter="'name'"
                   :error-messages="logErrors.walk_in_first_name"
                   label="First name"
                   placeholder="e.g. Juan"
                   variant="outlined"
                   density="comfortable"
                   class="mb-2"
-                  :rules="[required, nameFormat]"
+                  :rules="[rules.required('First name'), rules.name('First name')]"
                 ></v-text-field>
               </v-col>
               <v-col cols="12" sm="6">
                 <v-text-field
                   v-model="createDialog.form.walk_in_last_name"
+                  v-filter="'name'"
                   :error-messages="logErrors.walk_in_last_name"
                   label="Last name"
                   placeholder="e.g. Dela Cruz"
                   variant="outlined"
                   density="comfortable"
                   class="mb-2"
-                  :rules="[required, nameFormat]"
+                  :rules="[rules.required('Last name'), rules.name('Last name')]"
                 ></v-text-field>
               </v-col>
             </v-row>
             <v-text-field
               v-model="createDialog.form.walk_in_contact_number"
+              v-filter="'phone'"
+              inputmode="numeric"
               :error-messages="logErrors.walk_in_contact_number"
               label="Contact number"
               placeholder="e.g. 09171234567"
               variant="outlined"
               density="comfortable"
               class="mb-2"
-              :rules="[required, phoneFormat]"
+              :rules="[rules.required('Contact number'), rules.phone('Contact number')]"
             ></v-text-field>
           </template>
 
@@ -651,48 +655,57 @@
             <v-col cols="12" sm="8">
               <v-text-field
                 v-model="createDialog.form.patient_name"
+                v-filter="'name'"
                 :error-messages="logErrors.patient_name"
                 label="Patient name" placeholder="e.g. Maria Santos" variant="outlined" density="comfortable" class="mb-2"
-                :rules="[required]"
+                :rules="[rules.required('Patient name'), rules.name('Patient name')]"
               ></v-text-field>
             </v-col>
             <v-col cols="6" sm="4">
               <v-text-field
                 v-model="createDialog.form.patient_age"
+                v-filter="'age'"
+                inputmode="numeric"
                 :error-messages="logErrors.patient_age"
-                label="Age" placeholder="e.g. 54" type="number" min="0" max="150" variant="outlined" density="comfortable" class="mb-2"
+                label="Age" placeholder="e.g. 54" variant="outlined" density="comfortable" class="mb-2"
+                :rules="[rules.age('Age')]"
               ></v-text-field>
             </v-col>
           </v-row>
           <v-text-field
             v-model="createDialog.form.patient_address"
+            v-filter="'address'"
             :error-messages="logErrors.patient_address"
             label="Patient address" placeholder="e.g. Purok 2, San Fabian" variant="outlined" density="comfortable" class="mb-2"
-            :rules="[required]"
+            :rules="[rules.required('Patient address'), rules.address('Patient address')]"
           ></v-text-field>
           <v-row density="compact">
             <v-col cols="12" sm="6">
               <v-text-field
                 v-model="createDialog.form.pickup_location"
+                v-filter="'address'"
                 :error-messages="logErrors.pickup_location"
                 label="Pickup location" placeholder="e.g. Barangay Hall, San Fabian" variant="outlined" density="comfortable" class="mb-2"
-                :rules="[required]"
+                :rules="[rules.required('Pickup location'), rules.address('Pickup location')]"
               ></v-text-field>
             </v-col>
             <v-col cols="12" sm="6">
               <v-text-field
                 v-model="createDialog.form.destination"
+                v-filter="'address'"
                 :error-messages="logErrors.destination"
                 label="Destination" placeholder="e.g. Echague District Hospital" variant="outlined" density="comfortable" class="mb-2"
-                :rules="[required]"
+                :rules="[rules.required('Destination'), rules.address('Destination')]"
               ></v-text-field>
             </v-col>
           </v-row>
           <v-textarea
             v-model="createDialog.form.condition_notes"
+            v-filter="'note'"
+            counter="500"
             :error-messages="logErrors.condition_notes"
             label="Condition" placeholder="e.g. Chest pains since morning, conscious and breathing" variant="outlined" density="comfortable" rows="2" class="mb-2"
-            :rules="[required]"
+            :rules="[rules.required('Condition'), rules.note('Condition')]"
           ></v-textarea>
 
           <div class="mb-2">
@@ -709,11 +722,12 @@
             >
               <v-text-field
                 v-model="createDialog.form.patient_relatives[idx]"
+                v-filter="'name'"
                 :label="idx === 0 ? 'Relative 1 *' : `Relative ${idx + 1}`"
                 placeholder="e.g. Ana Santos"
                 variant="outlined"
                 density="compact"
-                :rules="idx === 0 ? [relativeNeeded] : []"
+                :rules="[...(idx === 0 ? [relativeNeeded] : []), rules.name('Relative')]"
                 :error-messages="logErrors[`patient_relatives.${idx}`] ?? (idx === 0 ? logErrors.patient_relatives : undefined)"
                 hide-details="auto"
               ></v-text-field>
@@ -794,6 +808,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { getToken } from '@/composables/authToken'
 import { outcomeLabel, isBookingOverdue, bookingCountdownLabel, openWaitDays, waitTone, authHeaders, pluralize } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
+import { rules, sentenceCase } from '@/composables/inputRules'
 import DateTimePickerField from '@/components/DateTimePickerField.vue'
 import AmbulanceScheduleDialog from '@/components/AmbulanceScheduleDialog.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
@@ -841,11 +856,7 @@ const selectedIds = reactive(new Set())
 
 const formData = ref({ remarks: '', internal_notes: '', vehicle_id: null })
 
-const required = (v) => (v !== null && v !== undefined && String(v).trim() !== '') || 'Required'
-// Letters (incl. accented/Ñ), spaces, hyphens, apostrophes, periods — no digits.
-const nameFormat = (v) => !v || /^[\p{L}.'-]+(?:\s[\p{L}.'-]+)*$/u.test(v.trim()) || 'Letters only'
-// Same shapes ServiceRequestController's PhoneNumber::REGEX accepts.
-const phoneFormat = (v) => !v || /^(?:09\d{9}|639\d{9}|\+639\d{9})$/.test(v.trim()) || 'Use 09XXXXXXXXX'
+const required = rules.required('This field')
 
 const emptyCreateForm = () => ({
   resident_id: null,
@@ -1426,7 +1437,7 @@ const submitWalkIn = async () => {
     }
     body.append('service_id', form.service_id)
     body.append('patient_name', form.patient_name.trim())
-    if (form.patient_age) body.append('patient_age', form.patient_age)
+    if (form.patient_age !== null && form.patient_age !== '') body.append('patient_age', form.patient_age)
     body.append('patient_address', form.patient_address.trim())
     body.append('pickup_location', form.pickup_location.trim())
     body.append('destination', form.destination.trim())

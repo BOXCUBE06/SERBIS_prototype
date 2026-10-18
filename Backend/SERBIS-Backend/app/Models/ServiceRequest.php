@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Traits\InvalidatesAnalyticsCache;
+use App\Traits\StoresCanonicalPhones;
 use App\Traits\TracksHistory;
 use Illuminate\Database\Eloquent\Attributes\Appends;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -21,7 +22,9 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 #[Appends(['has_valid_id', 'has_site_photo', 'has_letter'])]
 class ServiceRequest extends Model
 {
-    use HasFactory, InvalidatesAnalyticsCache, TracksHistory;
+    use HasFactory, InvalidatesAnalyticsCache, StoresCanonicalPhones, TracksHistory;
+
+    protected array $phoneColumns = ['walk_in_contact_number'];
 
     protected $ignoreLogging = ['created_at', 'updated_at', 'status_changed_at'];
 

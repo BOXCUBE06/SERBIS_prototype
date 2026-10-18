@@ -150,10 +150,12 @@
               v-else-if="f.type === 'textarea'"
               :model-value="form[f.key]"
               @update:model-value="set(f, $event)"
+              v-filter="filterOf(f)"
               :placeholder="f.placeholder"
               :rules="rulesFor(f)"
               :error-messages="serverErrors[f.key]"
               :aria-label="f.label"
+              :counter="f.filter === 'note' ? (f.maxlength ?? limits.note) : undefined"
               rows="3" auto-grow
               variant="outlined" density="compact" rounded="lg" hide-details="auto"
             ></v-textarea>
@@ -161,6 +163,7 @@
               v-else
               :model-value="form[f.key]"
               @update:model-value="set(f, $event)"
+              v-filter="filterOf(f)"
               :type="f.type === 'password' ? (shown[f.key] ? 'text' : 'password') : f.type"
               :append-inner-icon="f.type === 'password' ? (shown[f.key] ? 'mdi-eye-off' : 'mdi-eye') : undefined"
               :min="f.min"
@@ -203,6 +206,7 @@
 import { reactive, ref, watch } from 'vue'
 import { useSaveFeedback } from '@/composables/useSaveFeedback'
 import { focusFirstError, useFormErrors } from '@/composables/useFormErrors'
+import { limits, type FieldKind } from '@/composables/inputRules'
 
 interface Field {
   key: string
@@ -234,6 +238,8 @@ interface Field {
   numbers?: boolean
   maxRows?: number
   sanitize?: (value: string) => string
+  /** Keystroke and paste filter by kind (see inputRules.ts); `maxlength` overrides the kind's cap. */
+  filter?: FieldKind
   slot?: boolean
   note?: string
 }
@@ -286,6 +292,8 @@ watch(() => props.fieldErrors, (errors) => {
 watch(() => props.modelValue, (open) => { if (open) reset() })
 const picked = ref(null)
 const shown = reactive<Record<string, boolean>>({})
+
+const filterOf = (f: Field) => (f.filter ? { kind: f.filter, max: f.maxlength } : undefined)
 
 const rulesFor = (f: Field) =>
   f.rules ?? (f.required ? [(v: unknown) => (v !== null && v !== undefined && String(v).trim() !== '') || `${f.label} is required.`] : [])

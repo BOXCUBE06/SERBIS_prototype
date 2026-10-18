@@ -6,6 +6,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../models/request_models.dart';
 import '../models/service_forms.dart';
+import '../models/validators.dart';
 import '../state/account_store.dart';
 import '../state/request_store.dart';
 import '../state/translations.dart';
@@ -637,6 +638,7 @@ class ServiceRequestFormState extends State<ServiceRequestForm> {
         label: trEn(f, 'Landmark (optional)'),
         hint: trEn(f, 'e.g. beside the chapel'),
         controller: _drafts.landmark,
+        kind: FieldKind.address,
       );
 
   /// What the resident entered on the first two relief steps, one row per

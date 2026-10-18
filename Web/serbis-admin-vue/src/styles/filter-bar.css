@@ -44,5 +44,5 @@
 .filter-bar .v-select__selection { font-weight: 600; }
 
 /* BarangayFilter: chips stay on one 36px line; the rest is "+N more". */
-.filter-bar .barangay-filter { width: 340px; }
+.filter-bar .barangay-filter { width: 340px; max-width: 100%; }
 .filter-bar .barangay-filter .v-field__input { flex-wrap: nowrap; overflow: hidden; }

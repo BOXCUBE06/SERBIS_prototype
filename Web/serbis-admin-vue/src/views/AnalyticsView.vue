@@ -537,7 +537,13 @@ const TABS = [
 ]
 const tab = ref('demand')
 
-const printReport = () => window.print()
+// The page title becomes the saved PDF's filename; put it back once printing is done.
+const printReport = () => {
+  const previous = document.title
+  document.title = `Analytics_${new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date())}`
+  window.addEventListener('afterprint', () => { document.title = previous }, { once: true })
+  window.print()
+}
 // Charts are canvases sized for the screen layout; make them re-measure for the page.
 const resizeCharts = () => Object.values(ChartJS.instances).forEach(c => c.resize())
 

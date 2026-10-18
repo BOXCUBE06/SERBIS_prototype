@@ -127,6 +127,7 @@ import { getToken } from '@/composables/authToken'
 import { API_BASE } from '@/config/api'
 import { invalidate, useCachedFetch } from '@/composables/useCachedFetch'
 import { pluralize } from '@/composables/adminUi'
+import { rules } from '@/composables/inputRules'
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
 import PersonCell from '@/components/PersonCell.vue'
@@ -165,11 +166,12 @@ const photoUploading = ref(false)
 // Template ref for the EditDialog (validate / resetValidation).
 const formRef = ref(null)
 
+// Status items are { value, label } objects: with bare strings and a title function, the select stored the label ("Off Duty"), which the server refuses.
 const formFields = [
-  { key: 'name', label: 'Name', required: true, placeholder: 'e.g. Juan Dela Cruz' },
+  { key: 'name', label: 'Name', required: true, placeholder: 'e.g. Juan Dela Cruz', filter: 'name', rules: [rules.required('Name'), rules.name('Name')] },
   { key: 'position', label: 'Position', required: true, items: POSITIONS },
-  { key: 'contact_no', label: 'Contact number', required: true, placeholder: 'e.g. 09171234567' },
-  { key: 'status', label: 'Status', required: true, items: STATUSES, itemTitle: statusLabel },
+  { key: 'contact_no', label: 'Contact number', required: true, placeholder: 'e.g. 09171234567', filter: 'phone', inputmode: 'numeric', rules: [rules.required('Contact number'), rules.phone('Contact number')] },
+  { key: 'status', label: 'Status', required: true, items: statusChoices, itemTitle: 'label', itemValue: 'value' },
 ]
 
 const initials = (name) => (name || '').trim().split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join('').toUpperCase() || '?'

@@ -6,7 +6,10 @@ use App\Models\ConductionRequest;
 use App\Models\ConductionRequestPerson;
 use App\Models\ServiceRequest;
 use App\Services\VehicleDispatch;
+use App\Support\FieldRules;
+use App\Support\Text;
 use Carbon\Carbon;
+use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -50,6 +53,9 @@ class ConductionRequestController extends Controller
      * read off a dashboard, and catches the fat-fingered extra digit.
      */
     private const MAX_ODOMETER = 1000000;
+
+    // Diagnosis and "others" on the trip record run longer than an intake note.
+    private const MAX_LOG_NOTE = 1000;
 
     /**
      * How many drivers a single trip may carry. The other two PEOPLE_FIELDS
@@ -113,6 +119,8 @@ class ConductionRequestController extends Controller
 
     public function store(Request $request)
     {
+        Text::tidy($request, ['medical_diagnosis', 'patient_address', 'origin', 'destination']);
+
         $validated = $request->validate([
             // Links this trip log back to the booking it fulfils, and the unit
             // running it. Both nullable: a walk-in trip with no prior booking is
@@ -127,23 +135,21 @@ class ConductionRequestController extends Controller
             // 2026-09-17). Previously exists-checked only, so a raw API call
             // could put a Boat or Fire Truck on a trip record.
             'vehicle_id' => 'nullable|integer|exists:tbl_vehicles,vehicle_id,type,Ambulance',
-            'patient_name' => 'required|string|max:255',
-            // min:0 stays — a neonate transport is a real ambulance case and 0
-            // is the honest reading. 150 was not defensible: the oldest
-            // verified human lived to 122.
-            'patient_age' => 'nullable|integer|min:0|max:120',
-            'patient_address' => 'required|string|max:255',
-            'patient_contact_number' => 'required|string|max:32',
+            'patient_name' => ['required', ...FieldRules::name()],
+            // 0 stays valid — a neonate transport is a real ambulance case.
+            'patient_age' => ['nullable', ...FieldRules::age()],
+            'patient_address' => ['required', ...FieldRules::address()],
+            'patient_contact_number' => ['required', ...FieldRules::phone()],
             // Fallback only, for a unit outside the fleet table entirely
             // (mutual aid from a neighbouring LGU) — the panel now sources
             // this from tbl_vehicles via vehicle_id whenever the unit is one
             // of ours. Kept independent of vehicle_id: a row can carry a
             // real vehicle_id and this can still be blank, or vice versa.
             'vehicle' => 'nullable|string|max:255',
-            'medical_diagnosis' => 'required|string|max:5000',
+            'medical_diagnosis' => ['required', ...FieldRules::note(self::MAX_LOG_NOTE)],
             'plate_no' => 'nullable|string|max:32',
-            'origin' => 'required|string|max:255',
-            'destination' => 'required|string|max:255',
+            'origin' => ['required', ...FieldRules::address()],
+            'destination' => ['required', ...FieldRules::address()],
 
             // The form shows 2 slots per role but must scale past that, so
             // these are arrays rather than fixed driver_1/driver_2 inputs.
@@ -154,11 +160,11 @@ class ConductionRequestController extends Controller
             // crew for — min:1 matches the create form's own row-zero-is-
             // permanent rule (MDRRMO feedback, 2026-09-18).
             'drivers' => 'required|array|min:1|max:'.self::MAX_PEOPLE_PER_ROLE,
-            'drivers.*' => 'nullable|string|max:255',
+            'drivers.*' => ['nullable', ...FieldRules::name()],
             'authorized_passengers' => 'nullable|array|max:'.self::MAX_AUTHORIZED_PASSENGERS,
-            'authorized_passengers.*' => 'nullable|string|max:255',
+            'authorized_passengers.*' => ['nullable', ...FieldRules::name()],
             'patient_relatives' => 'nullable|array|max:'.self::MAX_PATIENT_RELATIVES,
-            'patient_relatives.*' => 'nullable|string|max:255',
+            'patient_relatives.*' => ['nullable', ...FieldRules::name()],
         ], [
             'vehicle_id.exists' => 'That unit is not an Ambulance.',
         ]);
@@ -281,6 +287,22 @@ class ConductionRequestController extends Controller
      * the checkpoints it is reporting and leaves the rest exactly as they
      * were, rather than overwriting them back to null.
      */
+    /** A trip checkpoint records something that happened, so it cannot be later than now (office time). */
+    private function notInFuture(): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail) {
+            try {
+                $future = Carbon::parse($value, self::OFFICE_TIMEZONE)->isFuture();
+            } catch (\Throwable) {
+                return;
+            }
+
+            if ($future) {
+                $fail('The :attribute cannot be in the future.');
+            }
+        };
+    }
+
     public function tripLog(Request $request, $id)
     {
         $conductionRequest = ConductionRequest::find($id);
@@ -289,15 +311,17 @@ class ConductionRequestController extends Controller
             return response()->json(['message' => 'Conduction request not found'], 404);
         }
 
+        Text::tidy($request, ['no_arrival_reason', 'others']);
+
         $validated = $request->validate([
-            'departed_office_at' => 'sometimes|nullable|date',
-            'arrived_destination_at' => 'sometimes|nullable|date',
-            'no_arrival_reason' => 'sometimes|nullable|string|max:500',
-            'departed_destination_at' => 'sometimes|nullable|date',
-            'returned_office_at' => 'sometimes|nullable|date',
+            'departed_office_at' => ['sometimes', 'nullable', 'date', $this->notInFuture()],
+            'arrived_destination_at' => ['sometimes', 'nullable', 'date', $this->notInFuture()],
+            'no_arrival_reason' => ['sometimes', 'nullable', ...FieldRules::note()],
+            'departed_destination_at' => ['sometimes', 'nullable', 'date', $this->notInFuture()],
+            'returned_office_at' => ['sometimes', 'nullable', 'date', $this->notInFuture()],
             'odometer_start' => 'sometimes|nullable|integer|min:0|max:'.self::MAX_ODOMETER,
             'odometer_end' => 'sometimes|nullable|integer|min:0|max:'.self::MAX_ODOMETER,
-            'others' => 'sometimes|nullable|string|max:5000',
+            'others' => ['sometimes', 'nullable', ...FieldRules::note(self::MAX_LOG_NOTE)],
             // All three PEOPLE_FIELDS roles, not just drivers — a stub the
             // dispatch bridge creates (createConductionStub) starts with
             // none of them, and until this form could add passengers and
@@ -311,11 +335,11 @@ class ConductionRequestController extends Controller
             // cannot be "updated" into staying driver-less by submitting an
             // empty array on purpose.
             'drivers' => 'sometimes|array|min:1|max:'.self::MAX_PEOPLE_PER_ROLE,
-            'drivers.*' => 'nullable|string|max:255',
+            'drivers.*' => ['nullable', ...FieldRules::name()],
             'authorized_passengers' => 'sometimes|array|max:'.self::MAX_AUTHORIZED_PASSENGERS,
-            'authorized_passengers.*' => 'nullable|string|max:255',
+            'authorized_passengers.*' => ['nullable', ...FieldRules::name()],
             'patient_relatives' => 'sometimes|array|max:'.self::MAX_PATIENT_RELATIVES,
-            'patient_relatives.*' => 'nullable|string|max:255',
+            'patient_relatives.*' => ['nullable', ...FieldRules::name()],
         ]);
 
         // Naive checkpoint strings are office local, not UTC. Read under

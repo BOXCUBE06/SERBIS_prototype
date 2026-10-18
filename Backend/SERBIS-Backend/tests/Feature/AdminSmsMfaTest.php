@@ -209,7 +209,7 @@ class AdminSmsMfaTest extends TestCase
             'last_name' => 'Cruz',
             'username' => 'nophone',
             'phone_number' => '09187654321',
-        ])->assertOk()->assertJsonPath('phone_number', '+639187654321');
+        ])->assertOk()->assertJsonPath('phone_number', '09187654321');
 
         $this->app['auth']->forgetGuards();
         $this->enable();
@@ -227,7 +227,7 @@ class AdminSmsMfaTest extends TestCase
             'first_name' => 'Anna',
             'last_name' => 'Cruz',
             'username' => 'ana',
-        ])->assertOk()->assertJsonPath('phone_number', '+639171234567');
+        ])->assertOk()->assertJsonPath('phone_number', '09171234567');
     }
 
     public function test_a_new_staff_account_needs_a_phone(): void
@@ -244,7 +244,7 @@ class AdminSmsMfaTest extends TestCase
 
         $this->postJson('/api/admins', $payload)->assertStatus(422)->assertJsonValidationErrors('phone_number');
         $this->postJson('/api/admins', $payload + ['phone_number' => '639171112222'])
-            ->assertCreated()->assertJsonPath('phone_number', '+639171112222');
+            ->assertCreated()->assertJsonPath('phone_number', '09171112222');
     }
 
     public function test_the_list_says_whether_the_switch_is_on(): void

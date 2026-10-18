@@ -2,8 +2,8 @@
 library serbis.screens.auth.register;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../../models/phone_number.dart';
+import '../../models/validators.dart';
 import '../../state/account_store.dart';
 import '../../state/api_service.dart' show VerificationDelivery;
 import '../../state/app_log.dart';
@@ -68,12 +68,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
   static final RegExp _lower = RegExp(r'[a-z]');
   static final RegExp _digit = RegExp(r'[0-9]');
 
-  /// What may be typed into the number field. The validator is what decides
-  /// whether it is a real one — this only keeps the letters and punctuation
-  /// out, so a resident cannot compose something the server was always going
-  /// to refuse.
-  static final _phoneInput =
-      FilteringTextInputFormatter.allow(RegExp(r'[0-9+]'));
 
   @override
   void initState() {
@@ -317,7 +311,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
             onChanged: (_) => _clearRejected('organization_name'),
             prefixIcon: Icons.apartment_rounded,
             maxLength: 150,
-            validator: (v) => (v ?? '').trim().isEmpty ? 'Enter the organization name' : null,
+            inputFormatters: Validators.formatters(FieldKind.label, max: 150),
+            textCapitalization: TextCapitalization.words,
+            validator: (v) => (v ?? '').trim().isEmpty
+                ? 'Enter the organization name'
+                : Validators.check(FieldKind.label, v, label: 'Organization name', max: 150),
           ),
         AuthTextField(
           label: _organization ? 'Contact first name' : 'First name',
@@ -326,9 +324,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
           errorText: _fieldErrors['first_name'],
           onChanged: (_) => _clearRejected('first_name'),
           prefixIcon: Icons.person_outline_rounded,
+          inputFormatters: Validators.formatters(FieldKind.name),
+          textCapitalization: TextCapitalization.words,
           validator: (v) => (v ?? '').trim().isEmpty
               ? (_organization ? 'Enter the contact person\'s first name' : 'Enter your first name')
-              : null,
+              : Validators.check(FieldKind.name, v, label: 'First name'),
         ),
         AuthTextField(
           label: _organization ? 'Contact last name' : 'Last name',
@@ -337,9 +337,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
           errorText: _fieldErrors['last_name'],
           onChanged: (_) => _clearRejected('last_name'),
           prefixIcon: Icons.person_outline_rounded,
+          inputFormatters: Validators.formatters(FieldKind.name),
+          textCapitalization: TextCapitalization.words,
           validator: (v) => (v ?? '').trim().isEmpty
               ? (_organization ? 'Enter the contact person\'s last name' : 'Enter your last name')
-              : null,
+              : Validators.check(FieldKind.name, v, label: 'Last name'),
         ),
         AuthTextField(
           label: 'Mobile number',
@@ -349,8 +351,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
           onChanged: (_) => _clearRejected('phone_number'),
           keyboard: TextInputType.phone,
           prefixIcon: Icons.phone_outlined,
-          maxLength: PhoneNumber.maxLength,
-          inputFormatters: [_phoneInput],
+          maxLength: Validators.maxLength(FieldKind.phone),
+          inputFormatters: Validators.formatters(FieldKind.phone),
           validator: (v) {
             final val = (v ?? '').trim();
             if (val.isEmpty) return 'Enter your mobile number';

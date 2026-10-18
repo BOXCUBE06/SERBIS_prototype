@@ -34,7 +34,7 @@ class ResponderPositionTest extends TestCase
     {
         foreach (Responder::POSITIONS as $i => $position) {
             $this->postJson('/api/responders', [
-                'name' => "Responder $i",
+                'name' => 'Responder '.chr(65 + $i),
                 'contact_no' => '09171234567',
                 'position' => $position,
             ])->assertCreated()->assertJsonPath('position', $position);

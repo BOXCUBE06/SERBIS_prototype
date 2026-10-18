@@ -22,10 +22,10 @@ import 'package:serbis/widgets/service_form_fields.dart';
 /// instance with no network is enough.
 final AppState _appState = AppState(ApiService());
 
-/// Fills every field on screen with a distinct value and returns them in
-/// order. The values are 11 digits because the contact fields strip everything
-/// else and cap at 11 — a word typed there would come back as one character
-/// and the check would prove nothing.
+/// Fills every field on screen with a distinct value and returns what each
+/// field kept, in order. Fields now filter what they hold (a name takes no
+/// digits, a number takes only digits), so each gets a word first and a short
+/// number if the word did not stick.
 Future<List<String>> _fillEveryField(WidgetTester tester) async {
   // A search field's own text box only filters its list; it is not an answer.
   final search = find
@@ -34,11 +34,14 @@ Future<List<String>> _fillEveryField(WidgetTester tester) async {
       .toSet();
   final fields = find.byType(TextField).evaluate().where((e) => !search.contains(e)).toList();
   final typed = <String>[];
+  const words = ['Zebra', 'Quokka', 'Narwhal', 'Ibex', 'Okapi', 'Tapir', 'Lemur', 'Wombat', 'Yak', 'Dingo'];
 
   for (var i = 0; i < fields.length; i++) {
-    final value = '0917000000$i';
-    await tester.enterText(find.byElementPredicate((e) => e == fields[i]), value);
-    typed.add(value);
+    final finder = find.byElementPredicate((e) => e == fields[i]);
+    final controller = tester.widget<TextField>(finder).controller!;
+    await tester.enterText(finder, words[i]);
+    if (controller.text != words[i]) await tester.enterText(finder, '${100 + i}');
+    typed.add(controller.text);
   }
 
   await tester.pump();

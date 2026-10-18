@@ -7,6 +7,7 @@ import 'package:file_picker/file_picker.dart' as fp;
 import 'package:flutter/material.dart';
 import '../data/hotlines.dart';
 import '../data/safety_files.dart';
+import '../models/validators.dart';
 import '../state/account_store.dart';
 import '../state/api_service.dart';
 import '../state/material_cache.dart';
@@ -1044,8 +1045,22 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
   bool _validate() {
     final errors = <String, String>{};
 
-    if (_first.text.trim().isEmpty) errors['first'] = _tr('profile.required');
-    if (_last.text.trim().isEmpty) errors['last'] = _tr('profile.required');
+    if (_first.text.trim().isEmpty) {
+      errors['first'] = _tr('profile.required');
+    } else {
+      final bad = Validators.check(FieldKind.name, _first.text, label: _tr('profile.first_name'));
+      if (bad != null) errors['first'] = bad;
+    }
+    if (_last.text.trim().isEmpty) {
+      errors['last'] = _tr('profile.required');
+    } else {
+      final bad = Validators.check(FieldKind.name, _last.text, label: _tr('profile.last_name'));
+      if (bad != null) errors['last'] = bad;
+    }
+    final badMiddle = Validators.check(FieldKind.name, _middle.text, label: _tr('profile.middle_name_optional'));
+    if (badMiddle != null) errors['middle'] = badMiddle;
+    final badStreet = Validators.check(FieldKind.address, _street.text, label: _tr('profile.street_address'));
+    if (badStreet != null) errors['street'] = badStreet;
 
     setState(() {
       _errors
@@ -1192,6 +1207,8 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
                       label: _tr('profile.first_name'),
                       hint: 'e.g. Juan',
                       controller: _first,
+                      kind: FieldKind.name,
+                      isRequired: true,
                       errorText: _errors['first'],
                       enabled: !_saving,
                     ),
@@ -1199,12 +1216,16 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
                       label: _tr('profile.middle_name_optional'),
                       hint: 'e.g. Reyes',
                       controller: _middle,
+                      kind: FieldKind.name,
+                      errorText: _errors['middle'],
                       enabled: !_saving,
                     ),
                     AppTextField(
                       label: _tr('profile.last_name'),
                       hint: 'e.g. Delacruz',
                       controller: _last,
+                      kind: FieldKind.name,
+                      isRequired: true,
                       errorText: _errors['last'],
                       enabled: !_saving,
                     ),
@@ -1252,6 +1273,8 @@ class _EditDetailsSheetState extends State<_EditDetailsSheet> {
                       label: _tr('profile.street_address'),
                       hint: 'e.g. Purok 3, Rizal St.',
                       controller: _street,
+                      kind: FieldKind.address,
+                      errorText: _errors['street'],
                       enabled: !_saving,
                     ),
                     if (_formError != null) ...[

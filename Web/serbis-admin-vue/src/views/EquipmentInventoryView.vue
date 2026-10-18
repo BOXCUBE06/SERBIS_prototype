@@ -113,6 +113,7 @@ import PersonCell from '@/components/PersonCell.vue'
 import StatusChip from '@/components/StatusChip.vue'
 import RowActions from '@/components/RowActions.vue'
 import EditDialog from '@/components/EditDialog.vue'
+import { rules } from '@/composables/inputRules'
 
 const API = `${API_BASE}/equipments`
 
@@ -133,7 +134,7 @@ const snackbar = ref({ show: false, text: '', color: 'success' })
 
 // Total and Available sit side by side; on add, Available is just a note (it mirrors total).
 const formFields = computed(() => [
-  { key: 'item_name', label: 'Item name', required: true, placeholder: 'Folding stretcher' },
+  { key: 'item_name', label: 'Item name', required: true, placeholder: 'Folding stretcher', filter: 'label', rules: [rules.required('Item name'), rules.label('Item name')] },
   { key: 'total_quantity', label: 'Total owned', required: true, placeholder: '12', type: 'number', min: 1, half: true, rules: [(v) => Number(v) >= 1 || 'Total owned must be at least 1.'] },
   modal.value.editing
     ? { key: 'available_quantity', label: 'Available now', required: true, placeholder: '9', type: 'number', min: 0, max: form.value.total_quantity, half: true }

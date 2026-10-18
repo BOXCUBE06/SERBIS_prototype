@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../models/service_forms.dart';
+import '../models/validators.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
 import 'form_inputs.dart';
@@ -116,6 +118,12 @@ class ServiceFormFields extends StatelessWidget {
                     keyboard: field.keyboard,
                     controller: form.field(field.key),
                     helpText: field.helpText == null ? null : trEn(f, field.helpText!),
+                    kind: _kindOf(field),
+                    maxLength: _caps[field.key],
+                    // A count is digits only; Validators has no kind for it.
+                    inputFormatters: field.keyboard == TextInputType.number
+                        ? [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(_caps[field.key]!)]
+                        : null,
                   ),
               ],
               if (index == 0 && firstSectionExtra != null) firstSectionExtra!,
@@ -157,12 +165,37 @@ class ServiceFormFields extends StatelessWidget {
                   label: trEn(f, 'Delivery address'),
                   hint: trEn(f, 'Purok / street, barangay'),
                   controller: form.deliveryAddress,
+                  kind: FieldKind.address,
                 ),
             ],
           ),
       ],
     );
   }
+}
+
+/// Per-field length caps. The server limits the whole composed description to
+/// 500 characters, so the long fields on one form have to add up to less.
+const _caps = {
+  'location': 100,
+  'description': 250,
+  'household_head': 50,
+  'address': 150,
+  'household_size': 5,
+  'participants': 5,
+  'topic': 100,
+  'certification_type': 100,
+  'purpose': 200,
+  'details': 400,
+};
+
+FieldKind? _kindOf(ServiceFormField field) {
+  if (field.keyboard == TextInputType.number) return null;
+  return switch (field.key) {
+    'household_head' => FieldKind.name,
+    'location' || 'address' => FieldKind.address,
+    _ => FieldKind.note,
+  };
 }
 
 /// A one-field section whose heading is the field's own label ("Description" over

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Support\AdminSections;
+use App\Traits\StoresCanonicalPhones;
 use App\Traits\TracksHistory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -15,7 +16,9 @@ use Laravel\Sanctum\HasApiTokens;
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
-    use HasApiTokens, HasFactory, Notifiable, TracksHistory;
+    use HasApiTokens, HasFactory, Notifiable, StoresCanonicalPhones, TracksHistory;
+
+    protected array $phoneColumns = ['phone_number'];
 
     /**
      * Staff accounts are created and removed from the panel now (audit #29), so

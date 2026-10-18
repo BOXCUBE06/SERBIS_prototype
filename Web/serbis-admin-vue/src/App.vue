@@ -108,8 +108,13 @@ useAppTheme().init()
   }
 }
 
+/* .v-main's padding is zeroed above, so Vuetify's own top offset for the fixed
+   app bar is gone; without this margin the first 56px of every page (the title)
+   sits under the bar. dvh keeps the bottom clear of a mobile browser's toolbar. */
 .outer-wrapper--mobile {
+  margin-top: 56px;
   height: calc(100vh - 56px);
+  height: calc(100dvh - 56px);
 }
 
 .inner-wrapper {
@@ -159,6 +164,12 @@ useAppTheme().init()
    overriding its pa-0 and insetting that panel 40px/24px past its siblings. */
 .inner-wrapper > .v-container {
   padding: 24px 32px !important;
+}
+/* 32px a side leaves a 360px phone with about 270px of page. */
+@media (max-width: 599px) {
+  .inner-wrapper > .v-container {
+    padding: 16px !important;
+  }
 }
 
 .modern-drawer {

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ServiceRequest;
 use App\Models\Vehicle;
+use App\Rules\Charset;
 use App\Services\VehicleDispatch;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -80,10 +81,10 @@ class VehicleController extends Controller
         // have been shown a 422. `unit_identifier` also lacked `string`
         // entirely, so an array reached the unique rule.
         $validated = $request->validate([
-            'unit_identifier' => 'required|string|max:255|unique:tbl_vehicles,unit_identifier',
+            'unit_identifier' => ['required', 'string', 'max:50', Charset::identifier(), 'unique:tbl_vehicles,unit_identifier'],
             'type' => ['required', Rule::in(Vehicle::TYPES)],
-            'specification' => 'nullable|string|max:255',
-            'status' => 'required|in:Available,Dispatched,Maintenance',
+            'specification' => ['nullable', 'string', 'max:100', Charset::identifier()],
+            'status' => ['required', Rule::in(Vehicle::STATUSES)],
         ]);
 
         $vehicle = Vehicle::create($validated);
@@ -114,12 +115,13 @@ class VehicleController extends Controller
                 'sometimes',
                 'required',
                 'string',
-                'max:255',
+                'max:50',
+                Charset::identifier(),
                 Rule::unique('tbl_vehicles')->ignore($vehicle->vehicle_id, 'vehicle_id'),
             ],
             'type' => ['sometimes', 'required', Rule::in(Vehicle::TYPES)],
-            'specification' => 'nullable|string|max:255',
-            'status' => 'sometimes|required|in:Available,Dispatched,Maintenance',
+            'specification' => ['nullable', 'string', 'max:100', Charset::identifier()],
+            'status' => ['sometimes', 'required', Rule::in(Vehicle::STATUSES)],
         ]);
 
         // A unit going into Maintenance is going away for an unknown length of

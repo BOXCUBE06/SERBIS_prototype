@@ -102,7 +102,7 @@ class EquipmentBorrowingStockTest extends TestCase
 
     public function test_a_purpose_over_the_column_length_is_rejected(): void
     {
-        $this->borrow(1, null, str_repeat('a', 256))
+        $this->borrow(1, null, str_repeat('a', 501))
             ->assertStatus(422)
             ->assertJsonValidationErrors('purpose');
 

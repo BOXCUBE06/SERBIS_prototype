@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../models/phone_number.dart';
+import '../models/validators.dart';
 import '../theme/app_theme.dart';
 import 'feedback.dart' show FieldError;
 
 /// The app's labelled text field. Lived as `_Field` inside the services screen,
 /// where nothing else could reach it.
-class AppTextField extends StatelessWidget {
+class AppTextField extends StatefulWidget {
   final String label;
   final String hint;
   final int lines;
@@ -46,6 +46,11 @@ class AppTextField extends StatelessWidget {
   /// Small grey line under the input.
   final String? note;
 
+  /// What the field holds. Sets the keystroke filter, length, keyboard and
+  /// capitalization, and checks the value when focus leaves the field (see
+  /// [Validators]); explicit parameters below still win.
+  final FieldKind? kind;
+
   const AppTextField({
     super.key,
     required this.label,
@@ -62,23 +67,12 @@ class AppTextField extends StatelessWidget {
     this.helpText,
     this.isRequired = false,
     this.note,
+    this.kind,
   });
 
-  /// The phone field, spelled once instead of at each of the call sites that
-  /// used to repeat the formatter and the length.
-  ///
-  /// Accepts the three shapes the backend does — `09XXXXXXXXX`,
-  /// `639XXXXXXXXX` and `+639XXXXXXXXX` — so `+` is allowed through and the
-  /// cap is [PhoneNumber.maxLength], not 11. It was digits-only and capped at
-  /// 11, which made the two country-code shapes impossible to type: a resident
-  /// who registered as `+639171234567` could see that number in their profile
-  /// and not retype it after clearing the field.
-  ///
-  /// This only bounds what can be entered. Whether it is a real number is the
-  /// caller's validator, because not every caller wants the same answer — the
-  /// account's own number must match the server's rule exactly, while the
-  /// ambulance form's patient contact is free text (`max:32`) server-side and
-  /// belongs to whoever is being carried, not to the account.
+  /// The phone field, spelled once: digits only, 11 long, starting 09. The
+  /// server still takes `639…` and `+639…` from older app builds, and the
+  /// profile shows the national form, so nothing a resident sees cannot be typed.
   factory AppTextField.phone({
     Key? key,
     String label = 'Contact number',
@@ -91,15 +85,31 @@ class AppTextField extends StatelessWidget {
         label: label,
         hint: '09XXXXXXXXX',
         controller: controller,
-        keyboard: TextInputType.phone,
-        maxLength: PhoneNumber.maxLength,
-        inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9+]'))],
+        kind: FieldKind.phone,
         errorText: errorText,
         enabled: enabled,
       );
 
   @override
+  State<AppTextField> createState() => _AppTextFieldState();
+}
+
+class _AppTextFieldState extends State<AppTextField> {
+  String? _blurError;
+
+  void _check() {
+    final kind = widget.kind;
+    if (kind == null) return;
+    final error = Validators.check(kind, widget.controller.text, label: widget.label, required: widget.isRequired);
+    if (error != _blurError) setState(() => _blurError = error);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final kind = widget.kind;
+    final errorText = widget.errorText ?? _blurError;
+    final label = widget.label;
+
     return Padding(
       padding: const EdgeInsets.only(bottom: AppSpacing.sm),
       child: Column(
@@ -110,11 +120,11 @@ class AppTextField extends StatelessWidget {
               // Flexible: at this size a long label wraps instead of pushing the
               // help icon off the edge of a 320dp screen.
               Flexible(child: Text(label, style: AppText.fieldLabel())),
-              if (isRequired) const RequiredMark(),
-              if (helpText != null) ...[
+              if (widget.isRequired) const RequiredMark(),
+              if (widget.helpText != null) ...[
                 const SizedBox(width: 4),
                 Tooltip(
-                  message: helpText,
+                  message: widget.helpText,
                   triggerMode: TooltipTriggerMode.tap,
                   child: const Icon(Icons.help_outline_rounded, size: 14, color: AppColors.inkFaint),
                 ),
@@ -122,25 +132,34 @@ class AppTextField extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.xs),
-          TextField(
-            controller: controller,
+          // Focus, not onEditingComplete: tapping elsewhere must validate too.
+          Focus(
+            onFocusChange: (focused) {
+              if (!focused) _check();
+            },
+            child: TextField(
+            controller: widget.controller,
             // A masked field cannot be multi-line: Flutter asserts on
             // obscureText with maxLines > 1, and no caller wants both.
-            maxLines: obscure ? 1 : lines,
-            keyboardType: keyboard,
-            maxLength: maxLength,
-            inputFormatters: inputFormatters,
-            enabled: enabled,
-            obscureText: obscure,
+            maxLines: widget.obscure ? 1 : widget.lines,
+            keyboardType: kind != null && widget.keyboard == TextInputType.text ? Validators.keyboard(kind) : widget.keyboard,
+            textCapitalization: kind == null ? TextCapitalization.none : Validators.capitalization(kind),
+            maxLength: widget.maxLength ?? (kind == null ? null : Validators.maxLength(kind)),
+            inputFormatters: widget.inputFormatters ?? (kind == null ? null : Validators.formatters(kind, max: widget.maxLength)),
+            onChanged: (_) {
+              if (_blurError != null) _check();
+            },
+            enabled: widget.enabled,
+            obscureText: widget.obscure,
             style: AppText.body(size: AppTextSize.bodyLg),
             decoration: InputDecoration(
-              hintText: hint,
+              hintText: widget.hint,
               hintStyle: AppText.body(size: AppTextSize.bodyLg, color: AppColors.inkFaint),
-              error: errorText == null ? null : FieldError(errorText!),
-              suffixIcon: suffixIcon,
+              error: errorText == null ? null : FieldError(errorText),
+              suffixIcon: widget.suffixIcon,
               counterText: '',
               // 52dp single-line fields.
-              constraints: lines == 1 ? const BoxConstraints(minHeight: 52) : null,
+              constraints: widget.lines == 1 ? const BoxConstraints(minHeight: 52) : null,
               filled: true,
               fillColor: AppColors.fieldFill,
               contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
@@ -169,8 +188,9 @@ class AppTextField extends StatelessWidget {
                 borderSide: const BorderSide(color: AppColors.red600, width: 2),
               ),
             ),
+            ),
           ),
-          if (note != null) FieldNote(note!),
+          if (widget.note != null) FieldNote(widget.note!),
         ],
       ),
     );

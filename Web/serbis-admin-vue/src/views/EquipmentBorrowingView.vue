@@ -575,8 +575,8 @@
               persistent-hint
               variant="outlined"
               rows="3"
-              counter="255"
-              maxlength="255"
+              counter="500"
+              v-filter="'note'"
               :error-messages="actionDialog.error"
               @update:model-value="actionDialog.error = ''"
             ></v-textarea>
@@ -603,7 +603,7 @@
               variant="outlined"
               rows="3"
               counter="500"
-              maxlength="500"
+              v-filter="'note'"
               @update:model-value="actionDialog.error = ''"
             ></v-textarea>
           </template>

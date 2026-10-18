@@ -7,6 +7,8 @@ use App\Models\Resident;
 use App\Models\Service;
 use App\Models\ServiceAudience;
 use App\Models\User;
+use App\Support\FieldRules;
+use App\Support\Text;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -48,10 +50,12 @@ class ServiceController extends Controller
 
     public function store(Request $request)
     {
+        Text::tidy($request, ['description']);
+
         $validated = $request->validate([
-            'service_name' => ['required', 'string', 'max:255', $this->unclaimedName(...)],
-            'service_name_fil' => 'nullable|string|max:255',
-            'description' => 'nullable|string|max:5000',
+            'service_name' => ['required', ...FieldRules::label(), $this->unclaimedName(...)],
+            'service_name_fil' => ['nullable', ...FieldRules::label()],
+            'description' => ['nullable', ...FieldRules::note()],
             // Omitted means the column default (relief); the panel always sends it.
             'category' => ['sometimes', 'required', Rule::in(Service::ADDABLE_CATEGORIES)],
         ], [
@@ -137,11 +141,13 @@ class ServiceController extends Controller
             }
         };
 
+        Text::tidy($request, ['description']);
+
         $validated = $request->validate([
             'service_name' => ['sometimes', 'required', 'string', 'max:255', $locked('service_name', 'name')],
             // Editable, unlike the name: the app keys on the code, not on this.
-            'service_name_fil' => 'nullable|string|max:255',
-            'description' => 'nullable|string|max:5000',
+            'service_name_fil' => ['nullable', ...FieldRules::label()],
+            'description' => ['nullable', ...FieldRules::note()],
             'category' => ['sometimes', 'required', Rule::in(Service::CATEGORIES), $locked('category', 'category')],
             'is_active' => 'sometimes|required|boolean',
         ]);

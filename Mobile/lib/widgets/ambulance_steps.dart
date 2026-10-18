@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../models/request_models.dart';
 import '../models/service_forms.dart';
+import '../models/validators.dart';
 import '../state/request_store.dart';
 import '../state/translations.dart';
 import '../theme/app_theme.dart';
@@ -15,7 +16,7 @@ import 'service_widgets.dart';
 /// The ambulance flow's five step names, in order. English keys for [trEn].
 const ambulanceStepNames = ['Patient', 'Trip', 'Condition', 'Schedule and ID', 'Review'];
 
-/// Max length of the condition field; the server allows more (5000).
+/// Max length of the condition field; the server's limit too.
 const _conditionMax = 500;
 
 /// Green header: close, title, "Step N of 5 · name", segmented progress.
@@ -225,6 +226,7 @@ class AmbulanceStepFields extends StatelessWidget {
         label: trEn(f, 'Full name'),
         hint: trEn(f, 'e.g. Maria Santos'),
         controller: form.patient,
+        kind: FieldKind.name,
         isRequired: true,
         errorText: errors['patient'],
       ),
@@ -236,7 +238,7 @@ class AmbulanceStepFields extends StatelessWidget {
             child: AppTextField(
               label: trEn(f, 'Age'),
               hint: trEn(f, 'e.g. 62'),
-              keyboard: TextInputType.number,
+              kind: FieldKind.age,
               controller: form.age,
             ),
           ),
@@ -270,8 +272,9 @@ class AmbulanceStepFields extends StatelessWidget {
               label: trEn(f, 'Full address'),
               hint: trEn(f, 'House no., street, barangay, town'),
               controller: form.patientAddress,
+              kind: FieldKind.address,
             )
-          : AppTextField(label: trEn(f, 'Purok / street'), hint: trEn(f, 'e.g. Purok 3'), controller: form.patientAddress),
+          : AppTextField(label: trEn(f, 'Purok / street'), hint: trEn(f, 'e.g. Purok 3'), controller: form.patientAddress, kind: FieldKind.address),
     ];
   }
 
@@ -303,11 +306,13 @@ class AmbulanceStepFields extends StatelessWidget {
           label: trEn(f, 'Pickup location'),
           hint: trEn(f, 'e.g. Purok 3, San Fabian'),
           controller: form.pickup,
+          kind: FieldKind.address,
         ),
       AppTextField(
         label: trEn(f, 'Landmark (optional)'),
         hint: trEn(f, 'e.g. beside the chapel'),
         controller: landmark,
+        kind: FieldKind.address,
         note: trEn(f, 'Helps the driver find you.'),
       ),
       const SizedBox(height: AppSpacing.sm),
@@ -328,6 +333,7 @@ class AmbulanceStepFields extends StatelessWidget {
           label: trEn(f, 'Destination name'),
           hint: trEn(f, 'e.g. Echague District Hospital'),
           controller: form.destination,
+          kind: FieldKind.address,
           isRequired: true,
           errorText: errors['destination'],
         ),
@@ -343,6 +349,7 @@ class AmbulanceStepFields extends StatelessWidget {
         lines: 4,
         maxLength: _conditionMax,
         controller: form.diagnosis,
+        kind: FieldKind.note,
       ),
       // The field hides Flutter's own counter, so the hint and "n / 500" share
       // a line under it.
@@ -366,6 +373,7 @@ class AmbulanceStepFields extends StatelessWidget {
                 label: i == 0 ? trEn(f, 'Relative to contact') : trEn(f, 'Relative {n}').replaceAll('{n}', '${i + 1}'),
                 hint: trEn(f, 'e.g. Juan Dela Cruz'),
                 controller: form.relatives[i],
+                kind: FieldKind.name,
                 isRequired: i == 0,
                 errorText: i == 0 ? errors['relative'] : null,
                 note: i == 0 ? trEn(f, "We'll call them if we can't reach the patient.") : null,

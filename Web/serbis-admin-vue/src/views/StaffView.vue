@@ -415,6 +415,7 @@ import PersonCell from '@/components/PersonCell.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import NoticeBanner from '@/components/NoticeBanner.vue'
 import EditDialog from '@/components/EditDialog.vue'
+import { rules } from '@/composables/inputRules'
 
 const API = `${API_BASE}/admins`
 
@@ -437,8 +438,7 @@ const snackbar = ref({ show: false, text: '', color: 'success' })
 // `form` above is already the reactive object the fields are bound to.
 const formRef = ref(null)
 
-const requiredRule = (label) => (v) =>
-  (v !== null && v !== undefined && String(v).trim() !== '') || `${label} is required.`
+const requiredRule = rules.required
 
 // A password is required only when creating an account; editing may leave
 // both password fields blank to keep the current one.
@@ -453,13 +453,9 @@ const usernameRule = (v) =>
 // email loses everything from the @ on.
 const cleanUsername = (v) => String(v || '').toLowerCase().replace(/@.*$/, '').replace(/[^a-z0-9._]/g, '')
 
-// Same shapes the server accepts (PhoneNumber::REGEX). Required on a new
-// account; on an edit, blank keeps whatever is stored.
-const phoneRule = (v) => {
-  const value = String(v || '').trim()
-  if (value === '') return modal.value.editing || 'Mobile number is required.'
-  return /^(?:09\d{9}|639\d{9}|\+639\d{9})$/.test(value) || 'Use a mobile number like 09171234567.'
-}
+// Required on a new account; on an edit, blank keeps whatever is stored.
+const phoneRule = (v) =>
+  String(v || '').trim() === '' ? modal.value.editing || 'Mobile number is required.' : rules.phone()(v)
 
 // Stored as +639…; staff read and type 09….
 const localPhone = (p) => String(p || '').replace(/^\+63/, '0')
@@ -579,14 +575,14 @@ const templateSections = (key) => ACCESS_TEMPLATES.find((t) => t.key === key)?.s
 const staffFields = computed(() => {
   const editing = modal.value.editing
   return [
-    { key: 'first_name', label: 'First name', required: true, half: true, placeholder: 'Juan', rules: [requiredRule('First name')], autocomplete: 'given-name' },
-    { key: 'last_name', label: 'Last name', required: true, half: true, placeholder: 'Dela Cruz', rules: [requiredRule('Last name')], autocomplete: 'family-name' },
+    { key: 'first_name', label: 'First name', required: true, half: true, placeholder: 'Juan', filter: 'name', rules: [requiredRule('First name'), rules.name('First name')], autocomplete: 'given-name' },
+    { key: 'last_name', label: 'Last name', required: true, half: true, placeholder: 'Dela Cruz', filter: 'name', rules: [requiredRule('Last name'), rules.name('Last name')], autocomplete: 'family-name' },
     {
       key: 'username', label: 'Username', required: true, placeholder: 'juan.delacruz', autocomplete: 'off', sanitize: cleanUsername,
       hint: '3 to 30 lowercase letters, digits, dots or underscores.', rules: [requiredRule('Username'), usernameRule],
     },
     {
-      key: 'phone_number', label: 'Mobile number', required: !editing, type: 'tel', inputmode: 'tel', placeholder: '09171234567', autocomplete: 'off',
+      key: 'phone_number', label: 'Mobile number', required: !editing, type: 'tel', inputmode: 'numeric', filter: 'phone', placeholder: '09171234567', autocomplete: 'off',
       hint: 'Sign-in codes are texted here.', rules: [phoneRule],
     },
     { key: 'password-note', text: editing ? 'Leave both password fields blank to keep the current password.' : 'At least 8 characters, with upper and lower case and a number.' },

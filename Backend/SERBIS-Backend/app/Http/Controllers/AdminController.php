@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use App\Support\AdminSections;
+use App\Support\FieldRules;
 use App\Support\PhoneNumber;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -74,8 +75,8 @@ class AdminController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'first_name' => 'required|string|max:255',
-            'last_name' => 'required|string|max:255',
+            'first_name' => ['required', ...FieldRules::name()],
+            'last_name' => ['required', ...FieldRules::name()],
             'username' => ['required', 'string', 'regex:'.User::USERNAME_REGEX, 'unique:tbl_user,username'],
             // Where the sign-in code goes once ADMIN_MFA_ENABLED is on.
             'phone_number' => ['required', 'string', 'max:20', 'regex:'.PhoneNumber::REGEX],
@@ -144,8 +145,8 @@ class AdminController extends Controller
         }
 
         $validated = $request->validate([
-            'first_name' => 'required|string|max:255',
-            'last_name' => 'required|string|max:255',
+            'first_name' => ['required', ...FieldRules::name()],
+            'last_name' => ['required', ...FieldRules::name()],
             'username' => [
                 'required',
                 'string',

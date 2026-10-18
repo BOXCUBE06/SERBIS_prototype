@@ -6,6 +6,7 @@ use App\Http\Controllers\Concerns\SendsResidentCodes;
 use App\Models\Resident;
 use App\Models\User; // Represents Admins/Staff
 use App\Rules\PhoneAvailable;
+use App\Support\FieldRules;
 use App\Support\PhoneNumber;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
@@ -97,15 +98,15 @@ class AuthController extends Controller
         }
 
         $validated = $request->validate([
-            'first_name' => 'required|string|max:255',
-            'middle_name' => 'nullable|string|max:255',
-            'last_name' => 'required|string|max:255',
+            'first_name' => ['required', ...FieldRules::name()],
+            'middle_name' => ['nullable', ...FieldRules::name()],
+            'last_name' => ['required', ...FieldRules::name()],
             'barangay_id' => 'required|integer|exists:tbl_barangay,barangay_id',
             // Purok/street — the one thing barangay_id cannot answer (MDRRMO
             // feedback, 2026-09-19). Optional at registration, same as every
             // other field a resident might not have on hand yet; editable
             // later from the profile either way.
-            'street_address' => 'nullable|string|max:255',
+            'street_address' => ['nullable', ...FieldRules::address()],
             // Refused here when a real account already holds the number, in any
             // spelling. That does tell a stranger the number is registered; the
             // route's per-IP limiter is what bounds using it to enumerate.
@@ -115,7 +116,7 @@ class AuthController extends Controller
             // Barangay accounts are made by MDRRMO staff and are refused here, so
             // nobody can sign themselves up as one.
             'account_type' => ['sometimes', Rule::in([Resident::TYPE_HEAD_OF_FAMILY, Resident::TYPE_ORGANIZATION])],
-            'organization_name' => 'required_if:account_type,'.Resident::TYPE_ORGANIZATION.'|nullable|string|max:150',
+            'organization_name' => ['required_if:account_type,'.Resident::TYPE_ORGANIZATION, 'nullable', ...FieldRules::label(150)],
         ]);
 
         $accountType = $validated['account_type'] ?? Resident::TYPE_HEAD_OF_FAMILY;
@@ -543,11 +544,11 @@ class AuthController extends Controller
         }
 
         $validated = $request->validate([
-            'first_name' => 'sometimes|required|string|max:255',
-            'middle_name' => 'nullable|string|max:255',
-            'last_name' => 'sometimes|required|string|max:255',
+            'first_name' => ['sometimes', 'required', ...FieldRules::name()],
+            'middle_name' => ['nullable', ...FieldRules::name()],
+            'last_name' => ['sometimes', 'required', ...FieldRules::name()],
             // Purok/street: a self-correctable detail nothing is grouped on.
-            'street_address' => 'sometimes|nullable|string|max:255',
+            'street_address' => ['sometimes', 'nullable', ...FieldRules::address()],
             // The resident's own notification preference. Writable here — unlike
             // the columns below — because it decides only what this account
             // receives, and there is nobody else who should be deciding it.
