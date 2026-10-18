@@ -72,6 +72,7 @@ RUN docker-php-ext-install -j"$(nproc)" pdo_mysql opcache
 # nothing.
 RUN mv "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
     && { \
+        echo 'expose_php=Off'; \
         echo 'upload_max_filesize=12M'; \
         echo 'post_max_size=16M'; \
         echo 'opcache.enable=1'; \

@@ -2,6 +2,7 @@
 
 use App\Http\Middleware\EnsureSection;
 use App\Http\Middleware\IsAdmin;
+use App\Http\Middleware\SecurityHeaders;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Application;
@@ -58,6 +59,8 @@ return Application::configure(basePath: dirname(__DIR__))
         // Route-model binding would otherwise 404 a missing id before is.admin
         // answers 403, telling a resident which admin-route ids exist.
         $middleware->prependToPriorityList(before: SubstituteBindings::class, prepend: IsAdmin::class);
+        // Outermost, so even a preflight or an unmatched route is answered with the security headers.
+        $middleware->prepend(SecurityHeaders::class);
         $middleware->alias([
             'is.admin' => IsAdmin::class,
             'section' => EnsureSection::class,
