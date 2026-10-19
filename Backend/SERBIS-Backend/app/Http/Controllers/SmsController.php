@@ -13,6 +13,7 @@ use App\Services\Sms\SmsGateway;
 use App\Services\Sms\SmsMessagePolicy;
 use App\Services\Sms\SmsResult;
 use App\Support\PhoneNumber;
+use App\Support\Text;
 use App\Traits\PaginatesLists;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
 use Illuminate\Http\JsonResponse;
@@ -38,6 +39,8 @@ class SmsController extends Controller
 
     public function sendBlast(Request $request, SmsGateway $gateway)
     {
+        Text::tidy($request, ['message']);
+
         $validated = $request->validate([
             'message' => [
                 'required',

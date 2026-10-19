@@ -142,6 +142,7 @@
                   color="primary"
                   rows="4"
                   counter="160"
+                  v-filter="{ kind: 'note', max: 160 }"
                   class="blast-textarea"
                   :rules="[
                     v => !!v || 'A message is required.',

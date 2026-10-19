@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../data/hotlines.dart' show callHotlineNumber;
 import '../models/borrow_models.dart';
 import '../models/request_models.dart' show formatMonthShort, formatStepTime;
+import '../models/validators.dart';
 import '../state/account_store.dart' show AppUser;
 import '../state/request_store.dart';
 import '../state/translations.dart';
@@ -921,14 +922,12 @@ class _BorrowSheet extends StatefulWidget {
 }
 
 class _BorrowSheetState extends State<_BorrowSheet> {
-  /// Matches `purpose`'s column width. The server rejects anything longer, and
-  /// finding that out only after a round trip loses what was typed past 255.
-  static const _purposeMaxLength = 255;
-
-  /// `other_equipment_text` and `delivery_address` are both varchar(255). Same
-  /// reasoning as above.
-  static const _otherItemMaxLength = 255;
-  static const _addressMaxLength = 255;
+  /// The server's limits for `purpose`, `other_equipment_text` and
+  /// `delivery_address`. It rejects anything longer, and finding that out only
+  /// after a round trip loses what was typed past the limit.
+  static final _purposeMaxLength = Validators.maxLength(FieldKind.note);
+  static final _otherItemMaxLength = Validators.maxLength(FieldKind.label);
+  static final _addressMaxLength = Validators.maxLength(FieldKind.address);
 
   /// Only bounds the uncatalogued path, where there is no stock figure to stop
   /// at. The stepper is one tap per unit, so it needs an end somewhere.
@@ -1148,6 +1147,7 @@ class _BorrowSheetState extends State<_BorrowSheet> {
           label: _t('What do you need?'),
           hint: _t('e.g. Portable generator'),
           controller: _otherItem,
+          kind: FieldKind.label,
           maxLength: _otherItemMaxLength,
           errorText: _otherItemError,
           enabled: !_submitting,
@@ -1184,6 +1184,7 @@ class _BorrowSheetState extends State<_BorrowSheet> {
         hint: _t('e.g. Barangay flood drill this weekend'),
         controller: _purpose,
         lines: 3,
+        kind: FieldKind.note,
         maxLength: _purposeMaxLength,
         errorText: _purposeError,
         enabled: !_submitting,
@@ -1223,6 +1224,7 @@ class _BorrowSheetState extends State<_BorrowSheet> {
           hint: _t('House number, street, barangay'),
           controller: _address,
           lines: 2,
+          kind: FieldKind.address,
           maxLength: _addressMaxLength,
           errorText: _addressError,
           enabled: !_submitting,

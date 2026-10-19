@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Equipment;
 use App\Models\Resident;
 use App\Services\EquipmentAvailabilityNotifier;
+use App\Support\FieldRules;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -46,7 +47,7 @@ class EquipmentController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'item_name' => 'required|string|max:255|unique:tbl_equipments,item_name',
+            'item_name' => ['required', ...FieldRules::label(), 'unique:tbl_equipments,item_name'],
             'total_quantity' => 'required|integer|min:1|max:'.self::MAX_QUANTITY,
             'status' => 'required|in:Available,Unavailable',
         ]);
@@ -82,8 +83,7 @@ class EquipmentController extends Controller
             'item_name' => [
                 'sometimes',
                 'required',
-                'string',
-                'max:255',
+                ...FieldRules::label(),
                 Rule::unique('tbl_equipments')->ignore($equipment->equipment_id, 'equipment_id'),
             ],
             'total_quantity' => 'sometimes|required|integer|min:0|max:'.self::MAX_QUANTITY,

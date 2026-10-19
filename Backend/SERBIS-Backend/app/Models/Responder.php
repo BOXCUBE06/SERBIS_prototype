@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Traits\StoresCanonicalPhones;
 use App\Traits\TracksHistory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -10,7 +11,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 class Responder extends Model
 {
-    use HasFactory, TracksHistory;
+    use HasFactory, StoresCanonicalPhones, TracksHistory;
+
+    protected array $phoneColumns = ['contact_no'];
 
     public const STATUSES = ['available', 'deployed', 'off_duty'];
 

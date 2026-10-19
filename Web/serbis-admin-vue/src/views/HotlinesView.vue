@@ -102,6 +102,7 @@ import { REFERENCE_TTL_MS, invalidate, useCachedFetch } from '@/composables/useC
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
 import EditDialog from '@/components/EditDialog.vue'
+import { rules } from '@/composables/inputRules'
 
 const headers = [
   { title: 'Hotline', key: 'label', sortable: false, width: '34%' },
@@ -122,8 +123,8 @@ const phoneChars = (v) => (v || '').replace(/[^0-9()+\- ]/g, '')
 
 // The add / edit dialog's fields. `numbers` is the repeatable carrier + number rows.
 const hotlineFields = [
-  { key: 'label', label: 'Name', required: true, rules: [required] },
-  { key: 'label_fil', label: 'Name in Filipino', hint: 'Leave blank to show the English name.' },
+  { key: 'label', label: 'Name', required: true, filter: 'hotline', rules: [required, rules.hotline('Name')] },
+  { key: 'label_fil', label: 'Name in Filipino', hint: 'Leave blank to show the English name.', filter: 'hotline', rules: [rules.hotline('Name in Filipino')] },
   { key: 'numbers', label: 'Numbers', numbers: true, maxRows: 6, rules: [required], sanitize: phoneChars, inputmode: 'tel', maxlength: 20 },
 ]
 

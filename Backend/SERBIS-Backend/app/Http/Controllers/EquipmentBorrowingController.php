@@ -9,6 +9,8 @@ use App\Models\ServiceAudience;
 use App\Models\User;
 use App\Services\EquipmentAvailabilityNotifier;
 use App\Services\Fcm;
+use App\Support\FieldRules;
+use App\Support\Text;
 use App\Traits\ResolvesUploadDisks;
 use App\Traits\ScopesToOwner;
 use Illuminate\Http\Request;
@@ -106,17 +108,19 @@ class EquipmentBorrowingController extends Controller
             ], 403);
         }
 
+        Text::tidy($request, ['purpose', 'delivery_address']);
+
         $validated = $request->validate([
             // Exactly one names the item (the table's CHECK enforces it): required_without catches neither, prohibits catches both; these give the readable 422 the constraint would not.
             'equipment_id' => 'required_without:other_equipment_text|nullable|exists:tbl_equipments,equipment_id',
-            'other_equipment_text' => 'required_without:equipment_id|nullable|string|max:255|prohibits:equipment_id',
+            'other_equipment_text' => ['required_without:equipment_id', 'nullable', ...FieldRules::label(), 'prohibits:equipment_id'],
             'quantity' => 'required|integer|min:1',
             // Required on the way in, nullable in the column (old rows have none); TrimStrings + ConvertEmptyStringsToNull run first, so spaces fail required.
-            'purpose' => 'required|string|max:255',
+            'purpose' => ['required', ...FieldRules::note()],
             // sometimes: a client that says nothing means Pickup (the column default), so older mobile builds keep working.
             'fulfillment_method' => 'sometimes|in:Pickup,Delivery',
             // Required for a delivery (tbl_residents has no street address), else it is a run nobody can make.
-            'delivery_address' => 'required_if:fulfillment_method,Delivery|nullable|string|max:255',
+            'delivery_address' => ['required_if:fulfillment_method,Delivery', 'nullable', ...FieldRules::address()],
         ]);
 
         // A satisfiability check, not a reservation: stock moves only on Released, and reserving on Pending would let anyone empty the inventory with unapproved requests, so no lock either. Skipped for free-text items (no stock figure); update() refuses to release those until an equipment row is attached.
@@ -275,6 +279,8 @@ class EquipmentBorrowingController extends Controller
             ], 422);
         }
 
+        Text::tidy($request, ['denial_reason', 'return_condition_note']);
+
         $validated = $request->validate([
             'status' => 'required|in:Pending,Approved,Released,Returned,Denied',
             // Both optional (a bare status change is valid; only two transitions carry them). A loan runs 1-7 days per agency policy; it used to allow same-day and +1 year. Closing an overdue loan sends the status alone, so the lower bound never blocks it.
@@ -283,12 +289,12 @@ class EquipmentBorrowingController extends Controller
                 'after_or_equal:'.$earliestDue->toDateString(),
                 'before_or_equal:'.$latestDue->toDateString(),
             ],
-            'denial_reason' => 'sometimes|nullable|string|max:255',
+            'denial_reason' => ['sometimes', 'nullable', ...FieldRules::note()],
             // What keys the "still needed?" reconfirm (EquipmentAvailabilityNotifier); denial_reason is free text. Optional: a non-availability denial sends neither.
             'denial_reason_code' => 'sometimes|nullable|in:Unavailable,Other',
             'return_condition' => 'sometimes|nullable|in:Good,Bad',
             // MDRRMO feedback, 2026-09-19: required on every return, not just Bad. Keyed on status so it fires even with no condition sent; no `sometimes`, which would skip required_if when the key is absent.
-            'return_condition_note' => 'nullable|string|max:500|required_if:status,Returned',
+            'return_condition_note' => ['nullable', ...FieldRules::note(), 'required_if:status,Returned'],
         ], [
             'due_date.date' => 'Pick a valid due date.',
             'due_date.after_or_equal' => 'A loan runs at least '.self::MIN_LOAN_DAYS.' day — pick '.$earliestDue->format('M j, Y').' or later.',

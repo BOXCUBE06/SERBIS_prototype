@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\EmergencyHotline;
+use App\Support\FieldRules;
 use Illuminate\Http\Request;
 
 class EmergencyHotlineController extends Controller
@@ -38,8 +39,8 @@ class EmergencyHotlineController extends Controller
     private function validated(Request $request): array
     {
         return $request->validate([
-            'label' => 'required|string|max:100',
-            'label_fil' => 'nullable|string|max:100',
+            'label' => ['required', ...FieldRules::hotline()],
+            'label_fil' => ['nullable', ...FieldRules::hotline()],
             'numbers' => 'required|array|min:1|max:6',
             // Not PhoneNumber::REGEX: that is mobile-only, and 911 and the
             // landlines are hotlines too.

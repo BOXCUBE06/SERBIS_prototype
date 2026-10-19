@@ -58,6 +58,16 @@ class EmergencyHotlineTest extends TestCase
         $this->assertNull(EmergencyHotline::find($id));
     }
 
+    public function test_a_hotline_name_takes_a_slash_but_no_other_symbol(): void
+    {
+        Sanctum::actingAs($this->makeStaff());
+
+        $this->postJson('/api/hotlines', $this->payload(['label' => 'Police / PNP', 'label_fil' => 'Pulis / PNP']))
+            ->assertCreated();
+        $this->postJson('/api/hotlines', $this->payload(['label' => 'Police @ PNP']))
+            ->assertStatus(422)->assertJsonValidationErrors('label');
+    }
+
     public function test_bad_number_is_rejected(): void
     {
         Sanctum::actingAs($this->makeStaff());

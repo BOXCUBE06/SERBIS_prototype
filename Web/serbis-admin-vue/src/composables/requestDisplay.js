@@ -1,5 +1,6 @@
 import { computed } from 'vue'
 import { displayPhone } from '@/composables/phoneNumber'
+import { sentenceCase } from '@/composables/inputRules'
 
 export const residentName = (resident) =>
   `${resident?.first_name || ''} ${resident?.last_name || ''}`.trim() || 'Unknown Head of the Family'
@@ -83,6 +84,7 @@ export function useDescriptionLines(selectedRequest) {
     if (!raw) {return []}
 
     const lines = raw.split('\n').map(line => line.trim()).filter(Boolean)
+    if (lines.length > 0) {lines[0] = sentenceCase(lines[0])}
     const service = (selectedRequest.value?.service?.service_name || '').trim().toLowerCase()
 
     const kept = [...lines]

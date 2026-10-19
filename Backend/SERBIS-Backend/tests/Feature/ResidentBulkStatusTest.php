@@ -34,7 +34,7 @@ class ResidentBulkStatusTest extends TestCase
     {
         return Resident::create([
             'barangay_id' => $this->barangay->barangay_id,
-            'first_name' => "Res{$n}",
+            'first_name' => 'Res'.chr(64 + $n),
             'last_name' => 'Test',
             'phone_number' => '+63917000000'.$n,
             'password' => Hash::make('Password123'),
@@ -93,6 +93,15 @@ class ResidentBulkStatusTest extends TestCase
         $this->assertSame('Active', $a->fresh()->status);
         $this->assertSame('Deactivated', $b->fresh()->status);
         $this->assertSame('Active', $c->fresh()->status);
+    }
+
+    public function test_bulk_activate_approves_pending_accounts_with_the_same_write(): void
+    {
+        $r = $this->resident(1, 'Inactive');
+
+        $this->setStatus($r, 'Active')->assertOk()->assertJsonPath('status', 'Active');
+
+        $this->assertSame('Active', $r->fresh()->status);
     }
 
     public function test_an_account_that_is_already_in_the_state_is_left_as_it_is(): void

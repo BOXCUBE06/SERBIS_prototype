@@ -111,7 +111,11 @@ function tablePage(type, cols, rows) {
 ${signatures(t.approver === false ? false : '')}</section>`
 }
 
-async function printHtml(html, urls) {
+// "Save as PDF" names the file after the page title. Chrome reads the top
+// document's, not the iframe's, so it is set here for the print and put back.
+const fileTitle = (type) => `${EXPORT_TYPES[type].title.replace(/\s+/g, '-')}_${new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Manila' }).format(new Date())}`
+
+async function printHtml(html, urls, title) {
   const frame = document.createElement('iframe')
   frame.setAttribute('aria-hidden', 'true')
   frame.style.cssText = 'position:fixed;width:0;height:0;border:0;visibility:hidden'
@@ -121,7 +125,9 @@ async function printHtml(html, urls) {
   // Blank pages are what an early print() produces: wait for the images.
   await Promise.all([...frame.contentDocument.images].map((img) => (img.complete ? null : new Promise((r) => { img.addEventListener('load', r, { once: true }); img.addEventListener('error', r, { once: true }) }))))
 
-  const done = () => { frame.remove(); urls.forEach((u) => URL.revokeObjectURL(u)) }
+  const previousTitle = document.title
+  document.title = title
+  const done = () => { document.title = previousTitle; frame.remove(); urls.forEach((u) => URL.revokeObjectURL(u)) }
   frame.contentWindow.addEventListener('afterprint', done, { once: true })
   frame.contentWindow.focus()
   frame.contentWindow.print()
@@ -138,6 +144,7 @@ export async function printRows(type, rows, { columns, layout = 'table', photos 
   const body = layout === 'detail' ? await detailPages(type, cols, rows, photos, urls) : tablePage(type, cols, rows)
   const size = layout === 'detail' ? 'A4 portrait' : 'A4 landscape'
 
-  await printHtml(`<!doctype html><html><head><meta charset="utf-8"><title>SERBIS ${esc(EXPORT_TYPES[type].title)}</title>
-<style>@page{size:${size};margin:14mm}${CSS}</style></head><body>${body}</body></html>`, urls)
+  const title = fileTitle(type)
+  await printHtml(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title>
+<style>@page{size:${size};margin:14mm}${CSS}</style></head><body>${body}</body></html>`, urls, title)
 }

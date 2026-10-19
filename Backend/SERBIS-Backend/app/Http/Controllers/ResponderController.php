@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Responder;
-use App\Support\PhoneNumber;
+use App\Support\FieldRules;
 use App\Traits\ResolvesUploadDisks;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -35,8 +35,8 @@ class ResponderController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'contact_no' => ['required', 'string', 'max:32', 'regex:'.PhoneNumber::REGEX],
+            'name' => ['required', ...FieldRules::name()],
+            'contact_no' => ['required', ...FieldRules::phone()],
             'position' => ['required', Rule::in(Responder::POSITIONS)],
             'status' => ['sometimes', 'required', Rule::in(Responder::STATUSES)],
         ]);
@@ -66,8 +66,8 @@ class ResponderController extends Controller
         }
 
         $validated = $request->validate([
-            'name' => 'sometimes|required|string|max:255',
-            'contact_no' => ['sometimes', 'required', 'string', 'max:32', 'regex:'.PhoneNumber::REGEX],
+            'name' => ['sometimes', 'required', ...FieldRules::name()],
+            'contact_no' => ['sometimes', 'required', ...FieldRules::phone()],
             'position' => ['sometimes', 'required', Rule::in(Responder::POSITIONS)],
             'status' => ['sometimes', 'required', Rule::in(Responder::STATUSES)],
         ]);

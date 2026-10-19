@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Traits\InvalidatesAnalyticsCache;
+use App\Traits\StoresCanonicalPhones;
 use App\Traits\TracksHistory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,7 +11,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ConductionRequest extends Model
 {
-    use InvalidatesAnalyticsCache, TracksHistory;
+    use InvalidatesAnalyticsCache, StoresCanonicalPhones, TracksHistory;
+
+    protected array $phoneColumns = ['patient_contact_number'];
 
     protected $table = 'tbl_conduction_requests';
 

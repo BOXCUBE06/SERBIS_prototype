@@ -19,6 +19,9 @@ class Vehicle extends Model
      */
     public const TYPES = ['Ambulance', 'Rescue Vehicle', 'Fire Truck', 'Boat'];
 
+    /** Driven by the request lifecycle; the panel's status menu offers the same three. */
+    public const STATUSES = ['Available', 'Dispatched', 'Maintenance'];
+
     protected $table = 'tbl_vehicles';
 
     protected $primaryKey = 'vehicle_id';

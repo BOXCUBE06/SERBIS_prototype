@@ -81,6 +81,20 @@ class ResidentPhoneLoginTest extends TestCase
         }
     }
 
+    public function test_an_existing_plus639_account_blocks_a_09_signup_and_still_logs_in_with_09(): void
+    {
+        $this->resident(['phone_number' => '+639171234567']);
+
+        $this->postJson('/api/register', [
+            'first_name' => 'Ian', 'last_name' => 'Uy',
+            'barangay_id' => $this->barangay->barangay_id,
+            'phone_number' => '09171234567',
+            'password' => 'Password123', 'password_confirmation' => 'Password123',
+        ])->assertStatus(422)->assertJsonValidationErrors('phone_number');
+
+        $this->login('09171234567')->assertStatus(403)->assertJsonPath('code', 'mfa_required');
+    }
+
     public function test_an_email_and_no_number_is_an_old_app_and_is_told_to_update(): void
     {
         $this->resident();

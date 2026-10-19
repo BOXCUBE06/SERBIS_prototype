@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Barangay;
+use App\Support\FieldRules;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -23,7 +24,7 @@ class BarangayController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'barangay_name' => 'required|string|max:255',
+            'barangay_name' => ['required', ...FieldRules::label()],
         ]);
 
         $barangay = Barangay::create($validated);
@@ -49,7 +50,7 @@ class BarangayController extends Controller
         $barangay = Barangay::findOrFail($id);
 
         $validated = $request->validate([
-            'barangay_name' => 'required|string|max:255',
+            'barangay_name' => ['required', ...FieldRules::label()],
         ]);
 
         $barangay->update($validated);

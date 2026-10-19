@@ -181,7 +181,7 @@
                 <dt>Preferred date</dt><dd>{{ formatPreferredDate(selectedRequest.preferred_date) }}</dd>
               </template>
               <template v-if="selectedRequest.landmark">
-                <dt>Location</dt><dd>{{ selectedRequest.landmark }}</dd>
+                <dt>Location</dt><dd>{{ sentenceCase(selectedRequest.landmark) }}</dd>
               </template>
               <dt>Phone</dt>
               <dd>
@@ -282,7 +282,7 @@
                 <dt>Time to resolve</dt><dd>{{ elapsed(selectedRequest.created_at, selectedRequest.resolved_at) }} after filing</dd>
               </template>
               <template v-if="selectedRequest.status === 'Disapproved' && selectedRequest.remarks">
-                <dt>Reason</dt><dd>{{ selectedRequest.remarks }}</dd>
+                <dt>Reason</dt><dd>{{ sentenceCase(selectedRequest.remarks) }}</dd>
               </template>
             </dl>
           </section>
@@ -346,8 +346,8 @@
               persistent-hint
               variant="outlined"
               rows="3"
-              counter="255"
-              maxlength="255"
+              counter="160"
+              v-filter="{ kind: 'note', max: 160 }"
               autofocus
               :error-messages="reasonDialog.error"
               @update:model-value="reasonDialog.error = ''"
@@ -456,37 +456,41 @@
               <v-col cols="12" sm="6">
                 <v-text-field
                   v-model="createDialog.form.walk_in_first_name"
+                  v-filter="'name'"
                   :error-messages="logErrors.walk_in_first_name"
                   label="First name"
                   placeholder="e.g. Juan"
                   variant="outlined"
                   density="comfortable"
                   class="mb-2"
-                  :rules="[required, nameFormat]"
+                  :rules="[rules.required('First name'), rules.name('First name')]"
                 ></v-text-field>
               </v-col>
               <v-col cols="12" sm="6">
                 <v-text-field
                   v-model="createDialog.form.walk_in_last_name"
+                  v-filter="'name'"
                   :error-messages="logErrors.walk_in_last_name"
                   label="Last name"
                   placeholder="e.g. Dela Cruz"
                   variant="outlined"
                   density="comfortable"
                   class="mb-2"
-                  :rules="[required, nameFormat]"
+                  :rules="[rules.required('Last name'), rules.name('Last name')]"
                 ></v-text-field>
               </v-col>
             </v-row>
             <v-text-field
               v-model="createDialog.form.walk_in_contact_number"
+              v-filter="'phone'"
+              inputmode="numeric"
               :error-messages="logErrors.walk_in_contact_number"
               label="Contact number"
               placeholder="e.g. 09171234567"
               variant="outlined"
               density="comfortable"
               class="mb-2"
-              :rules="[required, phoneFormat]"
+              :rules="[rules.required('Contact number'), rules.phone('Contact number')]"
             ></v-text-field>
           </template>
 
@@ -504,6 +508,8 @@
 
           <v-textarea
             v-model="createDialog.form.description"
+            v-filter="'note'"
+            counter="500"
             :error-messages="logErrors.description"
             label="Description"
             placeholder="e.g. Fallen tree blocking the road at Purok 3"
@@ -511,7 +517,7 @@
             density="comfortable"
             rows="3"
             class="mb-2"
-            :rules="[required]"
+            :rules="[rules.required('Description'), rules.note('Description')]"
           ></v-textarea>
           </v-form>
         </v-card-text>
@@ -538,6 +544,7 @@ import { useRoute } from 'vue-router'
 import { getToken } from '@/composables/authToken'
 import { outcomeLabel, authHeaders, openWaitDays, waitTone, pluralize } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
+import { rules, sentenceCase } from '@/composables/inputRules'
 import PageHeader from '@/components/PageHeader.vue'
 import DataTablePage from '@/components/DataTablePage.vue'
 import StatusPill from '@/components/StatusPill.vue'
@@ -587,11 +594,7 @@ const selectedIds = reactive(new Set())
 
 const formData = ref({ remarks: '', internal_notes: '', vehicle_id: null })
 
-const required = (v) => (v !== null && v !== undefined && String(v).trim() !== '') || 'Required'
-// Letters (incl. accented/Ñ), spaces, hyphens, apostrophes, periods — no digits.
-const nameFormat = (v) => !v || /^[\p{L}.'-]+(?:\s[\p{L}.'-]+)*$/u.test(v.trim()) || 'Letters only'
-// Same shapes ServiceRequestController's PhoneNumber::REGEX accepts.
-const phoneFormat = (v) => !v || /^(?:09\d{9}|639\d{9}|\+639\d{9})$/.test(v.trim()) || 'Use 09XXXXXXXXX'
+const required = rules.required('This field')
 
 const emptyCreateForm = () => ({
   resident_id: null,

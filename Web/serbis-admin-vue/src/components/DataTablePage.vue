@@ -485,6 +485,19 @@ const clearAll = () => {
   }
 }
 
+/* A table that does not collapse keeps a readable width and scrolls inside its
+   card, instead of squeezing its columns or pushing the page sideways. */
+@media (max-width: 959px) {
+  .data-table-page:not(.dtp-collapse) .dtp-table :deep(table) {
+    min-width: 720px;
+  }
+}
+@media (max-width: 599px) {
+  .data-table-page:not(.dtp-collapse) .dtp-table :deep(table) {
+    min-width: 640px;
+  }
+}
+
 /* Fixed layout: otherwise columns re-measure off the visible rows and the
    table jumps on every filter, search or page change. */
 .dtp-table :deep(table) {

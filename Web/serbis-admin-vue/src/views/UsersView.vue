@@ -381,10 +381,13 @@
             </div>
           </template>
 
-          <div v-if="bulk.pending.length > 0" class="mb-2">
-            <strong class="text-high-emphasis">Skipped (pending review) ({{ bulk.pending.length }})</strong>
+          <div v-if="bulk.pending.length > 0 && bulk.phase !== 'done'" class="mb-2">
+            <strong class="text-high-emphasis">Will be approved (pending review) ({{ bulk.pending.length }})</strong>
             <ul><li v-for="p in bulk.pending" :key="idOf(p)">{{ primaryName(p) }}</li></ul>
-            <span>Review each in its profile, then approve it there.</span>
+            <v-text-field
+              v-model="bulk.confirmText" label="Type APPROVE to confirm" density="comfortable"
+              variant="outlined" hide-details class="mt-3" autocomplete="off" @keyup.enter="bulkReady && runBulk()"
+            />
           </div>
           <p v-if="bulk.already.length > 0 && bulk.phase !== 'done'" class="mb-0">
             {{ bulk.already.length }} already {{ bulk.action === 'activate' ? 'active' : 'deactivated' }}, left as they are.
@@ -399,7 +402,7 @@
             <v-btn
               :color="bulk.action === 'activate' ? 'primary' : 'warning'"
               variant="flat" rounded="lg" class="px-6 text-none font-weight-bold"
-              :disabled="bulk.eligible.length === 0"
+              :disabled="!bulkReady"
               :loading="bulk.phase === 'running'"
               @click="runBulk"
             >
@@ -438,7 +441,8 @@ import {
   wordInitials,
 } from '@/composables/accountName'
 import { getToken } from '@/composables/authToken'
-import { displayPhone, isMobileNumber } from '@/composables/phoneNumber'
+import { displayPhone } from '@/composables/phoneNumber'
+import { rules } from '@/composables/inputRules'
 import { forgetResidentPhoto, residentPhotoUrl } from '@/composables/residentPhoto'
 import {
   ACCOUNT_TYPE,
@@ -563,17 +567,17 @@ const previewInitials = computed(() => {
 const accountFields = computed(() => [
   { key: 'account_type', label: 'Account type', required: true, items: ACCOUNT_TYPE_ITEMS, half: isOrganization.value },
   ...(isOrganization.value
-    ? [{ key: 'organization_name', label: 'Organization name', required: true, half: true, placeholder: 'Isabela State University', rules: [requiredRule('Organization name')] }]
+    ? [{ key: 'organization_name', label: 'Organization name', required: true, half: true, placeholder: 'Isabela State University', filter: 'label', maxlength: 150, rules: [requiredRule('Organization name'), rules.label('Organization name', 150)] }]
     : []),
-  { key: 'first_name', label: isHead.value ? 'First name' : 'Contact first name', required: true, third: true, placeholder: 'Juan', rules: [requiredRule('First name')], autocomplete: 'given-name' },
-  { key: 'middle_name', label: 'Middle name', third: true, placeholder: 'Santos', autocomplete: 'additional-name' },
-  { key: 'last_name', label: isHead.value ? 'Last name' : 'Contact last name', required: true, third: true, placeholder: 'Dela Cruz', rules: [requiredRule('Last name')], autocomplete: 'family-name' },
+  { key: 'first_name', label: isHead.value ? 'First name' : 'Contact first name', required: true, third: true, placeholder: 'Juan', filter: 'name', rules: [requiredRule('First name'), rules.name('First name')], autocomplete: 'given-name' },
+  { key: 'middle_name', label: 'Middle name', third: true, placeholder: 'Santos', filter: 'name', rules: [rules.name('Middle name')], autocomplete: 'additional-name' },
+  { key: 'last_name', label: isHead.value ? 'Last name' : 'Contact last name', required: true, third: true, placeholder: 'Dela Cruz', filter: 'name', rules: [requiredRule('Last name'), rules.name('Last name')], autocomplete: 'family-name' },
   // The resident logs in with this number, and no two accounts may share one. A
   // barangay or organization officer who is also a head of the family needs a
   // different number for this account; the server says so on the field.
   {
     key: 'phone_number', label: 'Mobile number (login)', required: true, half: !modal.value.isEditing, type: 'tel',
-    placeholder: '09171234567', hint: 'They sign in with this number. It must be unique.',
+    inputmode: 'numeric', filter: 'phone', placeholder: '09171234567', hint: 'They sign in with this number. It must be unique.',
     rules: [requiredRule('Mobile number'), phoneRule], autocomplete: 'tel',
   },
   ...(modal.value.isEditing
@@ -935,13 +939,11 @@ const removePhoto = () => changePhoto('DELETE')
 // field carried a rule and `saveUser` never called `form.validate()`, so an
 // empty form cost a network round trip and came back as six server sentences
 // in one paragraph, naming columns ("barangay id") rather than fields.
-const requiredRule = (label) => (v) =>
-  (v !== null && v !== undefined && String(v).trim() !== '') || `${label} is required.`
+const requiredRule = rules.required
 
 // The number is the login and the SMS destination, so it has to be a real
-// Philippine mobile number — the same rule the server applies, and no landline.
-const phoneRule = (v) =>
-  !v || isMobileNumber(v) || 'Enter a mobile number like 09171234567.'
+// Philippine mobile number, and no landline.
+const phoneRule = rules.phone('Mobile number')
 
 // Mirrors the hint already printed under the field, and the backend's own rule.
 const passwordRule = (v) =>
@@ -1082,9 +1084,14 @@ const toggleStatus = async (item, forcedNext = null) => {
 
 // Bulk Activate / Deactivate: a loop over the single-account write. The list is
 // small and the admin limiter is 300 a minute, so a bulk endpoint would buy
-// nothing. Activate leaves Pending accounts alone: they need review in the
-// profile first. Deactivate takes them.
-const bulk = ref({ show: false, action: '', phase: 'confirm', eligible: [], pending: [], already: [], done: [], failed: [] })
+// nothing. Activate also approves Pending accounts (the profile's own write), but
+// only once the admin types APPROVE; already-active rows are skipped.
+const bulk = ref({ show: false, action: '', phase: 'confirm', eligible: [], pending: [], already: [], done: [], failed: [], confirmText: '' })
+
+const bulkReady = computed(() => {
+  const b = bulk.value
+  return b.eligible.length > 0 && (b.pending.length === 0 || b.confirmText.trim() === 'APPROVE')
+})
 
 const askBulk = (action) => {
   const rows = selectedRows.value
@@ -1094,11 +1101,13 @@ const askBulk = (action) => {
     show: true,
     action,
     phase: 'confirm',
-    eligible: rows.filter((r) => (activating ? inState(r, RESIDENT_STATUS.deactivated) : !inState(r, RESIDENT_STATUS.deactivated))),
+    eligible: rows.filter((r) => (activating ? !inState(r, RESIDENT_STATUS.active) : !inState(r, RESIDENT_STATUS.deactivated))),
+    // Listed apart on Activate, and gated by the APPROVE field.
     pending: activating ? rows.filter((r) => inState(r, RESIDENT_STATUS.pending)) : [],
     already: rows.filter((r) => inState(r, activating ? RESIDENT_STATUS.active : RESIDENT_STATUS.deactivated)),
     done: [],
     failed: [],
+    confirmText: '',
   }
 }
 

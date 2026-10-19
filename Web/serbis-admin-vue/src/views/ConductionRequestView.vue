@@ -191,23 +191,23 @@
           <v-row density="compact">
             <v-col cols="12" sm="8">
               <label class="dd-field-label" for="trip-new-name">Name</label>
-              <v-text-field v-model="createDialog.form.patient_name" :error-messages="createErrors.patient_name" id="trip-new-name" placeholder="Juan Dela Cruz" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+              <v-text-field v-model="createDialog.form.patient_name" v-filter="'name'" :error-messages="createErrors.patient_name" id="trip-new-name" placeholder="Juan Dela Cruz" variant="outlined" density="comfortable" :rules="[rules.required('Name'), rules.name('Name')]"></v-text-field>
             </v-col>
             <v-col cols="6" sm="4">
               <label class="dd-field-label" for="trip-new-age">Age</label>
-              <v-text-field v-model="createDialog.form.patient_age" :error-messages="createErrors.patient_age" id="trip-new-age" placeholder="45" type="number" min="0" max="150" variant="outlined" density="comfortable"></v-text-field>
+              <v-text-field v-model="createDialog.form.patient_age" v-filter="'age'" inputmode="numeric" :error-messages="createErrors.patient_age" id="trip-new-age" placeholder="45" variant="outlined" density="comfortable" :rules="[rules.age('Age')]"></v-text-field>
             </v-col>
             <v-col cols="12">
               <label class="dd-field-label" for="trip-new-address">Address</label>
-              <v-text-field v-model="createDialog.form.patient_address" :error-messages="createErrors.patient_address" id="trip-new-address" placeholder="Purok 3, San Isidro" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+              <v-text-field v-model="createDialog.form.patient_address" v-filter="'address'" :error-messages="createErrors.patient_address" id="trip-new-address" placeholder="Purok 3, San Isidro" variant="outlined" density="comfortable" :rules="[rules.required('Address'), rules.address('Address')]"></v-text-field>
             </v-col>
             <v-col cols="12">
               <label class="dd-field-label" for="trip-new-contact-number">Contact number</label>
-              <v-text-field v-model="createDialog.form.patient_contact_number" :error-messages="createErrors.patient_contact_number" id="trip-new-contact-number" placeholder="09171234567" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+              <v-text-field v-model="createDialog.form.patient_contact_number" v-filter="'phone'" inputmode="numeric" :error-messages="createErrors.patient_contact_number" id="trip-new-contact-number" placeholder="09171234567" variant="outlined" density="comfortable" :rules="[rules.required('Contact number'), rules.phone('Contact number')]"></v-text-field>
             </v-col>
             <v-col cols="12">
               <label class="dd-field-label" for="trip-new-medical-diagnosis">Medical diagnosis</label>
-              <v-textarea v-model="createDialog.form.medical_diagnosis" :error-messages="createErrors.medical_diagnosis" id="trip-new-medical-diagnosis" placeholder="Suspected stroke" variant="outlined" density="comfortable" rows="2" :rules="[required]"></v-textarea>
+              <v-textarea v-model="createDialog.form.medical_diagnosis" v-filter="{ kind: 'note', max: 1000 }" counter="1000" :error-messages="createErrors.medical_diagnosis" id="trip-new-medical-diagnosis" placeholder="Suspected stroke" variant="outlined" density="comfortable" rows="2" :rules="[rules.required('Medical diagnosis'), rules.note('Medical diagnosis', 1000)]"></v-textarea>
             </v-col>
           </v-row>
         </section>
@@ -217,11 +217,11 @@
           <v-row density="compact">
             <v-col cols="12" sm="6">
               <label class="dd-field-label" for="trip-new-from">From</label>
-              <v-text-field v-model="createDialog.form.origin" :error-messages="createErrors.origin" id="trip-new-from" placeholder="San Isidro" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+              <v-text-field v-model="createDialog.form.origin" v-filter="'address'" :error-messages="createErrors.origin" id="trip-new-from" placeholder="San Isidro" variant="outlined" density="comfortable" :rules="[rules.required('From'), rules.address('From')]"></v-text-field>
             </v-col>
             <v-col cols="12" sm="6">
               <label class="dd-field-label" for="trip-new-to">To</label>
-              <v-text-field v-model="createDialog.form.destination" :error-messages="createErrors.destination" id="trip-new-to" placeholder="Echague District Hospital" variant="outlined" density="comfortable" :rules="[required]"></v-text-field>
+              <v-text-field v-model="createDialog.form.destination" v-filter="'address'" :error-messages="createErrors.destination" id="trip-new-to" placeholder="Echague District Hospital" variant="outlined" density="comfortable" :rules="[rules.required('To'), rules.address('To')]"></v-text-field>
             </v-col>
             <v-col v-if="vehiclesError" cols="12">
               <v-alert type="warning" variant="tonal" border="start" density="compact">
@@ -307,7 +307,9 @@
                 <v-text-field
                   v-else
                   v-model="createDialog.form[group.field][idx]"
+                  v-filter="'name'"
                   :error-messages="crewError(group.field, idx)"
+                  :rules="[rules.name(group.singular)]"
                   :id="`trip-new-${group.field}-${idx}`"
                   placeholder="Full name"
                   variant="outlined"
@@ -388,8 +390,8 @@
           <dl class="kv">
             <dt>Contact</dt><dd>{{ displayPhone(selected.patient_contact_number) || NOT_RECORDED }}</dd>
             <dt>Age</dt><dd>{{ selected.patient_age ?? NOT_RECORDED }}</dd>
-            <dt>Address</dt><dd>{{ selected.patient_address || NOT_RECORDED }}</dd>
-            <dt>Diagnosis</dt><dd>{{ selected.medical_diagnosis || NOT_RECORDED }}</dd>
+            <dt>Address</dt><dd>{{ sentenceCase(selected.patient_address) || NOT_RECORDED }}</dd>
+            <dt>Diagnosis</dt><dd>{{ sentenceCase(selected.medical_diagnosis) || NOT_RECORDED }}</dd>
           </dl>
         </section>
 
@@ -397,9 +399,9 @@
           <h3 class="sect-label">Route and vehicle</h3>
           <div class="dd-route mb-2">
             <span class="dd-route__mark dd-route__mark--start" aria-hidden="true"></span>
-            <div class="dd-route__stop--start"><div class="dd-label">Pickup</div>{{ selected.origin || NOT_RECORDED }}</div>
+            <div class="dd-route__stop--start"><div class="dd-label">Pickup</div>{{ sentenceCase(selected.origin) || NOT_RECORDED }}</div>
             <span class="dd-route__mark dd-route__mark--end" aria-hidden="true"></span>
-            <div><div class="dd-label">Destination</div>{{ selected.destination || NOT_RECORDED }}</div>
+            <div><div class="dd-label">Destination</div>{{ sentenceCase(selected.destination) || NOT_RECORDED }}</div>
           </div>
           <dl class="kv">
             <dt>Vehicle</dt>
@@ -443,7 +445,7 @@
           <dl class="kv">
             <dt>At departure</dt><dd>{{ selected.odometer_start ?? NOT_RECORDED }}</dd>
             <dt>On return</dt><dd>{{ selected.odometer_end ?? NOT_RECORDED }}</dd>
-            <template v-if="selected.others"><dt>Others</dt><dd>{{ selected.others }}</dd></template>
+            <template v-if="selected.others"><dt>Others</dt><dd>{{ sentenceCase(selected.others) }}</dd></template>
           </dl>
         </section>
       </template>
@@ -506,6 +508,9 @@
         <v-textarea
           v-if="tripLog.form.did_not_arrive"
           v-model="tripLog.form.no_arrival_reason"
+          v-filter="'note'"
+          counter="500"
+          :rules="[rules.note('Reason')]"
           id="trip-log-reason-required"
           placeholder="e.g. Patient had already been taken by a relative"
           variant="outlined"
@@ -571,6 +576,8 @@
               <v-text-field
                 v-else
                 v-model="tripLog.form[group.field][idx]"
+                v-filter="'name'"
+                :rules="[rules.name(group.singular)]"
                 :id="`trip-log-${group.field}-${idx}`"
                 placeholder="Full name"
                 variant="outlined"
@@ -603,7 +610,7 @@
       <section class="detail-section">
         <h3 class="sect-label">Notes</h3>
         <label class="dd-field-label" for="trip-log-others">Others</label>
-        <v-textarea v-model="tripLog.form.others" id="trip-log-others" placeholder="Anything else worth recording about the trip" variant="outlined" density="comfortable" rows="2"></v-textarea>
+        <v-textarea v-model="tripLog.form.others" v-filter="{ kind: 'note', max: 1000 }" counter="1000" :rules="[rules.note('Others', 1000)]" id="trip-log-others" placeholder="Anything else worth recording about the trip" variant="outlined" density="comfortable" rows="2"></v-textarea>
       </section>
 
       <template #footer>
@@ -624,6 +631,7 @@ import { ref, reactive, computed, watch, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { getToken } from '@/composables/authToken'
 import { displayPhone } from '@/composables/phoneNumber'
+import { rules, sentenceCase } from '@/composables/inputRules'
 import { sharedStatusLabel, tripStatusLabel, outcomeLabel } from '@/composables/adminUi'
 import { API_BASE } from '@/config/api'
 import { REFERENCE_TTL_MS, invalidate, useCachedFetch } from '@/composables/useCachedFetch'
@@ -1037,7 +1045,7 @@ const applyBooking = (booking, form = createDialog.value.form) => {
   // the account number is the fallback, not the answer. This prefill previously
   // skipped booking.patient_contact_number entirely and opened at the filer's
   // number.
-  form.patient_contact_number = booking.patient_contact_number
+  form.patient_contact_number = displayPhone(booking.patient_contact_number)
     || displayPhone(booking.resident?.phone_number)
     || booking.walk_in_contact_number
     || ''
@@ -1330,6 +1338,11 @@ const passengerOptionsFor = (drivers) => {
 // Same three rules the server enforces, checked client-side first so a mistake
 // shows next to the field instead of round-tripping to the API to find out.
 const validateTripLog = (form) => {
+  const postDated = CHECKPOINTS.find(([field]) => form[field] && new Date(form[field]) > new Date())
+  if (postDated) {
+    return `"${postDated[1]}" cannot be in the future.`
+  }
+
   const start = form.odometer_start
   const end = form.odometer_end
   if (start !== null && start !== '' && end !== null && end !== '' && Number(end) < Number(start)) {

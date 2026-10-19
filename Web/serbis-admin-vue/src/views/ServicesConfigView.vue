@@ -169,6 +169,7 @@ import DataTablePage from '@/components/DataTablePage.vue'
 import StatusPill from '@/components/StatusPill.vue'
 import FilterSelect from '@/components/FilterSelect.vue'
 import EditDialog from '@/components/EditDialog.vue'
+import { rules } from '@/composables/inputRules'
 import RowActions from '@/components/RowActions.vue'
 import { pluralize } from '@/composables/adminUi'
 import { splitServerErrors } from '@/composables/useFormErrors'
@@ -294,8 +295,8 @@ const editFields = [
   { key: 'service_name', label: 'Service', readonly: true },
   { key: 'category', label: 'Category', readonly: true, display: (v) => categories[v]?.label ?? v },
   { key: 'fixed-note', text: 'The name and category are fixed; the Filipino name and the description can be changed.' },
-  { key: 'service_name_fil', label: 'Filipino name', maxlength: 255, placeholder: 'e.g. Pagpapahiram ng Trapal', hint: FIL_HINT },
-  { key: 'description', label: 'Description', type: 'textarea', placeholder: 'When this service applies and what the MDRRMO provides', hint: 'Optional, but it helps residents pick the right service.' },
+  { key: 'service_name_fil', label: 'Filipino name', filter: 'label', placeholder: 'e.g. Pagpapahiram ng Trapal', hint: FIL_HINT, rules: [rules.label('Filipino name')] },
+  { key: 'description', label: 'Description', type: 'textarea', filter: 'note', placeholder: 'When this service applies and what the MDRRMO provides', hint: 'Optional, but it helps residents pick the right service.', rules: [rules.note('Description')] },
 ]
 
 const openEdit = (item) => {
@@ -344,11 +345,11 @@ const added = ref(null)
 const addedSteps = computed(() => (added.value ? nextSteps(added.value, can) : []))
 
 const addFields = [
-  { key: 'service_name', label: 'Service name', required: true, maxlength: 255, placeholder: 'e.g. Tarpaulin Lending', hint: 'Residents see this name in the app. It cannot be changed later.' },
-  { key: 'service_name_fil', label: 'Filipino name', maxlength: 255, placeholder: 'e.g. Pagpapahiram ng Trapal', hint: FIL_HINT },
+  { key: 'service_name', label: 'Service name', required: true, filter: 'label', placeholder: 'e.g. Tarpaulin Lending', hint: 'Residents see this name in the app. It cannot be changed later.', rules: [rules.required('Service name'), rules.label('Service name')] },
+  { key: 'service_name_fil', label: 'Filipino name', filter: 'label', placeholder: 'e.g. Pagpapahiram ng Trapal', hint: FIL_HINT, rules: [rules.label('Filipino name')] },
   // Not Programs: a program needs its own form in the app, and the API refuses it too.
   { key: 'category', label: 'Category', required: true, items: Object.values(categories).filter((c) => c.key !== 'programs'), itemTitle: 'label', itemValue: 'key', hint: 'Groups it in the app. It cannot be changed later.' },
-  { key: 'description', label: 'Description', type: 'textarea', placeholder: 'When this service applies and what the MDRRMO provides', hint: 'Optional, but it helps residents pick the right service.' },
+  { key: 'description', label: 'Description', type: 'textarea', filter: 'note', placeholder: 'When this service applies and what the MDRRMO provides', hint: 'Optional, but it helps residents pick the right service.', rules: [rules.note('Description')] },
   { key: 'off-note', text: 'It is saved switched off. Residents cannot see it until you set who can request it and switch it on. In the app it uses the general request form: a details box and a photo of a valid ID.' },
 ]
 
