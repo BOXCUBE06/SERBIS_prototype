@@ -1,0 +1,2316 @@
+{
+ "info": {
+  "name": "SERBIS API - Acceptance Tests",
+  "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+ },
+ "item": [
+  {
+   "name": "1. Authentication and session",
+   "item": [
+    {
+     "name": "1.1 Admin login - valid (direct token or MFA challenge)",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/admin/login",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "admin",
+        "login"
+       ]
+      },
+      "auth": {
+       "type": "noauth"
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"username\": \"{{admin_username}}\",\n  \"password\": \"{{admin_password}}\"\n}"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200,403', () => pm.expect([200,403]).to.include(pm.response.code));",
+         "try { const j = pm.response.json(); const v = j.token; if (v !== undefined && v !== null) pm.environment.set('admin_token', v); } catch (e) {}",
+         "try { const j = pm.response.json(); const v = j.challenge_id; if (v !== undefined && v !== null) pm.environment.set('challenge_id', v); } catch (e) {}",
+         "pm.test('token or mfa_required', () => { const j = pm.response.json(); pm.expect(!!(j.token || j.code === 'mfa_required')).to.be.true; });"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "1.2 Admin login - wrong password",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/admin/login",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "admin",
+        "login"
+       ]
+      },
+      "auth": {
+       "type": "noauth"
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"username\": \"{{admin_username}}\",\n  \"password\": \"definitely-wrong\"\n}"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 401', () => pm.expect([401]).to.include(pm.response.code));",
+         "pm.test('no token', () => pm.expect(pm.response.json().token).to.be.undefined);"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "1.3 Admin login verify - correct code",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/admin/login/verify",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "admin",
+        "login",
+        "verify"
+       ]
+      },
+      "auth": {
+       "type": "noauth"
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"challenge_id\": \"{{challenge_id}}\",\n  \"code\": \"{{otp_code}}\"\n}"
+      },
+      "description": "Only needed when ADMIN_MFA_ENABLED=true. Set otp_code to the texted code. 422 accepted when MFA is off."
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200,422', () => pm.expect([200,422]).to.include(pm.response.code));",
+         "try { const j = pm.response.json(); const v = j.token; if (v !== undefined && v !== null) pm.environment.set('admin_token', v); } catch (e) {}"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "1.4 Admin login verify - wrong code",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/admin/login/verify",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "admin",
+        "login",
+        "verify"
+       ]
+      },
+      "auth": {
+       "type": "noauth"
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"challenge_id\": \"{{challenge_id}}\",\n  \"code\": \"000000\"\n}"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 422,429', () => pm.expect([422,429]).to.include(pm.response.code));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "1.5 Resident login - valid",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/resident/login",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "resident",
+        "login"
+       ]
+      },
+      "auth": {
+       "type": "noauth"
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"phone_number\": \"{{resident_phone}}\",\n  \"password\": \"{{resident_password}}\"\n}"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200,403', () => pm.expect([200,403]).to.include(pm.response.code));",
+         "try { const j = pm.response.json(); const v = j.token; if (v !== undefined && v !== null) pm.environment.set('resident_token', v); } catch (e) {}",
+         "try { const j = pm.response.json(); const v = j.challenge_id; if (v !== undefined && v !== null) pm.environment.set('resident_challenge_id', v); } catch (e) {}"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "1.6 Resident login verify - correct code",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/resident/login/verify",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "resident",
+        "login",
+        "verify"
+       ]
+      },
+      "auth": {
+       "type": "noauth"
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"challenge_id\": \"{{resident_challenge_id}}\",\n  \"code\": \"{{resident_otp_code}}\"\n}"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200,422', () => pm.expect([200,422]).to.include(pm.response.code));",
+         "try { const j = pm.response.json(); const v = j.token; if (v !== undefined && v !== null) pm.environment.set('resident_token', v); } catch (e) {}"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "1.7 GET /me",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/me",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "me"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{admin_token}}",
+         "type": "string"
+        }
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200', () => pm.expect([200]).to.include(pm.response.code));",
+         "pm.test('JSON body', () => pm.response.to.have.jsonBody());"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "1.8 Logout",
+     "request": {
+      "method": "POST",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/logout",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "logout"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{admin_token}}",
+         "type": "string"
+        }
+       ]
+      },
+      "description": "Re-run 1.1/1.3 afterwards to get a fresh admin_token."
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200,204', () => pm.expect([200,204]).to.include(pm.response.code));",
+         "pm.environment.set('logged_out_token', pm.environment.get('admin_token'));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "1.8b GET /me with logged-out token -> 401",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/me",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "me"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{logged_out_token}}",
+         "type": "string"
+        }
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 401', () => pm.expect([401]).to.include(pm.response.code));"
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "2. Access control and security",
+   "item": [
+    {
+     "name": "2.1 Dashboard without token",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/admin/dashboard",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "admin",
+        "dashboard"
+       ]
+      },
+      "auth": {
+       "type": "noauth"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 401', () => pm.expect([401]).to.include(pm.response.code));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "2.2 Dashboard with resident token",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/admin/dashboard",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "admin",
+        "dashboard"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{resident_token}}",
+         "type": "string"
+        }
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 403,401', () => pm.expect([403,401]).to.include(pm.response.code));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "2.3 Analytics with limited admin (no section)",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/admin/analytics",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "admin",
+        "analytics"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{limited_token}}",
+         "type": "string"
+        }
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 403', () => pm.expect([403]).to.include(pm.response.code));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "2.4 Temp-password admin blocked before change",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/admin/dashboard",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "admin",
+        "dashboard"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{temp_pw_token}}",
+         "type": "string"
+        }
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 403', () => pm.expect([403]).to.include(pm.response.code));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "2.5 Change password - weak",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/admin/change-password",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "admin",
+        "change-password"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{temp_pw_token}}",
+         "type": "string"
+        }
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"current_password\": \"{{temp_pw_admin_password}}\",\n  \"password\": \"abc\",\n  \"password_confirmation\": \"abc\"\n}"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 422', () => pm.expect([422]).to.include(pm.response.code));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "2.6 Rate limit - Runner iterations = 12",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/resident/login",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "resident",
+        "login"
+       ]
+      },
+      "auth": {
+       "type": "noauth"
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"phone_number\": \"09000000000\",\n  \"password\": \"bad\"\n}"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('401 until limited, then 429', () => pm.expect([401, 429]).to.include(pm.response.code));",
+         "if (pm.response.code === 429) pm.test('Retry-After header', () => pm.expect(pm.response.headers.has('Retry-After')).to.be.true);"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "2.7 Security headers",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/barangays",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "barangays"
+       ]
+      },
+      "auth": {
+       "type": "noauth"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200', () => pm.expect([200]).to.include(pm.response.code));",
+         "pm.test('nosniff', () => pm.expect(pm.response.headers.get('X-Content-Type-Options')).to.eql('nosniff'));",
+         "pm.test('no X-Powered-By', () => pm.expect(pm.response.headers.has('X-Powered-By')).to.be.false);"
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "3. Service requests",
+   "item": [
+    {
+     "name": "3.1 List services",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/services",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "services"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{resident_token}}",
+         "type": "string"
+        }
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200', () => pm.expect([200]).to.include(pm.response.code));",
+         "pm.test('JSON body', () => pm.response.to.have.jsonBody());",
+         "try { const j = pm.response.json(); const v = (j.data || j)[0].service_id; if (v !== undefined && v !== null) pm.environment.set('test_service_id', v); } catch (e) {}"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "3.2 Create request (resident)",
+     "request": {
+      "method": "POST",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/service-requests",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "service-requests"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{resident_token}}",
+         "type": "string"
+        }
+       ]
+      },
+      "body": {
+       "mode": "formdata",
+       "formdata": [
+        {
+         "key": "service_id",
+         "value": "{{test_service_id}}",
+         "type": "text"
+        },
+        {
+         "key": "description",
+         "value": "Postman test request",
+         "type": "text"
+        }
+       ]
+      },
+      "description": "Adjust to the real form (valid_id JPG/PNG file, dates). Attach a file in Postman if the service needs one."
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 201,200', () => pm.expect([201,200]).to.include(pm.response.code));",
+         "try { const j = pm.response.json(); const v = (j.data || j).request_id; if (v !== undefined && v !== null) pm.environment.set('test_request_id', v); } catch (e) {}"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "3.3 Create request - missing fields",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/service-requests",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "service-requests"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{resident_token}}",
+         "type": "string"
+        }
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{}"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 422', () => pm.expect([422]).to.include(pm.response.code));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "3.4 List own requests",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/service-requests",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "service-requests"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{resident_token}}",
+         "type": "string"
+        }
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200', () => pm.expect([200]).to.include(pm.response.code));",
+         "pm.test('JSON body', () => pm.response.to.have.jsonBody());"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "3.5 Other resident cannot read it",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/service-requests/{{test_request_id}}",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "service-requests",
+        "{{test_request_id}}"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{resident2_token}}",
+         "type": "string"
+        }
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 403,404', () => pm.expect([403,404]).to.include(pm.response.code));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "3.6 Admin list",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/admin/service-requests",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "admin",
+        "service-requests"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{admin_token}}",
+         "type": "string"
+        }
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200', () => pm.expect([200]).to.include(pm.response.code));",
+         "pm.test('JSON body', () => pm.response.to.have.jsonBody());"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "3.7 Admin approve",
+     "request": {
+      "method": "PATCH",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/service-requests/{{test_request_id}}/approve",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "service-requests",
+        "{{test_request_id}}",
+        "approve"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{admin_token}}",
+         "type": "string"
+        }
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200', () => pm.expect([200]).to.include(pm.response.code));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "3.8 Resident cancel",
+     "request": {
+      "method": "PATCH",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/service-requests/{{test_request_id}}/cancel",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "service-requests",
+        "{{test_request_id}}",
+        "cancel"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{resident_token}}",
+         "type": "string"
+        }
+       ]
+      },
+      "description": "Use a separate pending request if 3.7 already approved it."
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200,422', () => pm.expect([200,422]).to.include(pm.response.code));"
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "4. Equipment borrowing and inventory",
+   "item": [
+    {
+     "name": "4.1 List equipment",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/equipments",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "equipments"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{resident_token}}",
+         "type": "string"
+        }
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200', () => pm.expect([200]).to.include(pm.response.code));",
+         "pm.test('JSON body', () => pm.response.to.have.jsonBody());",
+         "try { const j = pm.response.json(); const v = (j.data || j)[0].equipment_id; if (v !== undefined && v !== null) pm.environment.set('test_equipment_id', v); } catch (e) {}"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "4.2 Create equipment (admin)",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/equipments",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "equipments"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{admin_token}}",
+         "type": "string"
+        }
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"name\": \"Postman Test Item\",\n  \"quantity\": 5\n}"
+      },
+      "description": "Match EquipmentController validation."
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 201,200', () => pm.expect([201,200]).to.include(pm.response.code));",
+         "try { const j = pm.response.json(); const v = (j.data || j).equipment_id; if (v !== undefined && v !== null) pm.environment.set('new_equipment_id', v); } catch (e) {}"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "4.3 Update equipment (admin)",
+     "request": {
+      "method": "PUT",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/equipments/{{new_equipment_id}}",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "equipments",
+        "{{new_equipment_id}}"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{admin_token}}",
+         "type": "string"
+        }
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"name\": \"Postman Test Item\",\n  \"quantity\": 8\n}"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200', () => pm.expect([200]).to.include(pm.response.code));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "4.4 Create borrowing (resident)",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/borrowings",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "borrowings"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{resident_token}}",
+         "type": "string"
+        }
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"equipment_id\": \"{{test_equipment_id}}\",\n  \"quantity\": 1,\n  \"purpose\": \"Postman test\",\n  \"fulfillment_method\": \"Pickup\"\n}"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 201,200', () => pm.expect([201,200]).to.include(pm.response.code));",
+         "try { const j = pm.response.json(); const v = (j.data || j).borrowing_id || (j.data || j).id; if (v !== undefined && v !== null) pm.environment.set('test_borrowing_id', v); } catch (e) {}"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "4.5 Borrow too many",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/borrowings",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "borrowings"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{resident_token}}",
+         "type": "string"
+        }
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"equipment_id\": \"{{test_equipment_id}}\",\n  \"quantity\": 999999,\n  \"purpose\": \"Too many\"\n}"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 422', () => pm.expect([422]).to.include(pm.response.code));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "4.6 Admin updates borrowing",
+     "request": {
+      "method": "PUT",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/borrowings/{{test_borrowing_id}}",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "borrowings",
+        "{{test_borrowing_id}}"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{admin_token}}",
+         "type": "string"
+        }
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"status\": \"Approved\"\n}"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200', () => pm.expect([200]).to.include(pm.response.code));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "4.7 Resident cancels borrowing",
+     "request": {
+      "method": "PATCH",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/borrowings/{{test_borrowing_id}}/cancel",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "borrowings",
+        "{{test_borrowing_id}}",
+        "cancel"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{resident_token}}",
+         "type": "string"
+        }
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200,422', () => pm.expect([200,422]).to.include(pm.response.code));"
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "5. Ambulance, vehicles, and trips",
+   "item": [
+    {
+     "name": "5.1 Ambulance destinations",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/ambulance-destinations",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "ambulance-destinations"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{resident_token}}",
+         "type": "string"
+        }
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200', () => pm.expect([200]).to.include(pm.response.code));",
+         "pm.test('JSON body', () => pm.response.to.have.jsonBody());"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "5.2 Ambulance availability",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/ambulance-availability",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "ambulance-availability"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{resident_token}}",
+         "type": "string"
+        }
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200', () => pm.expect([200]).to.include(pm.response.code));",
+         "pm.test('JSON body', () => pm.response.to.have.jsonBody());"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "5.3 Book ambulance (free slot)",
+     "request": {
+      "method": "POST",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/service-requests",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "service-requests"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{resident_token}}",
+         "type": "string"
+        }
+       ]
+      },
+      "body": {
+       "mode": "formdata",
+       "formdata": [
+        {
+         "key": "service_id",
+         "value": "{{ambulance_service_id}}",
+         "type": "text"
+        },
+        {
+         "key": "request_date",
+         "value": "2026-12-05",
+         "type": "text"
+        },
+        {
+         "key": "start_time",
+         "value": "09:00",
+         "type": "text"
+        },
+        {
+         "key": "end_time",
+         "value": "11:00",
+         "type": "text"
+        }
+       ]
+      },
+      "description": "Fill with the real ambulance form fields."
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 201,200', () => pm.expect([201,200]).to.include(pm.response.code));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "5.4 Book same slot again -> rejected",
+     "request": {
+      "method": "POST",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/service-requests",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "service-requests"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{resident_token}}",
+         "type": "string"
+        }
+       ]
+      },
+      "body": {
+       "mode": "formdata",
+       "formdata": [
+        {
+         "key": "service_id",
+         "value": "{{ambulance_service_id}}",
+         "type": "text"
+        },
+        {
+         "key": "request_date",
+         "value": "2026-12-05",
+         "type": "text"
+        },
+        {
+         "key": "start_time",
+         "value": "09:00",
+         "type": "text"
+        },
+        {
+         "key": "end_time",
+         "value": "11:00",
+         "type": "text"
+        }
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 409,422', () => pm.expect([409,422]).to.include(pm.response.code));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "5.5 List vehicles",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/vehicles",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "vehicles"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{admin_token}}",
+         "type": "string"
+        }
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200', () => pm.expect([200]).to.include(pm.response.code));",
+         "pm.test('JSON body', () => pm.response.to.have.jsonBody());",
+         "try { const j = pm.response.json(); const v = (j.data || j)[0].vehicle_id; if (v !== undefined && v !== null) pm.environment.set('test_vehicle_id', v); } catch (e) {}"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "5.6 Create vehicle",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/vehicles",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "vehicles"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{admin_token}}",
+         "type": "string"
+        }
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"plate_number\": \"PMT-{{$randomInt}}\",\n  \"type\": \"Ambulance\"\n}"
+      },
+      "description": "Match VehicleController fields."
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 201,200', () => pm.expect([201,200]).to.include(pm.response.code));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "5.7 Conduction request",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/conduction-requests",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "conduction-requests"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{admin_token}}",
+         "type": "string"
+        }
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{}"
+      },
+      "description": "Fill patient/trip fields. Then PATCH /conduction-requests/{{test_conduction_id}}/trip-log."
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 201,200', () => pm.expect([201,200]).to.include(pm.response.code));",
+         "try { const j = pm.response.json(); const v = (j.data || j).conduction_id || (j.data || j).id; if (v !== undefined && v !== null) pm.environment.set('test_conduction_id', v); } catch (e) {}"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "5.8 Ambulance schedule",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/ambulance-schedule",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "ambulance-schedule"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{admin_token}}",
+         "type": "string"
+        }
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200', () => pm.expect([200]).to.include(pm.response.code));",
+         "pm.test('JSON body', () => pm.response.to.have.jsonBody());"
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "6. Dashboard, analytics, and logs",
+   "item": [
+    {
+     "name": "6.1 Dashboard",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/admin/dashboard",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "admin",
+        "dashboard"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{admin_token}}",
+         "type": "string"
+        }
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200', () => pm.expect([200]).to.include(pm.response.code));",
+         "pm.test('JSON body', () => pm.response.to.have.jsonBody());"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "6.2 Analytics",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/admin/analytics",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "admin",
+        "analytics"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{admin_token}}",
+         "type": "string"
+        }
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200', () => pm.expect([200]).to.include(pm.response.code));",
+         "pm.test('JSON body', () => pm.response.to.have.jsonBody());"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "6.3 Pulse",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/admin/pulse",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "admin",
+        "pulse"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{admin_token}}",
+         "type": "string"
+        }
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200', () => pm.expect([200]).to.include(pm.response.code));",
+         "pm.test('JSON body', () => pm.response.to.have.jsonBody());"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "6.4 System logs",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/logs/system",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "logs",
+        "system"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{admin_token}}",
+         "type": "string"
+        }
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200', () => pm.expect([200]).to.include(pm.response.code));",
+         "pm.test('JSON body', () => pm.response.to.have.jsonBody());"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "6.5 SMS logs",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/logs/sms",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "logs",
+        "sms"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{admin_token}}",
+         "type": "string"
+        }
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200', () => pm.expect([200]).to.include(pm.response.code));",
+         "pm.test('JSON body', () => pm.response.to.have.jsonBody());"
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "7. Barangays, hotlines, advisories, info materials",
+   "item": [
+    {
+     "name": "7.1 Barangays (public)",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/barangays",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "barangays"
+       ]
+      },
+      "auth": {
+       "type": "noauth"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200', () => pm.expect([200]).to.include(pm.response.code));",
+         "pm.test('JSON body', () => pm.response.to.have.jsonBody());",
+         "try { const j = pm.response.json(); const v = (j.data || j)[0].barangay_id; if (v !== undefined && v !== null) pm.environment.set('test_barangay_id', v); } catch (e) {}"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "7.2 Hotlines (public)",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/hotlines",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "hotlines"
+       ]
+      },
+      "auth": {
+       "type": "noauth"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200', () => pm.expect([200]).to.include(pm.response.code));",
+         "pm.test('JSON body', () => pm.response.to.have.jsonBody());"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "7.3 Advisories (resident)",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/advisories",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "advisories"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{resident_token}}",
+         "type": "string"
+        }
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200', () => pm.expect([200]).to.include(pm.response.code));",
+         "pm.test('JSON body', () => pm.response.to.have.jsonBody());"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "7.4 Info materials (resident)",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/info-materials",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "info-materials"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{resident_token}}",
+         "type": "string"
+        }
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200', () => pm.expect([200]).to.include(pm.response.code));",
+         "pm.test('JSON body', () => pm.response.to.have.jsonBody());"
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "8. Profile and push notifications",
+   "item": [
+    {
+     "name": "8.1 Update profile",
+     "request": {
+      "method": "PATCH",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/me",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "me"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{resident_token}}",
+         "type": "string"
+        }
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"first_name\": \"Postman\"\n}"
+      },
+      "description": "Use a field PATCH /me accepts."
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200', () => pm.expect([200]).to.include(pm.response.code));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "8.2 Register device token",
+     "request": {
+      "method": "POST",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/device-tokens",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "device-tokens"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{resident_token}}",
+         "type": "string"
+        }
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"token\": \"postman-test-token-123\",\n  \"platform\": \"android\"\n}"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200,201', () => pm.expect([200,201]).to.include(pm.response.code));"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "8.3 Delete device token",
+     "request": {
+      "method": "DELETE",
+      "header": [
+       {
+        "key": "Content-Type",
+        "value": "application/json"
+       }
+      ],
+      "url": {
+       "raw": "{{base_url}}/device-tokens",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "device-tokens"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{resident_token}}",
+         "type": "string"
+        }
+       ]
+      },
+      "body": {
+       "mode": "raw",
+       "raw": "{\n  \"token\": \"postman-test-token-123\"\n}"
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200,204', () => pm.expect([200,204]).to.include(pm.response.code));"
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "name": "9. Residents and responders (administrator)",
+   "item": [
+    {
+     "name": "9.1 Residents list",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/residents",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "residents"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{admin_token}}",
+         "type": "string"
+        }
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200', () => pm.expect([200]).to.include(pm.response.code));",
+         "pm.test('JSON body', () => pm.response.to.have.jsonBody());"
+        ]
+       }
+      }
+     ]
+    },
+    {
+     "name": "9.2 Responders list",
+     "request": {
+      "method": "GET",
+      "header": [],
+      "url": {
+       "raw": "{{base_url}}/responders",
+       "host": [
+        "{{base_url}}"
+       ],
+       "path": [
+        "responders"
+       ]
+      },
+      "auth": {
+       "type": "bearer",
+       "bearer": [
+        {
+         "key": "token",
+         "value": "{{admin_token}}",
+         "type": "string"
+        }
+       ]
+      }
+     },
+     "event": [
+      {
+       "listen": "test",
+       "script": {
+        "type": "text/javascript",
+        "exec": [
+         "pm.test('Response time < 2000 ms', () => pm.expect(pm.response.responseTime).to.be.below(2000));",
+         "pm.test('Status is one of 200', () => pm.expect([200]).to.include(pm.response.code));",
+         "pm.test('JSON body', () => pm.response.to.have.jsonBody());"
+        ]
+       }
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "event": [
+  {
+   "listen": "prerequest",
+   "script": {
+    "type": "text/javascript",
+    "exec": [
+     "pm.request.headers.upsert({ key: 'Accept', value: 'application/json' });"
+    ]
+   }
+  }
+ ]
+}
