@@ -182,7 +182,7 @@ class AppServiceProvider extends ServiceProvider
         });
 
         RateLimiter::for('sms-blast', function (Request $request) {
-            return Limit::perHour(3)->by('admin:'.$request->user()->admin_id);
+            return Limit::perHour(100)->by('admin:'.$request->user()->admin_id);
         });
         RateLimiter::for('mfa', function (Request $request) {
             $challenge = Str::lower((string) $request->input('challenge_id'));
